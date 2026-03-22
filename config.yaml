@@ -1,0 +1,90 @@
+# ============================================================
+# Screen Time Tracker — Configuration
+# ============================================================
+# Run `python tracker.py init` to regenerate this file.
+#
+# HOW TO FIND YOUR APP BUNDLE IDs:
+#   python tracker.py apps --days 7
+# This lists every app seen in the last 7 days so you can
+# copy bundle IDs into work_apps or personal_apps below.
+# ============================================================
+
+# --- Apps that count as WORK time ---
+work_apps:
+  # IDEs / editors
+  - com.microsoft.VSCode
+  - com.apple.dt.Xcode
+  - com.jetbrains.intellij
+  - com.jetbrains.pycharm
+  - com.jetbrains.webstorm
+  - com.jetbrains.rubymine
+  - com.jetbrains.goland
+  # Terminals
+  - com.apple.Terminal
+  - com.googlecode.iterm2
+  - com.github.wez.wezterm
+  - dev.warp.Warp-Stable
+  # Communication / meetings
+  - com.microsoft.teams
+  - com.microsoft.teams2
+  - com.tinyspeck.slackmacgap
+  - com.slack.Slack
+  - com.microsoft.outlook
+  - com.apple.mail
+  - com.zoom.us
+  - us.zoom.xos
+  - com.webex.meetingmanager
+  # Office / docs
+  - com.microsoft.Word
+  - com.microsoft.Excel
+  - com.microsoft.Powerpoint
+  - com.apple.Pages
+  - com.apple.Numbers
+  - com.apple.Keynote
+  # Project / task / version control
+  - com.notion.id
+  - com.linear.LinearLauncher
+  - com.atlassian.jira-desktop
+  - com.github.GitHubDesktop
+  - com.sourcetreeapp.SourceTree
+  - com.towerapp.TowerTwo
+
+# --- Apps that are always PERSONAL (never counted as work) ---
+personal_apps:
+  - com.apple.Safari           # comment out if you use Safari for work
+  - com.netflix.Netflix
+  - com.spotify.client
+  - com.apple.Music
+  - com.apple.TV
+  - com.apple.FaceTime
+  - com.apple.iChat
+  - com.apple.Photos
+  - com.apple.news
+  - com.apple.podcasts
+  - com.reddit.Reddit
+  - com.twitter.twitter-mac
+  - com.burbn.instagram
+
+# --- WiFi SSIDs that indicate a WORK location ---
+# When a work period overlaps with a work-WiFi connection it is tagged [work WiFi].
+# This also helps verify you were actually at/connected-to the office.
+work_wifi:
+  - Office-WiFi        # replace with your actual office SSID
+  - VPN-Connected      # add your VPN SSID if applicable
+
+# --- Filtering ---
+# App sessions shorter than this many seconds are ignored (reduces noise)
+min_duration_seconds: 60
+
+# --- Rounding ---
+# All work periods are rounded to this many minutes
+round_minutes: 5
+
+# --- Gap merging ---
+# Consecutive work sessions separated by less than this many minutes
+# are merged into a single work period (e.g. brief breaks, context-switching)
+merge_gap_minutes: 10
+
+# --- Paths ---
+db_path: ~/Library/Application Support/Knowledge/knowledgeC.db
+wifi_log: ~/.screentime_wifi.log

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent — logs WiFi join/leave events every 5 minutes.
+  This feeds the WiFi history used by `tracker.py report`.
+
+  INSTALL:
+    1. Edit TRACKER_PATH below to the absolute path of tracker.py
+    2. Edit PYTHON_PATH if your python3 lives elsewhere (check: which python3)
+    3. Copy this file to ~/Library/LaunchAgents/
+    4. Load it:
+         launchctl load ~/Library/LaunchAgents/com.user.screentime-wifi-logger.plist
+    5. Verify it is running:
+         launchctl list | grep screentime
+
+  UNINSTALL:
+    launchctl unload ~/Library/LaunchAgents/com.user.screentime-wifi-logger.plist
+    rm ~/Library/LaunchAgents/com.user.screentime-wifi-logger.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.screentime-wifi-logger</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ⚠️  Replace /usr/bin/python3 if you use a Homebrew or pyenv python -->
+        <string>/usr/bin/python3</string>
+        <!-- ⚠️  Replace with the absolute path to your tracker.py -->
+        <string>/Users/YOUR_USERNAME/path/to/tracker.py</string>
+        <string>wifi</string>
+    </array>
+
+    <!-- Run every 5 minutes (300 seconds) -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Also run once when the agent is loaded -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Redirect stdout/stderr to log files for debugging -->
+    <key>StandardOutPath</key>
+    <string>/tmp/screentime-wifi.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/screentime-wifi-error.log</string>
+</dict>
+</plist>
