@@ -8,6 +8,7 @@
  */
 
 import 'dotenv/config';
+import { writeFile, mkdir } from 'node:fs/promises';
 import fetch from 'node-fetch';
 
 const API_KEY = process.env.MAILGUN_API_KEY;
@@ -55,10 +56,23 @@ const SAMPLE_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-// ─── Step 1: Fetch available clients ──────────────────────────────────────────
+// Selected clients based on SendGrid open stats for CH/DE user base
+const CLIENTS = [
+  'gmailcom-lm_chrcurrent_win10',    // Gmail webmail (Chrome) — #1 channel by far
+  'android16_gmailapp_pixel10_lm',    // Android Gmail App — top mobile combo
+  'iphone16_18',                      // iPhone Apple Mail — #2 mobile segment
+  'applemail16',                      // Apple Mail desktop — top desktop client
+  'm365_w11_lm_dt',                   // Outlook Microsoft 365 — Windows 11 (Word engine)
+  'outlook2021_win11_lm_dt',          // Outlook 2021 — Windows 11 (Word engine)
+  'o365_w10_lm_dt',                   // Outlook Office 365 — Windows 10 (Word engine)
+  'outlook19',                        // Outlook 2019 — Windows 10 (Word engine)
+  'outlook16_win10',                  // Outlook 2016 — Windows 10 (Word engine)
+];
 
-async function fetchClients() {
-  console.log('=== Step 1: Fetching available clients ===');
+// ─── Step 1: Verify selected clients exist ────────────────────────────────────
+
+async function verifyClients() {
+  console.log('=== Step 1: Verifying selected clients ===');
 
   const res = await fetch(`${BASE_URL}/v1/preview/tests/clients`, {
     headers: { Authorization: authHeader },
@@ -71,13 +85,17 @@ async function fetchClients() {
     throw new Error(`Fetch clients failed: ${res.status}`);
   }
 
-  const clients = Object.values(data.clients);
-  console.log(`Available clients (${clients.length}):`);
-  for (const c of clients) {
-    console.log(`  ${c.id} - ${c.client} | ${c.os} (${c.category})`);
+  const available = data.clients;
+  for (const id of CLIENTS) {
+    const c = available[id];
+    if (c) {
+      console.log(`  OK: ${id} — ${c.client} | ${c.os} (${c.category})`);
+    } else {
+      console.warn(`  MISSING: ${id} — not found in available clients`);
+    }
   }
 
-  return clients.slice(0, 2).map(c => c.id);
+  return CLIENTS.filter(id => available[id]);
 }
 
 // ─── Step 2: Create a preview test ───────────────────────────────────────────
@@ -163,14 +181,26 @@ async function fetchAndPrintResults(testId) {
     throw new Error(`Fetch results failed: ${res.status}`);
   }
 
+  const outDir = 'screenshots';
+  await mkdir(outDir, { recursive: true });
+
   for (const [clientId, client] of Object.entries(data)) {
-    console.log(`\nClient: ${client.displayname} (${clientId})`);
+    const name = client.displayname ?? client.display_name ?? client.client;
+    console.log(`\nClient: ${name} (${clientId})`);
     console.log(`  OS:         ${client.os}`);
     console.log(`  Category:   ${client.category}`);
     console.log(`  Status:     ${client.status}`);
-    console.log(`  Screenshot: ${client.screenshots?.default ?? 'N/A'}`);
-    console.log(`  Thumbnail:  ${client.thumbnail ?? 'N/A'}`);
-    console.log(`  Full thumb: ${client.fullthumbnail ?? 'N/A'}`);
+
+    const url = client.screenshots?.default;
+    if (url) {
+      const imgRes = await fetch(url);
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
+      const path = `${outDir}/${clientId}.png`;
+      await writeFile(path, buffer);
+      console.log(`  Saved:      ${path}`);
+    } else {
+      console.log(`  Screenshot: N/A`);
+    }
   }
 }
 
@@ -178,7 +208,7 @@ async function fetchAndPrintResults(testId) {
 
 (async () => {
   try {
-    const clients = await fetchClients();
+    const clients = await verifyClients();
     const testId = await createPreviewTest(clients);
     const completedTestId = await pollForResults(testId);
     await fetchAndPrintResults(completedTestId);
