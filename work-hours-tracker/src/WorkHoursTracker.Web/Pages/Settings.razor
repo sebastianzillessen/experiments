@@ -1,0 +1,150 @@
+@page "/settings"
+@using System.Text.Json
+@using Microsoft.AspNetCore.DataProtection
+@using Microsoft.EntityFrameworkCore
+@using WorkHoursTracker.Domain.Entities
+@using WorkHoursTracker.Domain.Interfaces
+@using WorkHoursTracker.Infrastructure.Data
+@inject ICurrentUserService CurrentUser
+@inject AppDbContext Db
+@inject IDataProtectionProvider ProtectionProvider
+@inject IAtossClient AtossClient
+@attribute [Authorize]
+
+<h1>Settings</h1>
+
+<div style="max-width: 500px; margin-top: 2rem;">
+    <h2 style="font-size: 1.125rem; margin-bottom: 1rem;">Atoss Connection</h2>
+
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        @if (_hasCredentials)
+        {
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <span style="color: #00b894; font-weight: 500;">Connected</span>
+                <span style="color: var(--text-muted); font-size: 0.875rem;">(@_baseUrl)</span>
+            </div>
+        }
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <label>
+                <span style="font-size: 0.875rem; font-weight: 500;">Atoss Base URL</span>
+                <input type="url" @bind="_baseUrl" placeholder="https://atoss.yourcompany.com"
+                    style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;" />
+            </label>
+            <label>
+                <span style="font-size: 0.875rem; font-weight: 500;">Username</span>
+                <input type="text" @bind="_username" placeholder="Your Atoss username"
+                    style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;" />
+            </label>
+            <label>
+                <span style="font-size: 0.875rem; font-weight: 500;">Password</span>
+                <input type="password" @bind="_password" placeholder="Your Atoss password"
+                    style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;" />
+            </label>
+
+            <button @onclick="SaveCredentials" disabled="@_saving"
+                style="background: var(--primary); color: white; border: none; padding: 0.625rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                @(_saving ? "Saving..." : "Save & Test Connection")
+            </button>
+
+            @if (!string.IsNullOrEmpty(_message))
+            {
+                <div style="font-size: 0.875rem; color: @(_isError ? "#ff6b6b" : "#00b894");">@_message</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _baseUrl = string.Empty;
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private bool _hasCredentials;
+    private bool _saving;
+    private string _message = string.Empty;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Db.UserSettings
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.UserId == CurrentUser.UserId);
+
+        if (settings is not null)
+        {
+            _hasCredentials = !string.IsNullOrEmpty(settings.AtossCredentialsEncrypted);
+            _baseUrl = settings.AtossBaseUrl ?? string.Empty;
+        }
+    }
+
+    private async Task SaveCredentials()
+    {
+        if (string.IsNullOrWhiteSpace(_baseUrl) || string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _message = "All fields are required.";
+            _isError = true;
+            return;
+        }
+
+        _saving = true;
+        _message = string.Empty;
+
+        try
+        {
+            var protector = ProtectionProvider.CreateProtector("AtossCredentials");
+            var credentialsJson = JsonSerializer.Serialize(new { Username = _username, Password = _password });
+            var encrypted = protector.Protect(credentialsJson);
+
+            var settings = await Db.UserSettings
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.UserId == CurrentUser.UserId);
+
+            if (settings is null)
+            {
+                settings = new UserSettings
+                {
+                    UserId = CurrentUser.UserId,
+                    DisplayName = CurrentUser.DisplayName,
+                    Email = CurrentUser.Email,
+                    AtossCredentialsEncrypted = encrypted,
+                    AtossBaseUrl = _baseUrl.TrimEnd('/'),
+                    CreatedUtc = DateTime.UtcNow,
+                    UpdatedUtc = DateTime.UtcNow
+                };
+                Db.UserSettings.Add(settings);
+            }
+            else
+            {
+                settings.AtossCredentialsEncrypted = encrypted;
+                settings.AtossBaseUrl = _baseUrl.TrimEnd('/');
+                settings.UpdatedUtc = DateTime.UtcNow;
+            }
+
+            await Db.SaveChangesAsync();
+
+            var ok = await AtossClient.TestConnectionAsync(CurrentUser.UserId);
+            _hasCredentials = true;
+            _password = string.Empty;
+
+            if (ok)
+            {
+                _message = "Saved. Connection test successful.";
+                _isError = false;
+            }
+            else
+            {
+                _message = "Saved, but connection test failed. Please verify your credentials.";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

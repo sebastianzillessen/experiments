@@ -1,0 +1,80 @@
+@page "/"
+@using Microsoft.EntityFrameworkCore
+@using WorkHoursTracker.Domain.Interfaces
+@using WorkHoursTracker.Infrastructure.Data
+@inject ICurrentUserService CurrentUser
+@inject AppDbContext Db
+@attribute [Authorize]
+
+<h1>Dashboard</h1>
+<p style="color: var(--text-muted); margin-top: 0.5rem;">Welcome, @CurrentUser.DisplayName</p>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Status</div>
+        <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">
+            @if (_isCheckedIn) { <span style="color: #00b894;">Checked In</span> }
+            else { <span style="color: var(--text-muted);">Checked Out</span> }
+        </div>
+    </div>
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Today's Hours</div>
+        <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">@_totalHours.ToString("F1")h</div>
+    </div>
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Entries Today</div>
+        <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">@_entryCount</div>
+    </div>
+</div>
+
+@if (_entries.Any())
+{
+    <h2 style="margin-top: 2rem; font-size: 1.125rem;">Today's Time Entries</h2>
+    <table style="width: 100%; margin-top: 1rem; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border); text-align: left;">
+                <th style="padding: 0.5rem;">Start</th>
+                <th style="padding: 0.5rem;">End</th>
+                <th style="padding: 0.5rem;">Hours</th>
+                <th style="padding: 0.5rem;">Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in _entries)
+            {
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 0.5rem;">@entry.StartTime.ToString("HH:mm")</td>
+                    <td style="padding: 0.5rem;">@(entry.EndTime?.ToString("HH:mm") ?? "ongoing")</td>
+                    <td style="padding: 0.5rem;">@(entry.Hours?.ToString("F1") ?? "--")</td>
+                    <td style="padding: 0.5rem;">@(entry.EntryType ?? "--")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _isCheckedIn;
+    private double _totalHours;
+    private int _entryCount;
+    private List<WorkHoursTracker.Domain.Entities.AtossTimeEntry> _entries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var activeSession = await Db.WorkSessions
+            .Where(s => s.CheckOutUtc == null)
+            .AnyAsync();
+
+        _isCheckedIn = activeSession;
+
+        _entries = await Db.AtossTimeEntries
+            .Where(e => e.Date == today)
+            .OrderBy(e => e.StartTime)
+            .ToListAsync();
+
+        _totalHours = _entries.Sum(e => e.Hours ?? 0);
+        _entryCount = _entries.Count;
+    }
+}
