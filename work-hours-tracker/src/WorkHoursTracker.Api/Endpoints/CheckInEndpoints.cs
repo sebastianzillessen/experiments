@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using WorkHoursTracker.Api.Dtos;
 using WorkHoursTracker.Domain.Entities;
@@ -33,6 +36,12 @@ public static class CheckInEndpoints
             try
             {
                 atossEntry = await atossClient.CheckInAsync(currentUser.UserId, timestamp, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(
+                    detail: $"Atoss not configured: {ex.Message}",
+                    statusCode: 400);
             }
             catch (HttpRequestException ex)
             {
@@ -90,6 +99,12 @@ public static class CheckInEndpoints
             try
             {
                 atossEntry = await atossClient.CheckOutAsync(currentUser.UserId, timestamp, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(
+                    detail: $"Atoss not configured: {ex.Message}",
+                    statusCode: 400);
             }
             catch (HttpRequestException ex)
             {

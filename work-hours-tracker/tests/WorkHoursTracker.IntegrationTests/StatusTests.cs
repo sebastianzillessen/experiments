@@ -8,6 +8,7 @@ using WireMock.ResponseBuilders;
 using WorkHoursTracker.Api.Dtos;
 using WorkHoursTracker.Domain.Entities;
 using WorkHoursTracker.Infrastructure.Data;
+using Xunit;
 
 namespace WorkHoursTracker.IntegrationTests;
 
@@ -25,6 +26,7 @@ public class StatusTests : IClassFixture<WorkHoursTrackerFactory>, IAsyncLifetim
     {
         TestAuthHandler.ResetToDefaults();
         _factory.AtossMock.Reset();
+        await _factory.ClearDatabaseAsync();
 
         await _factory.SeedUserSettingsAsync(
             TestAuthHandler.DefaultUserId,

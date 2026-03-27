@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
+using Xunit;
 
 namespace WorkHoursTracker.IntegrationTests;
 
@@ -20,6 +21,7 @@ public class CheckInTests : IClassFixture<WorkHoursTrackerFactory>, IAsyncLifeti
     {
         TestAuthHandler.ResetToDefaults();
         _factory.AtossMock.Reset();
+        await _factory.ClearDatabaseAsync();
 
         await _factory.SeedUserSettingsAsync(
             TestAuthHandler.DefaultUserId,

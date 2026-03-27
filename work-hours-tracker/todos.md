@@ -20,8 +20,8 @@
 - [ ] Configure real Azure AD app registration (TenantId, ClientId, ClientSecret)
 - [ ] Set up SQL Server and run initial EF Core migration (`dotnet ef migrations add Initial`)
 - [ ] Generate proper PWA icons (192x192, 512x512)
-- [ ] Test full E2E flow with `dotnet test`
-- [ ] Deploy to hosting environment
+- [x] Test full E2E flow with `dotnet test` — 12/12 tests passing
+- [ ] Deploy to Azure hosting environment
 - [ ] Configure real Atoss API base URL and test connection
 
 ## Phase 2: Probability Engine (Future)
