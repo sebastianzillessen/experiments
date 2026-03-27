@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0f3460" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Work Hours Tracker</title>
+    <link rel="manifest" href="/checkin/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <style>
+        :root {
+            --bg: #0f0f23;
+            --surface: #1a1a2e;
+            --primary: #0f3460;
+            --accent: #e94560;
+            --success: #00b894;
+            --text: #f5f6fa;
+            --text-muted: #a0a0b8;
+            --danger: #ff6b6b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #login-screen, #main-screen, #loading-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 400px;
+            gap: 1.5rem;
+        }
+
+        .active { display: flex !important; }
+
+        h1 { font-size: 1.5rem; font-weight: 600; }
+
+        .status-badge {
+            font-size: 0.875rem;
+            padding: 0.375rem 1rem;
+            border-radius: 100px;
+            font-weight: 500;
+        }
+
+        .status-checked-in { background: rgba(0, 184, 148, 0.2); color: var(--success); }
+        .status-checked-out { background: rgba(160, 160, 184, 0.2); color: var(--text-muted); }
+
+        .timer {
+            font-size: 3rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.02em;
+        }
+
+        .action-btn {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            border: none;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .action-btn:active { transform: scale(0.95); }
+
+        .btn-checkin {
+            background: linear-gradient(135deg, var(--success), #00cec9);
+            box-shadow: 0 4px 24px rgba(0, 184, 148, 0.3);
+        }
+
+        .btn-checkout {
+            background: linear-gradient(135deg, var(--accent), var(--danger));
+            box-shadow: 0 4px 24px rgba(233, 69, 96, 0.3);
+        }
+
+        .btn-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .hours-card {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        .hours-card .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .hours-card .value { font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem; }
+
+        .entries-list {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .entry-item {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+        }
+
+        .entry-time { color: var(--text); }
+        .entry-hours { color: var(--text-muted); }
+
+        .login-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.875rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-muted);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .offline-banner {
+            display: none;
+            background: rgba(255, 107, 107, 0.15);
+            color: var(--danger);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        .offline-banner.visible { display: block; }
+
+        .error-msg {
+            color: var(--danger);
+            font-size: 0.875rem;
+            text-align: center;
+            min-height: 1.25rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--success);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="loading-screen" class="active">
+        <div class="spinner"></div>
+        <p style="color: var(--text-muted); font-size: 0.875rem;">Loading...</p>
+    </div>
+
+    <div id="login-screen">
+        <h1>Work Hours Tracker</h1>
+        <p style="color: var(--text-muted);">Sign in with your company account</p>
+        <button class="login-btn" onclick="signIn()">Sign in with Microsoft</button>
+    </div>
+
+    <div id="main-screen">
+        <div class="offline-banner" id="offline-banner">You are offline. Actions will sync when reconnected.</div>
+        <h1>Work Hours</h1>
+        <span class="status-badge" id="status-badge">--</span>
+        <div class="timer" id="timer">00:00:00</div>
+        <button class="action-btn" id="action-btn" onclick="toggleCheckIn()">--</button>
+        <p class="error-msg" id="error-msg"></p>
+        <div class="hours-card">
+            <div class="label">Today's logged hours</div>
+            <div class="value" id="total-hours">--</div>
+        </div>
+        <div class="entries-list" id="entries-list"></div>
+        <button class="refresh-btn" onclick="refreshStatus()">Refresh from Atoss</button>
+    </div>
+
+    <script>
+        // ---- Configuration ----
+        const API_BASE = window.location.origin;
+        const DB_NAME = 'WorkHoursTrackerOffline';
+        const DB_STORE = 'pendingActions';
+
+        // ---- State ----
+        let state = {
+            isCheckedIn: false,
+            sessionStart: null,
+            totalHours: 0,
+            entries: [],
+            accessToken: null,
+            timerInterval: null
+        };
+
+        // ---- Auth (MSAL.js placeholder) ----
+        // In production, load MSAL from CDN and configure with your Entra ID app registration.
+        // For development, we use a simplified flow.
+
+        let msalInstance = null;
+
+        async function initAuth() {
+            // Check if MSAL is available (loaded from CDN)
+            if (typeof msal !== 'undefined') {
+                msalInstance = new msal.PublicClientApplication({
+                    auth: {
+                        clientId: 'YOUR_CLIENT_ID',
+                        authority: 'https://login.microsoftonline.com/YOUR_TENANT_ID',
+                        redirectUri: window.location.origin + '/checkin/'
+                    },
+                    cache: { cacheLocation: 'localStorage' }
+                });
+
+                await msalInstance.initialize();
+
+                const response = await msalInstance.handleRedirectPromise();
+                if (response) {
+                    state.accessToken = response.accessToken;
+                }
+
+                const accounts = msalInstance.getAllAccounts();
+                if (accounts.length > 0) {
+                    try {
+                        const tokenResponse = await msalInstance.acquireTokenSilent({
+                            scopes: ['api://YOUR_CLIENT_ID/.default'],
+                            account: accounts[0]
+                        });
+                        state.accessToken = tokenResponse.accessToken;
+                    } catch {
+                        // Token expired, need interactive login
+                    }
+                }
+            }
+
+            // For development without MSAL: skip auth
+            if (!state.accessToken && typeof msal === 'undefined') {
+                state.accessToken = 'dev-token';
+            }
+        }
+
+        async function signIn() {
+            if (msalInstance) {
+                await msalInstance.loginRedirect({
+                    scopes: ['api://YOUR_CLIENT_ID/.default']
+                });
+            } else {
+                // Dev mode — just proceed
+                state.accessToken = 'dev-token';
+                showScreen('main');
+                await refreshStatus();
+            }
+        }
+
+        // ---- API calls ----
+        function authHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.accessToken}`
+            };
+        }
+
+        async function apiCall(method, path, body = null) {
+            const opts = { method, headers: authHeaders() };
+            if (body) opts.body = JSON.stringify(body);
+
+            const response = await fetch(`${API_BASE}${path}`, opts);
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`${response.status}: ${text}`);
+            }
+            return response.json();
+        }
+
+        async function refreshStatus() {
+            try {
+                const data = await apiCall('GET', '/api/status');
+                state.isCheckedIn = data.isCheckedIn;
+                state.sessionStart = data.currentSessionStart ? new Date(data.currentSessionStart) : null;
+                state.totalHours = data.totalHoursToday;
+                state.entries = data.todayEntries || [];
+                updateUI();
+                showError('');
+            } catch (e) {
+                showError('Failed to load status: ' + e.message);
+            }
+        }
+
+        async function forceRefresh() {
+            try {
+                await apiCall('POST', '/api/status/refresh');
+                await refreshStatus();
+            } catch (e) {
+                showError('Refresh failed: ' + e.message);
+            }
+        }
+
+        async function toggleCheckIn() {
+            const btn = document.getElementById('action-btn');
+            btn.classList.add('btn-disabled');
+            showError('');
+
+            try {
+                if (state.isCheckedIn) {
+                    await apiCall('POST', '/api/checkout', {});
+                } else {
+                    await apiCall('POST', '/api/checkin', {});
+                }
+                await refreshStatus();
+            } catch (e) {
+                if (!navigator.onLine) {
+                    await queueOfflineAction(state.isCheckedIn ? 'checkout' : 'checkin');
+                    // Optimistically update UI
+                    state.isCheckedIn = !state.isCheckedIn;
+                    state.sessionStart = state.isCheckedIn ? new Date() : null;
+                    updateUI();
+                    showError('Action queued for when you are back online.');
+                } else {
+                    showError(e.message);
+                }
+            } finally {
+                btn.classList.remove('btn-disabled');
+            }
+        }
+
+        // ---- Offline Queue (IndexedDB) ----
+        function openDb() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = () => {
+                    request.result.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true });
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function queueOfflineAction(action) {
+            const db = await openDb();
+            const tx = db.transaction(DB_STORE, 'readwrite');
+            tx.objectStore(DB_STORE).add({
+                action,
+                timestampUtc: new Date().toISOString()
+            });
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = resolve;
+                tx.onerror = reject;
+            });
+        }
+
+        async function syncOfflineActions() {
+            const db = await openDb();
+            const tx = db.transaction(DB_STORE, 'readonly');
+            const store = tx.objectStore(DB_STORE);
+            const actions = await new Promise((resolve, reject) => {
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+
+            if (actions.length === 0) return;
+
+            try {
+                await apiCall('POST', '/api/checkin/batch', {
+                    actions: actions.map(a => ({
+                        action: a.action,
+                        timestampUtc: a.timestampUtc
+                    }))
+                });
+
+                // Clear synced actions
+                const clearTx = db.transaction(DB_STORE, 'readwrite');
+                clearTx.objectStore(DB_STORE).clear();
+                await new Promise((resolve) => { clearTx.oncomplete = resolve; });
+
+                await refreshStatus();
+            } catch (e) {
+                console.error('Sync failed:', e);
+            }
+        }
+
+        // ---- UI Updates ----
+        function showScreen(screen) {
+            document.getElementById('loading-screen').classList.remove('active');
+            document.getElementById('login-screen').classList.remove('active');
+            document.getElementById('main-screen').classList.remove('active');
+            document.getElementById(screen + '-screen').classList.add('active');
+        }
+
+        function showError(msg) {
+            document.getElementById('error-msg').textContent = msg;
+        }
+
+        function updateUI() {
+            const badge = document.getElementById('status-badge');
+            const btn = document.getElementById('action-btn');
+            const totalEl = document.getElementById('total-hours');
+            const entriesList = document.getElementById('entries-list');
+
+            if (state.isCheckedIn) {
+                badge.textContent = 'Checked In';
+                badge.className = 'status-badge status-checked-in';
+                btn.textContent = 'Check Out';
+                btn.className = 'action-btn btn-checkout';
+                startTimer();
+            } else {
+                badge.textContent = 'Checked Out';
+                badge.className = 'status-badge status-checked-out';
+                btn.textContent = 'Check In';
+                btn.className = 'action-btn btn-checkin';
+                stopTimer();
+                document.getElementById('timer').textContent = '00:00:00';
+            }
+
+            totalEl.textContent = state.totalHours.toFixed(1) + 'h';
+
+            entriesList.innerHTML = state.entries.map(e => `
+                <div class="entry-item">
+                    <span class="entry-time">${e.startTime} – ${e.endTime || 'ongoing'}</span>
+                    <span class="entry-hours">${e.hours != null ? e.hours.toFixed(1) + 'h' : '--'}</span>
+                </div>
+            `).join('');
+        }
+
+        function startTimer() {
+            stopTimer();
+            state.timerInterval = setInterval(() => {
+                if (!state.sessionStart) return;
+                const diff = Date.now() - state.sessionStart.getTime();
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                document.getElementById('timer').textContent =
+                    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (state.timerInterval) {
+                clearInterval(state.timerInterval);
+                state.timerInterval = null;
+            }
+        }
+
+        // ---- Online/Offline handling ----
+        window.addEventListener('online', () => {
+            document.getElementById('offline-banner').classList.remove('visible');
+            syncOfflineActions();
+        });
+
+        window.addEventListener('offline', () => {
+            document.getElementById('offline-banner').classList.add('visible');
+        });
+
+        // ---- Init ----
+        (async () => {
+            await initAuth();
+
+            if (state.accessToken) {
+                showScreen('main');
+                await refreshStatus();
+                if (!navigator.onLine) {
+                    document.getElementById('offline-banner').classList.add('visible');
+                }
+            } else {
+                showScreen('login');
+            }
+        })();
+
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/checkin/service-worker.js');
+        }
+    </script>
+</body>
+</html>

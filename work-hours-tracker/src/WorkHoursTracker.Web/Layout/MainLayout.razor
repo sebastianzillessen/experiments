@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+
+<div class="layout">
+    <nav class="sidebar">
+        <h2>WorkTrack</h2>
+        <a href="/">Home</a>
+        <a href="/checkin/" target="_blank">Check In (PWA)</a>
+        <a href="/settings">Settings</a>
+        <AuthorizeView>
+            <Authorized>
+                <a href="/MicrosoftIdentity/Account/SignOut" style="margin-top: auto;">Sign Out</a>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+    <main class="content">
+        @Body
+    </main>
+</div>
