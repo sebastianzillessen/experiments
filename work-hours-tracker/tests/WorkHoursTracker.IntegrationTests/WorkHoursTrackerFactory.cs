@@ -36,9 +36,16 @@ public class WorkHoursTrackerFactory : WebApplicationFactory<Program>, IAsyncLif
 
         builder.ConfigureServices(services =>
         {
-            // Remove the real SQL Server DbContext registration
-            services.RemoveAll<DbContextOptions<AppDbContext>>();
-            services.RemoveAll<AppDbContext>();
+            // Remove all EF Core / SQL Server registrations to avoid dual-provider error in EF Core 10
+            var efDescriptors = services
+                .Where(d =>
+                    d.ServiceType.FullName?.Contains("EntityFrameworkCore") == true
+                    || d.ServiceType == typeof(DbContextOptions<AppDbContext>)
+                    || d.ServiceType == typeof(DbContextOptions)
+                    || d.ServiceType == typeof(AppDbContext))
+                .ToList();
+            foreach (var d in efDescriptors)
+                services.Remove(d);
 
             // Add InMemory database with a stable name per factory instance
             services.AddDbContext<AppDbContext>((sp, options) =>
