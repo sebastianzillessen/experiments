@@ -63,6 +63,8 @@ p { margin-bottom:12px; font-size:15px; }
 .weather-day .weekday { font-size:10px; color:var(--stone); text-transform:uppercase; letter-spacing:0.05em; }
 .weather-day .temps { font-size:16px; font-weight:700; color:var(--navy); margin:4px 0; }
 .weather-day .lo { font-size:12px; color:var(--stone); font-weight:400; }
+.weather-day .wind { font-size:11px; color:var(--ocean); font-weight:600; margin-top:4px; display:flex; align-items:center; justify-content:center; gap:3px; }
+.weather-day .wind-arrow { display:inline-block; font-weight:900; }
 
 /* WIND TABLE */
 .wind-table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; }
@@ -568,11 +570,19 @@ window.addEventListener('scroll', () => {
         const lo = Math.round(data.daily.temperature_2m_min[i]);
         const icon = wmoIcons[data.daily.weathercode[i]] || '';
         const note = notes[key] || '';
+        const windKmh = data.daily.windspeed_10m_max[i];
+        const windKn = Math.round(windKmh / 1.852);
+        const windDeg = data.daily.winddirection_10m_dominant[i];
+        const windCompass = windDir(windDeg);
         const el = document.createElement('div');
         el.className = 'weather-day';
         el.innerHTML = `<div class="weekday">${wd}</div><div class="date">${key}</div>`
           + `<div style="font-size:18px;margin:2px 0">${icon}</div>`
           + `<div class="temps">${hi}°</div><div class="lo">${lo}°</div>`
+          + `<div class="wind" title="${windCompass} (${Math.round(windDeg)}°), ${Math.round(windKmh)} km/h">`
+          +   `<span class="wind-arrow" style="transform:rotate(${windDeg}deg)">↓</span>`
+          +   `${windKn} kn ${windCompass}`
+          + `</div>`
           + (note ? `<div class="lo" style="font-size:10px;color:var(--coral);margin-top:2px">${note}</div>` : '');
         grid.appendChild(el);
       });
