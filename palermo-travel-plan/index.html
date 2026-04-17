@@ -7,6 +7,13 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1a3a5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Palermo">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
 <style>
 :root {
   --navy: #1a3a5c; --ocean: #2e6ea6; --coral: #d4654a; --stone: #6b6560;
@@ -495,7 +502,7 @@ window.addEventListener('scroll', () => {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=38.1157&longitude=13.3613'
       + '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weathercode'
       + '&current=temperature_2m,relative_humidity_2m,windspeed_10m,winddirection_10m,weathercode'
-      + '&timezone=Europe/Rome&forecast_days=2';
+      + '&timezone=Europe/Rome&start_date=2026-04-17&end_date=2026-04-26';
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('API error');
     const data = await resp.json();
@@ -544,10 +551,43 @@ window.addEventListener('scroll', () => {
     }
 
     container.innerHTML = html;
+
+    // Replace the 10-day Reiseprognose grid with live API data
+    if (data.daily && data.daily.time && data.daily.time.length) {
+      const wdShort = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+      const notes = Object.fromEntries(weather.map(w => [w.d, w.note]));
+      const grid = document.getElementById('weatherGrid');
+      grid.innerHTML = '';
+      data.daily.time.forEach((iso, i) => {
+        const dt = new Date(iso + 'T12:00:00');
+        const dd = String(dt.getDate()).padStart(2,'0');
+        const mm = String(dt.getMonth()+1).padStart(2,'0');
+        const key = `${dd}.${mm}.`;
+        const wd = wdShort[dt.getDay()];
+        const hi = Math.round(data.daily.temperature_2m_max[i]);
+        const lo = Math.round(data.daily.temperature_2m_min[i]);
+        const icon = wmoIcons[data.daily.weathercode[i]] || '';
+        const note = notes[key] || '';
+        const el = document.createElement('div');
+        el.className = 'weather-day';
+        el.innerHTML = `<div class="weekday">${wd}</div><div class="date">${key}</div>`
+          + `<div style="font-size:18px;margin:2px 0">${icon}</div>`
+          + `<div class="temps">${hi}°</div><div class="lo">${lo}°</div>`
+          + (note ? `<div class="lo" style="font-size:10px;color:var(--coral);margin-top:2px">${note}</div>` : '');
+        grid.appendChild(el);
+      });
+    }
   } catch(e) {
     container.innerHTML = '<div class="live-error">Live-Daten konnten nicht geladen werden. <a href="https://www.windfinder.com/forecast/palermo" target="_blank" style="color:var(--ocean)">→ Windfinder öffnen</a></div>';
   }
 })();
+
+// ─── PWA: register service worker ───
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+  });
+}
 </script>
 </body>
 </html>
