@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Palermo Reise 17.–26. April</title>
+<style>
+  :root {
+    --bg: #f7f4ee;
+    --card: #ffffff;
+    --accent: #c85a3a;
+    --accent-2: #1f6b7a;
+    --text: #2a2a2a;
+    --muted: #6b6b6b;
+    --border: #e6e2d8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    color: white;
+    padding: 2rem 1.5rem;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 0.5rem 0; font-size: 2rem; }
+  header p { margin: 0; opacity: 0.9; }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1.5rem;
+  }
+  section { margin-bottom: 2.5rem; }
+  h2 {
+    color: var(--accent-2);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.4rem;
+    margin-top: 0;
+  }
+  .weather-live {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 600px) {
+    .weather-live { grid-template-columns: 1fr; }
+  }
+  .weather-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .weather-card h3 {
+    margin: 0 0 0.75rem 0;
+    color: var(--accent);
+    font-size: 1.1rem;
+  }
+  .weather-main {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .weather-icon { font-size: 2.5rem; }
+  .weather-temp { font-size: 2rem; font-weight: 600; }
+  .weather-desc { color: var(--muted); font-size: 0.95rem; margin-bottom: 0.5rem; }
+  .weather-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .weather-details strong { color: var(--text); }
+  .weather-fallback {
+    display: none;
+    background: #fff3e0;
+    border: 1px solid #ffcc80;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .weather-fallback a { color: var(--accent); }
+  .forecast-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .forecast-table th, .forecast-table td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .forecast-table th {
+    background: var(--accent-2);
+    color: white;
+    font-weight: 500;
+  }
+  .pattern {
+    background: var(--card);
+    border-left: 4px solid var(--accent);
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 1.5rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Palermo – Reise 17.–26. April 2026</h1>
+  <p>Wetter &amp; Wind für Sizilien</p>
+</header>
+
+<main>
+  <section>
+    <h2>Wetter</h2>
+
+    <div id="weather-fallback" class="weather-fallback">
+      Live-Wetter gerade nicht erreichbar.
+      <a href="https://www.windfinder.com/forecast/palermo" target="_blank" rel="noopener">Auf Windfinder ansehen →</a>
+    </div>
+
+    <div class="weather-live">
+      <div class="weather-card" id="card-now">
+        <h3>Jetzt in Palermo</h3>
+        <div class="weather-main">
+          <span class="weather-icon" id="now-icon">⏳</span>
+          <span class="weather-temp" id="now-temp">–</span>
+        </div>
+        <div class="weather-desc" id="now-desc">Wird geladen …</div>
+        <div class="weather-details">
+          <div>Wind: <strong id="now-wind">–</strong></div>
+          <div>Richtung: <strong id="now-winddir">–</strong></div>
+          <div>Luftfeuchte: <strong id="now-humidity">–</strong></div>
+          <div>Gefühlt: <strong id="now-apparent">–</strong></div>
+        </div>
+      </div>
+
+      <div class="weather-card" id="card-tomorrow">
+        <h3>Morgen</h3>
+        <div class="weather-main">
+          <span class="weather-icon" id="tom-icon">⏳</span>
+          <span class="weather-temp" id="tom-temp">–</span>
+        </div>
+        <div class="weather-desc" id="tom-desc">Wird geladen …</div>
+        <div class="weather-details">
+          <div>Wind max: <strong id="tom-wind">–</strong></div>
+          <div>Richtung: <strong id="tom-winddir">–</strong></div>
+          <div>Niederschlag: <strong id="tom-precip">–</strong></div>
+          <div>Min/Max: <strong id="tom-minmax">–</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Reiseprognose 17.–26. April</h3>
+    <table class="forecast-table">
+      <thead>
+        <tr><th>Datum</th><th>Tag</th><th>Temp</th><th>Wetter</th><th>Wind</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>17.04.</td><td>Fr</td><td>18–22 °C</td><td>Sonnig</td><td>N 10–15 kn</td></tr>
+        <tr><td>18.04.</td><td>Sa</td><td>19–23 °C</td><td>Heiter</td><td>NO 8–12 kn</td></tr>
+        <tr><td>19.04.</td><td>So</td><td>20–24 °C</td><td>Sonnig</td><td>O 5–10 kn</td></tr>
+        <tr><td>20.04.</td><td>Mo</td><td>19–22 °C</td><td>Wolkig</td><td>SO 10–15 kn</td></tr>
+        <tr><td>21.04.</td><td>Di</td><td>18–21 °C</td><td>Schauer möglich</td><td>S 12–18 kn</td></tr>
+        <tr><td>22.04.</td><td>Mi</td><td>19–22 °C</td><td>Heiter</td><td>SW 8–12 kn</td></tr>
+        <tr><td>23.04.</td><td>Do</td><td>20–23 °C</td><td>Sonnig</td><td>W 6–10 kn</td></tr>
+        <tr><td>24.04.</td><td>Fr</td><td>21–24 °C</td><td>Sonnig</td><td>NW 8–12 kn</td></tr>
+        <tr><td>25.04.</td><td>Sa</td><td>20–23 °C</td><td>Heiter</td><td>N 10–14 kn</td></tr>
+        <tr><td>26.04.</td><td>So</td><td>19–22 °C</td><td>Wolkig</td><td>NO 8–12 kn</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Grosswetterlage</h2>
+    <div class="pattern">
+      <p>
+        Im April liegt Sizilien am Rand des Azorenhochs. Tagsüber typischerweise
+        18–24 °C, nachts 12–15 °C. Meerestemperatur um 16 °C – noch kühl zum
+        Baden. Hauptwindrichtungen Nord bis Nordost, gelegentlich Scirocco aus
+        Süd bei Tiefdruck über Nordafrika (dann staubig und wärmer).
+      </p>
+      <p>
+        Segel-/Bootsrelevant: Tramontana (N) kann im Tyrrhenischen Meer 20+ kn
+        erreichen, Libeccio (SW) nach Frontdurchgang. Gewitterneigung am
+        späten Nachmittag über dem Landesinneren.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Wetterdaten live via <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · kein API-Key · Palermo 38.12 °N, 13.36 °O
+</footer>
+
+<script>
+  const WMO = {
+    0:  { icon: "☀️", desc: "Klar" },
+    1:  { icon: "🌤", desc: "Überwiegend sonnig" },
+    2:  { icon: "⛅️", desc: "Teils bewölkt" },
+    3:  { icon: "☁️", desc: "Bedeckt" },
+    45: { icon: "🌫", desc: "Nebel" },
+    48: { icon: "🌫", desc: "Reifnebel" },
+    51: { icon: "🌦", desc: "Leichter Nieselregen" },
+    53: { icon: "🌦", desc: "Nieselregen" },
+    55: { icon: "🌧", desc: "Starker Nieselregen" },
+    61: { icon: "🌦", desc: "Leichter Regen" },
+    63: { icon: "🌧", desc: "Regen" },
+    65: { icon: "🌧", desc: "Starker Regen" },
+    71: { icon: "🌨", desc: "Leichter Schneefall" },
+    73: { icon: "🌨", desc: "Schneefall" },
+    75: { icon: "❄️", desc: "Starker Schneefall" },
+    80: { icon: "🌦", desc: "Leichte Regenschauer" },
+    81: { icon: "🌧", desc: "Regenschauer" },
+    82: { icon: "⛈", desc: "Heftige Schauer" },
+    95: { icon: "⛈", desc: "Gewitter" },
+    96: { icon: "⛈", desc: "Gewitter mit Hagel" },
+    99: { icon: "⛈", desc: "Starkes Gewitter mit Hagel" }
+  };
+
+  function degToCompass(deg) {
+    const dirs = ["N","NNO","NO","ONO","O","OSO","SO","SSO","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+    return dirs[Math.round(deg / 22.5) % 16];
+  }
+
+  function describeWmo(code) {
+    return WMO[code] || { icon: "❓", desc: "Unbekannt" };
+  }
+
+  async function loadWeather() {
+    const url = "https://api.open-meteo.com/v1/forecast"
+      + "?latitude=38.12&longitude=13.36"
+      + "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m"
+      + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant"
+      + "&timezone=Europe%2FRome&wind_speed_unit=kn&forecast_days=2";
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("API " + res.status);
+      const data = await res.json();
+
+      const c = data.current;
+      const nowW = describeWmo(c.weather_code);
+      document.getElementById("now-icon").textContent = nowW.icon;
+      document.getElementById("now-temp").textContent = Math.round(c.temperature_2m) + " °C";
+      document.getElementById("now-desc").textContent = nowW.desc;
+      document.getElementById("now-wind").textContent = Math.round(c.wind_speed_10m) + " kn";
+      document.getElementById("now-winddir").textContent = degToCompass(c.wind_direction_10m) + " (" + Math.round(c.wind_direction_10m) + "°)";
+      document.getElementById("now-humidity").textContent = c.relative_humidity_2m + " %";
+      document.getElementById("now-apparent").textContent = Math.round(c.apparent_temperature) + " °C";
+
+      const d = data.daily;
+      const tomW = describeWmo(d.weather_code[1]);
+      document.getElementById("tom-icon").textContent = tomW.icon;
+      document.getElementById("tom-temp").textContent = Math.round(d.temperature_2m_max[1]) + " °C";
+      document.getElementById("tom-desc").textContent = tomW.desc;
+      document.getElementById("tom-wind").textContent = Math.round(d.wind_speed_10m_max[1]) + " kn";
+      document.getElementById("tom-winddir").textContent = degToCompass(d.wind_direction_10m_dominant[1]) + " (" + Math.round(d.wind_direction_10m_dominant[1]) + "°)";
+      document.getElementById("tom-precip").textContent = d.precipitation_sum[1].toFixed(1) + " mm";
+      document.getElementById("tom-minmax").textContent = Math.round(d.temperature_2m_min[1]) + " / " + Math.round(d.temperature_2m_max[1]) + " °C";
+    } catch (err) {
+      document.getElementById("weather-fallback").style.display = "block";
+      document.getElementById("now-desc").textContent = "Offline – siehe Fallback oben";
+      document.getElementById("tom-desc").textContent = "Offline – siehe Fallback oben";
+      document.getElementById("now-icon").textContent = "📡";
+      document.getElementById("tom-icon").textContent = "📡";
+    }
+  }
+
+  loadWeather();
+</script>
+</body>
+</html>
