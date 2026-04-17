@@ -1,5 +1,7 @@
 name: Deploy Palermo Travel Plan
 
+# Deploys palermo-travel-plan/ to GitHub Pages
+
 on:
   push:
     branches:
