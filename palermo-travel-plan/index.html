@@ -142,6 +142,7 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <a href="#monreale">Monreale</a>
   <a href="#cefalu">Cefalù</a>
   <a href="#aktivitaeten">Mehr</a>
+  <a href="#unesco">UNESCO</a>
   <a href="#nautik">Nautik</a>
   <a href="#restaurants">Essen</a>
   <a href="#infos">Infos</a>
@@ -339,6 +340,43 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
     Schöne Küstenorte, weniger touristisch. Ankermöglichkeiten vorhanden.</p></div>
 </section>
 
+<!-- UNESCO WELTERBE -->
+<section id="unesco">
+  <h2><span class="emoji">🏛</span>UNESCO-Welterbe: Arabisch-Normannisches Palermo</h2>
+  <p class="section-sub">Seit 2015 UNESCO-Welterbe – einzigartige Verschmelzung arabischer, normannischer und byzantinischer Baukunst (12. Jh.)</p>
+
+  <div class="card"><h3>⛪ Kathedrale von Cefalù</h3>
+    <p>Normannendom aus 1131, Auftrag von König Roger II. Das monumentale Christus-Pantokrator-Mosaik in der Apsis gilt als eines der bedeutendsten der Welt. Tipp: kombinieren mit dem Tagesausflug Cefalù.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Cattedrale+di+Cefal%C3%B9" target="_blank" rel="noopener">📍 Google Maps</a>
+  </div>
+
+  <div class="card"><h3>⛪ Kathedrale von Monreale</h3>
+    <p>6.500 m² Goldmosaiken – die grösste byzantinische Mosaikfläche der Welt. Kreuzgang mit 228 Säulen, jede anders verziert. Unbedingt früh (vor 10 Uhr) oder am späten Nachmittag hin.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Duomo+di+Monreale" target="_blank" rel="noopener">📍 Google Maps</a>
+  </div>
+
+  <div class="card"><h3>🏰 Normannenpalast &amp; Cappella Palatina</h3>
+    <p>Ältester Königspalast Europas, heute Sitz des sizilianischen Regionalparlaments. Die Cappella Palatina (1140) verbindet normannische Architektur, byzantinische Mosaiken und eine arabische Muqarnas-Holzdecke – das Highlight Palermos. Tickets ca. 15 €, Kinder unter 14 frei.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Palazzo+dei+Normanni+Cappella+Palatina+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
+  </div>
+
+  <div class="card"><h3>🏛 Castello della Zisa</h3>
+    <p>Arabisch-normannischer Sommerpalast aus dem 12. Jh., von Wilhelm I. begonnen. Kühlungssystem mit Brunnen und Windkanälen – eine Oase mitten in Palermo. Museum für islamische Kunst. Ruhig, selten überlaufen.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Castello+della+Zisa+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
+  </div>
+
+  <div class="card"><h3>🌉 Ponte dell'Ammiraglio</h3>
+    <p>Zwölf-bogige Steinbrücke aus dem Jahr 1131, erbaut von Georg von Antiochien, Admiral König Rogers II. Ursprünglich über den Fluss Oreto – heute liegt die Brücke in einem Park (Fluss umgeleitet). Kurzer Stopp mit Spielplatz in der Nähe.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Ponte+dell%27Ammiraglio+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
+  </div>
+
+  <div class="tip">Tipp: Ein Kombi-Ticket für Normannenpalast + Zisa + Cuba (ca. 18 €) lohnt sich, wenn man beide Orte besucht.</div>
+
+  <div class="links">
+    <div class="link-card"><a href="https://whc.unesco.org/en/list/1487/" target="_blank" rel="noopener">🌐 UNESCO Eintrag</a><div class="label">Offizielle UNESCO-Seite</div></div>
+  </div>
+</section>
+
 <!-- NAUTISCHE KARTE -->
 <section id="nautik">
   <h2><span class="emoji">⚓</span>Nautische Übersicht</h2>
@@ -423,13 +461,13 @@ const weather = [
 ];
 
 const restos = [
-  {n:'Porta Carbone',a:'Via Cala 62',desc:'Legendäres Pani ca\' Meusa seit 1943. Auch Panelle und Arancini.',p:'2–5 €',lat:38.1187,lng:13.3683},
-  {n:'Nni Franco',a:'Via V. Emanuele 102',desc:'Street Food: Panelle, Crocchè, Sfincione. Grosse Terrasse – perfekt mit Kids.',p:'2–5 €',lat:38.1179,lng:13.3670},
-  {n:'Al Tentacolo',a:'P.zza Caracciolo',desc:'Frischer Fisch: du zeigst, er grillt. Fritto Misto, Oktopus. Vucciria-Flair.',p:'10–15 €/P.',lat:38.1174,lng:13.3639},
-  {n:'Buatta',a:'Via V. Emanuele 176',desc:'Moderne sizilianische Küche im historischen Laden von 1870. Reservieren!',p:'15–25 €/P.',lat:38.1171,lng:13.3652},
-  {n:'Bisso Bistrot',a:'Via Maqueda 172A',desc:'Bistro in ehemaliger Buchhandlung. Auch Frühstück!',p:'10–15 €/P.',lat:38.1158,lng:13.3613},
-  {n:'Osteria Alivàru',a:'Via Vetriera 1',desc:'Saisonale Küche, legendäre Caponata. Mo geschlossen.',p:'15–20 €/P.',lat:38.1145,lng:13.3709},
-  {n:'Cappadonia Gelati',a:'Via V. Emanuele 401',desc:'Bestes Gelato Palermos (Lonely Planet)! Pistazie + Brioche.',p:'3–5 €',lat:38.1147,lng:13.3589},
+  {n:'Porta Carbone',a:'Via Cala 62',desc:'Legendäres Pani ca\' Meusa seit 1943. Auch Panelle und Arancini.',p:'2–5 €',lat:38.1201,lng:13.3717},
+  {n:'Nni Franco',a:'Via V. Emanuele 102',desc:'Street Food: Panelle, Crocchè, Sfincione. Grosse Terrasse – perfekt mit Kids.',p:'2–5 €',lat:38.1158,lng:13.3611},
+  {n:'Al Tentacolo',a:'P.zza Caracciolo',desc:'Frischer Fisch: du zeigst, er grillt. Fritto Misto, Oktopus. Vucciria-Flair.',p:'10–15 €/P.',lat:38.1178,lng:13.3643},
+  {n:'Buatta',a:'Via V. Emanuele 176',desc:'Moderne sizilianische Küche im historischen Laden von 1870. Reservieren!',p:'15–25 €/P.',lat:38.1151,lng:13.3594},
+  {n:'Bisso Bistrot',a:'Via Maqueda 172A',desc:'Bistro in ehemaliger Buchhandlung. Auch Frühstück!',p:'10–15 €/P.',lat:38.1156,lng:13.3623},
+  {n:'Osteria Alivàru',a:'Via Vetriera 1',desc:'Saisonale Küche, legendäre Caponata. Mo geschlossen.',p:'15–20 €/P.',lat:38.1138,lng:13.3710},
+  {n:'Cappadonia Gelati',a:'Via V. Emanuele 401',desc:'Bestes Gelato Palermos (Lonely Planet)! Pistazie + Brioche.',p:'3–5 €',lat:38.1128,lng:13.3544},
 ];
 
 // ─── WEATHER GRID ───
@@ -486,45 +524,48 @@ function makeMap(id, center, zoom, markers, opts={}) {
 
 // ─── MAPS ───
 makeMap('mapOverview', [38.14, 13.34], 12, [
-  {lat:38.116,lng:13.362,name:'Altstadt Palermo',info:'Quattro Canti, Ballarò, Street Food'},
-  {lat:38.120,lng:13.368,name:'Hafen La Cala',info:'Marina, Liegeplatz Boot'},
-  {lat:38.110,lng:13.373,name:'Orto Botanico',info:'Schildkröten, Spielfläche'},
-  {lat:38.198,lng:13.335,name:'Mondello Beach',info:'2 km Sand, Bus 806'},
-  {lat:38.205,lng:13.285,name:'Capo Gallo',info:'Meeresschutzgebiet'},
-  {lat:38.080,lng:13.290,name:'Monreale',info:'Normannendom, Bus 389'},
-  {lat:38.128,lng:13.345,name:'Giardino Inglese',info:'Spielplatz'},
+  {lat:38.1156,lng:13.3625,name:'Altstadt Palermo',info:'Quattro Canti, Ballarò, Street Food'},
+  {lat:38.1209,lng:13.3701,name:'Hafen La Cala',info:'Marina, Liegeplatz Boot'},
+  {lat:38.1112,lng:13.3728,name:'Orto Botanico',info:'Schildkröten, Spielfläche'},
+  {lat:38.2006,lng:13.3294,name:'Mondello Beach',info:'2 km Sand, Bus 806'},
+  {lat:38.2180,lng:13.2884,name:'Capo Gallo',info:'Meeresschutzgebiet (Leuchtturm)'},
+  {lat:38.0815,lng:13.2923,name:'Monreale',info:'UNESCO – Normannendom, Bus 389'},
+  {lat:38.1316,lng:13.3510,name:'Giardino Inglese',info:'Spielplatz'},
+  {lat:38.1110,lng:13.3534,name:'Palazzo dei Normanni',info:'UNESCO – Cappella Palatina'},
+  {lat:38.1287,lng:13.3426,name:'Castello della Zisa',info:'UNESCO – arabisch-normannischer Palast'},
+  {lat:38.1069,lng:13.3762,name:"Ponte dell'Ammiraglio",info:'UNESCO – Steinbrücke von 1131'},
 ]);
 
-makeMap('mapAltstadt', [38.114, 13.364], 16, [
-  {lat:38.1164,lng:13.3680,name:'La Cala Hafen',info:'Liegeplatz'},
-  {lat:38.1157,lng:13.3570,name:'Quattro Canti',info:'Kreuzung der 4 Stadtteile'},
-  {lat:38.1120,lng:13.3620,name:'Fontana Pretoria',info:'Brunnen der Schande'},
-  {lat:38.1143,lng:13.3538,name:'Mercato Ballarò',info:'Street Food!'},
-  {lat:38.1100,lng:13.3690,name:'Orto Botanico',info:'5 EUR, Kinder frei'},
-  {lat:38.1128,lng:13.3683,name:'Spasimo',info:'Offene Kirche, WC'},
-  {lat:38.1170,lng:13.3681,name:'Famila Superstore',info:'Bunkern! Mo–Sa 8–21h'},
+makeMap('mapAltstadt', [38.1155, 13.3645], 15, [
+  {lat:38.1209,lng:13.3701,name:'La Cala Hafen',info:'Liegeplatz'},
+  {lat:38.1156,lng:13.3625,name:'Quattro Canti',info:'Kreuzung der 4 Stadtteile'},
+  {lat:38.1153,lng:13.3627,name:'Fontana Pretoria',info:'Brunnen der Schande'},
+  {lat:38.1115,lng:13.3602,name:'Mercato Ballarò',info:'Street Food!'},
+  {lat:38.1112,lng:13.3728,name:'Orto Botanico',info:'5 EUR, Kinder frei'},
+  {lat:38.1148,lng:13.3680,name:'Spasimo',info:'Offene Kirche, WC'},
+  {lat:38.1176,lng:13.3688,name:'Famila Superstore',info:'Bunkern! Mo–Sa 8–21h'},
 ]);
 
-makeMap('mapMondello', [38.20, 13.31], 14, [
-  {lat:38.197,lng:13.335,name:'Mondello Beach',info:'Hausstrand, flaches Wasser'},
-  {lat:38.210,lng:13.290,name:'Capo Gallo',info:'Zone-A beachten'},
-  {lat:38.207,lng:13.288,name:'Ankerbucht',info:'Geschützt, kristallklar'},
-  {lat:38.195,lng:13.293,name:'Sferracavallo',info:'Fischrestaurants, Windschutz'},
+makeMap('mapMondello', [38.206, 13.308], 14, [
+  {lat:38.2006,lng:13.3294,name:'Mondello Beach',info:'Hausstrand, flaches Wasser'},
+  {lat:38.2180,lng:13.2884,name:'Capo Gallo',info:'Leuchtturm, Zone-A beachten'},
+  {lat:38.2095,lng:13.2870,name:'Baia del Corallo',info:'Geschützte Ankerbucht, kristallklar'},
+  {lat:38.2015,lng:13.2815,name:'Sferracavallo',info:'Fischrestaurants, Windschutz'},
 ], {color:'#2e6ea6'});
 
-makeMap('mapCefalu', [38.039, 13.928], 15, [
-  {lat:38.0387,lng:13.9268,name:'Altstadt Cefalù',info:'Gassen, Shops, Gelato'},
-  {lat:38.0362,lng:13.9305,name:'Strand',info:'Goldener Sand, flach'},
-  {lat:38.0405,lng:13.9248,name:'Normannendom',info:'UNESCO Welterbe'},
-  {lat:38.0430,lng:13.9260,name:'La Rocca',info:'Panoramablick, Aufstieg ~45min'},
+makeMap('mapCefalu', [38.039, 13.923], 15, [
+  {lat:38.0391,lng:13.9235,name:'Altstadt Cefalù',info:'Gassen, Shops, Gelato'},
+  {lat:38.0397,lng:13.9215,name:'Lungomare',info:'Goldener Sandstrand, flach'},
+  {lat:38.0390,lng:13.9236,name:'Normannendom',info:'UNESCO Welterbe'},
+  {lat:38.0407,lng:13.9240,name:'La Rocca',info:'Panoramablick, Aufstieg ~45 min'},
 ], {color:'#3a7d44'});
 
-makeMap('mapNautical', [38.14, 13.34], 12, [
-  {lat:38.118,lng:13.380,name:'La Cala Marina',info:'Strom/Wasser/Diesel'},
-  {lat:38.205,lng:13.340,name:'Mondello Bucht',info:'Ankern vor Strand'},
-  {lat:38.215,lng:13.275,name:'Capo Gallo',info:'Zone-A beachten!'},
-  {lat:38.145,lng:13.390,name:'Reede Palermo',info:'Nur bei ruhiger See'},
-  {lat:38.210,lng:13.275,name:'Sferracavallo',info:'Windschutz bei W'},
+makeMap('mapNautical', [38.16, 13.33], 12, [
+  {lat:38.1215,lng:13.3705,name:'La Cala Marina',info:'Strom/Wasser/Diesel'},
+  {lat:38.2005,lng:13.3295,name:'Mondello Bucht',info:'Ankern vor Strand'},
+  {lat:38.2095,lng:13.2870,name:'Capo Gallo',info:'Zone-A beachten!'},
+  {lat:38.1450,lng:13.3850,name:'Reede Palermo',info:'Nur bei ruhiger See'},
+  {lat:38.2015,lng:13.2815,name:'Sferracavallo',info:'Windschutz bei W'},
 ], {color:'#1a3a5c', seamark:true});
 
 makeMap('mapRestos', [38.116, 13.365], 16,
