@@ -137,6 +137,7 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
 <nav id="topnav">
   <a href="#wetter">Wetter</a>
   <a href="#uebersicht">Übersicht</a>
+  <a href="#guide">Altstadt-Guide</a>
   <a href="#altstadt">Altstadt</a>
   <a href="#mondello">Mondello</a>
   <a href="#monreale">Monreale</a>
@@ -198,6 +199,25 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <p class="section-sub">Alle Ziele auf einen Blick – per Bus, Boot oder zu Fuss erreichbar</p>
   <div class="map-wrap"><div id="mapOverview" class="leaflet-container"></div></div>
   <div class="map-caption">Karte: OpenStreetMap contributors (ODbL)</div>
+</section>
+
+<!-- ALTSTADT-GUIDE (combined hotels + restaurants + landmarks) -->
+<section id="guide">
+  <h2><span class="emoji">📖</span>Altstadt-Guide: Essen, Schlafen, Sehen</h2>
+  <p class="section-sub">Kombinierte Karte wie im Reiseführer – Hotels (blau), Restaurants (grün), Sehenswürdigkeiten (orange)</p>
+  <div class="map-wrap"><div id="mapGuide" class="leaflet-container"></div></div>
+  <div class="map-caption">Numerierung passend zu den Listen unten</div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;font-size:12px">
+    <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:16px;height:16px;background:#1a3a5c;border-radius:50%"></span>Übernachten</span>
+    <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:16px;height:16px;background:#3a7d44;border-radius:50%"></span>Essen &amp; Trinken</span>
+    <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:16px;height:16px;background:#d4654a;border-radius:50%"></span>Sehenswürdigkeit</span>
+  </div>
+
+  <div class="card">
+    <h3>🛌 Übernachten</h3>
+    <div id="hotelList"></div>
+  </div>
 </section>
 
 <!-- ALTSTADT -->
@@ -499,6 +519,17 @@ const weather = [
   {d:'26.04.',wd:'So',hi:21,lo:15,note:'Abreise'},
 ];
 
+const hotels = [
+  {n:'Grand Hotel et Des Palmes',a:'Via Roma 398',desc:'Historisch, 1856 eröffnet. Wagner wohnte hier. 4★, zentral.',p:'ca. 150 €',lat:38.1231,lng:13.3632},
+  {n:'Hotel Centrale Palace',a:'Corso V. Emanuele 327',desc:'Palazzo aus dem 18. Jh., Dachterrasse mit Blick auf Kathedrale. 4★.',p:'ca. 140 €',lat:38.1156,lng:13.3596},
+  {n:'Hotel Massimo Plaza',a:'Via Maqueda 437',desc:'Boutique-Hotel direkt am Teatro Massimo. 4★.',p:'ca. 130 €',lat:38.1200,lng:13.3608},
+  {n:'Hotel Porta Felice',a:'Via Butera 47',desc:'Ruhig in der Kalsa, Dachpool mit Meerblick. 4★.',p:'ca. 160 €',lat:38.1172,lng:13.3720},
+  {n:'NH Hotel Palermo',a:'Foro Italico Umberto I 22',desc:'Modern, Meerblick, 5 Min vom Hafen. 4★.',p:'ca. 120 €',lat:38.1133,lng:13.3742},
+  {n:'B&B Hotel Quattro Canti',a:'Via Vittorio Emanuele 336',desc:'Direkt an den Quattro Canti, preiswert. 3★.',p:'ca. 80 €',lat:38.1158,lng:13.3620},
+  {n:'Hotel Villa Archirafi',a:'Via Lincoln 30',desc:'Nahe Hauptbahnhof und Botanischer Garten, Garten. 3★.',p:'ca. 90 €',lat:38.1127,lng:13.3683},
+  {n:'Hotel Joli',a:'Via Michele Amari 11',desc:'Klein und zentral, nahe Teatro Politeama. 3★.',p:'ca. 100 €',lat:38.1238,lng:13.3648},
+];
+
 const restos = [
   {n:'Porta Carbone',a:'Via Cala 62',desc:'Legendäres Pani ca\' Meusa seit 1943. Auch Panelle und Arancini.',p:'2–5 €',lat:38.1201,lng:13.3717},
   {n:'Nni Franco',a:'Via V. Emanuele 102',desc:'Street Food: Panelle, Crocchè, Sfincione. Grosse Terrasse – perfekt mit Kids.',p:'2–5 €',lat:38.1158,lng:13.3611},
@@ -525,6 +556,13 @@ restos.forEach((r,i) => {
   rl.innerHTML += `<div class="resto"><div class="num">${i+1}</div><div class="info"><div class="name">${r.n}</div><div class="addr">${r.a}</div><div class="desc">${r.desc}</div><span class="price">${r.p}</span> <a class="gmap-link" href="${gurl}" target="_blank" rel="noopener">📍 Google Maps</a></div></div>`;
 });
 
+// ─── HOTEL LIST ───
+const hl = document.getElementById('hotelList');
+hotels.forEach((h,i) => {
+  const gurl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(h.n + ', ' + h.a + ', Palermo');
+  hl.innerHTML += `<div class="resto"><div class="num" style="background:#1a3a5c">${i+1}</div><div class="info"><div class="name">${h.n}</div><div class="addr">${h.a}</div><div class="desc">${h.desc}</div><span class="price" style="color:#1a3a5c">${h.p}</span> <a class="gmap-link" href="${gurl}" target="_blank" rel="noopener">📍 Google Maps</a></div></div>`;
+});
+
 // ─── GOOGLE MAPS URL HELPERS ───
 function gmapsCoords(lat, lng, label) {
   const q = label ? encodeURIComponent(label) + '@' + lat + ',' + lng : lat + ',' + lng;
@@ -546,10 +584,11 @@ function makeMap(id, center, zoom, markers, opts={}) {
     }).addTo(map);
   }
   markers.forEach((m,i) => {
-    const color = opts.color || '#d4654a';
+    const color = m.color || opts.color || '#d4654a';
+    const n = m.n != null ? m.n : (i+1);
     const icon = L.divIcon({
       className: '',
-      html: `<div style="background:${color};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${i+1}</div>`,
+      html: `<div style="background:${color};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${n}</div>`,
       iconSize: [26,26], iconAnchor: [13,13]
     });
     const gurl = gmapsQuery(m.name + ', Palermo');
@@ -614,6 +653,23 @@ makeMap('mapRestos', [38.116, 13.365], 16,
   restos.map((r,i) => ({lat:r.lat,lng:r.lng,name:r.n,info:r.desc})),
   {color:'#3a7d44'}
 );
+
+// Combined Altstadt-Guide: hotels (navy) + restaurants (green) + key landmarks (coral)
+const guideLandmarks = [
+  {lat:38.1156,lng:13.3625,name:'Quattro Canti',info:'Barocke 4 Ecken'},
+  {lat:38.1153,lng:13.3627,name:'Fontana Pretoria',info:'Brunnen der Schande'},
+  {lat:38.1149,lng:13.3628,name:'La Martorana',info:'UNESCO – Goldmosaiken'},
+  {lat:38.1110,lng:13.3534,name:'Palazzo dei Normanni',info:'UNESCO – Cappella Palatina'},
+  {lat:38.1144,lng:13.3562,name:'Kathedrale Palermo',info:'Normannische Kathedrale'},
+  {lat:38.1115,lng:13.3602,name:'Mercato Ballarò',info:'Street-Food-Markt'},
+  {lat:38.1209,lng:13.3701,name:'La Cala Hafen',info:'Marina'},
+  {lat:38.1200,lng:13.3607,name:'Teatro Massimo',info:'Opernhaus'},
+];
+makeMap('mapGuide', [38.1175, 13.3645], 15, [
+  ...hotels.map((h,i) => ({lat:h.lat, lng:h.lng, name:h.n, info:h.a + ' · ' + h.p, color:'#1a3a5c', n:i+1})),
+  ...restos.map((r,i) => ({lat:r.lat, lng:r.lng, name:r.n, info:r.a + ' · ' + r.p, color:'#3a7d44', n:i+1})),
+  ...guideLandmarks.map((l,i) => ({...l, color:'#d4654a', n:String.fromCharCode(65+i)})), // A, B, C...
+]);
 
 // ─── NAV ACTIVE STATE ───
 const sections = document.querySelectorAll('section');
