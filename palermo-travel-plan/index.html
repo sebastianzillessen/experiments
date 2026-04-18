@@ -124,6 +124,12 @@ p { margin-bottom:12px; font-size:15px; }
 
 /* FOOTER */
 footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center; padding:24px; font-size:12px; }
+
+/* GOOGLE MAPS LINK */
+.gmap-link { display:inline-flex; align-items:center; gap:4px; background:var(--ocean); color:#fff !important; text-decoration:none; font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; margin-top:8px; transition:background .2s; }
+.gmap-link:hover { background:var(--navy); }
+.gmap-inline { display:inline-flex; align-items:center; gap:3px; color:var(--ocean) !important; text-decoration:none; font-size:12px; font-weight:600; margin-left:4px; }
+.gmap-inline:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -202,13 +208,21 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
 
   <div class="card">
     <h3>Rundgang</h3>
-    <p>La Cala Hafen → Quattro Canti → Fontana Pretoria → Mercato Ballarò (Street Food!) → Santa Maria dello Spasimo (offene Kirche, WC) → Orto Botanico (Schildkröten, Teich, Spielfläche).</p>
+    <p>
+      <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=La+Cala+Palermo" target="_blank" rel="noopener">📍 La Cala Hafen</a> →
+      <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Quattro+Canti+Palermo" target="_blank" rel="noopener">📍 Quattro Canti</a> →
+      <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Fontana+Pretoria+Palermo" target="_blank" rel="noopener">📍 Fontana Pretoria</a> →
+      <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Mercato+Ballar%C3%B2+Palermo" target="_blank" rel="noopener">📍 Mercato Ballarò</a> (Street Food!) →
+      <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Santa+Maria+dello+Spasimo+Palermo" target="_blank" rel="noopener">📍 Santa Maria dello Spasimo</a> (offene Kirche, WC) →
+      <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Orto+Botanico+Palermo" target="_blank" rel="noopener">📍 Orto Botanico</a> (Schildkröten, Teich, Spielfläche).
+    </p>
     <p>Lilly und Miriam werden die Ape-Dreiräder und die bunten Märkte lieben.</p>
   </div>
 
   <div class="card">
     <h3>🛒 Bunkern / Supermarkt</h3>
     <p><strong>Famila Superstore</strong> – Salita Partanna 1, 5 Min. zu Fuss vom Hafen. Grosses Sortiment inkl. Fleisch/Käse-Theke, Obst, Windeln. Mo–Sa 8–21h, So 8–20:30h.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Famila+Superstore+Salita+Partanna+1+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
   </div>
 
   <div class="card">
@@ -219,9 +233,9 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <div class="tip">Tipp: Auf dem Ballarò-Markt unbedingt Sfincione probieren – der sizilianische Vorläufer der Pizza!</div>
 
   <div class="links">
-    <div class="link-card"><a href="https://www.ortobotanico.unipa.it" target="_blank">🌿 Orto Botanico</a><div class="label">5 EUR, Kinder unter 6 gratis</div></div>
-    <div class="link-card"><a href="https://goo.gl/maps/Palermo-Ballaro" target="_blank">🗺 Mercato Ballarò</a><div class="label">Google Maps Standort</div></div>
-    <div class="link-card"><a href="https://www.mimmoculicchia.com" target="_blank">🎭 Teatro dei Pupi</a><div class="label">Marionettentheater, ~10 EUR</div></div>
+    <div class="link-card"><a href="https://www.ortobotanico.unipa.it" target="_blank">🌿 Orto Botanico</a><div class="label">5 EUR, Kinder unter 6 gratis</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Orto+Botanico+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+    <div class="link-card"><a href="https://www.google.com/maps/search/?api=1&amp;query=Mercato+Ballar%C3%B2+Palermo" target="_blank">🗺 Mercato Ballarò</a><div class="label">Street-Food-Markt</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Mercato+Ballar%C3%B2+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+    <div class="link-card"><a href="https://www.mimmoculicchia.com" target="_blank">🎭 Teatro dei Pupi</a><div class="label">Marionettentheater, ~10 EUR</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Teatro+dei+Pupi+Mimmo+Cuticchio+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
   </div>
 </section>
 
@@ -235,16 +249,19 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <div class="card">
     <h3>Mondello Beach</h3>
     <p>Palermos Hausstrand – 2 km feiner Sand mit flachem, klarem Wasser. Perfekt für alle drei Kids! Bus 806 ab Giardino Inglese (alle 10 Min) oder direkt per Boot.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Mondello+Beach+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
   </div>
 
   <div class="card">
     <h3>Capo Gallo</h3>
     <p>Meeresschutzgebiet zwischen Mondello und Sferracavallo. Kristallklares Wasser, geschützte Buchten. Lilly kann mit Taucherbrille vom Boot Fische schauen! Ankern nur ausserhalb Zone-A.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Riserva+Naturale+Capo+Gallo+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
   </div>
 
   <div class="card">
     <h3>Sferracavallo</h3>
     <p>Fischerort mit exzellenten Fischrestaurants. Bei Westwind geschützter als Mondello – ideal für eine Ankernacht mit den Kids.</p>
+    <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Sferracavallo+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
   </div>
 
   <div class="tip">Tipp: Nordende Mondello (Richtung Capo Gallo) ist ruhiger mit flacherem Wasser – ideal mit Kleinkindern.</div>
@@ -269,7 +286,7 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <div class="tip">Tipp: Früh hin (ab 9 Uhr) – ab Mittag kommen die Reisegruppen.</div>
 
   <div class="links">
-    <div class="link-card"><a href="https://www.monrealeduomo.it" target="_blank">⛪ Monreale Dom</a><div class="label">Offizielle Website</div></div>
+    <div class="link-card"><a href="https://www.monrealeduomo.it" target="_blank">⛪ Monreale Dom</a><div class="label">Offizielle Website</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Duomo+di+Monreale" target="_blank" rel="noopener">📍 Google Maps</a></div>
   </div>
 </section>
 
@@ -298,8 +315,10 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <div class="tip">Tipp: Zug ist mit Kinderwagen einfacher als Auto (Parkplätze in Cefalù = Albtraum). Mietwagen nur für Castelbuono/Madonie-Kombi.</div>
 
   <div class="links">
-    <div class="link-card"><a href="https://www.trenitalia.com" target="_blank">🚂 Trenitalia</a><div class="label">Zugfahrplan & Tickets</div></div>
-    <div class="link-card"><a href="https://www.visitcefalu.it" target="_blank">🏖 Visit Cefalù</a><div class="label">Tourismus-Info</div></div>
+    <div class="link-card"><a href="https://www.trenitalia.com" target="_blank">🚂 Trenitalia</a><div class="label">Zugfahrplan & Tickets</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Palermo+Centrale+Bahnhof" target="_blank" rel="noopener">📍 Palermo Centrale</a></div>
+    <div class="link-card"><a href="https://www.visitcefalu.it" target="_blank">🏖 Visit Cefalù</a><div class="label">Tourismus-Info</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Cefal%C3%B9+Altstadt" target="_blank" rel="noopener">📍 Cefalù Altstadt</a></div>
+    <div class="link-card"><a href="https://www.google.com/maps/search/?api=1&amp;query=Cattedrale+di+Cefal%C3%B9" target="_blank">⛪ Normannendom</a><div class="label">UNESCO Welterbe</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Cattedrale+di+Cefal%C3%B9" target="_blank" rel="noopener">📍 Google Maps</a></div>
+    <div class="link-card"><a href="https://www.google.com/maps/search/?api=1&amp;query=La+Rocca+Cefal%C3%B9" target="_blank">🏔 La Rocca</a><div class="label">Panoramablick, Aufstieg ~45 Min</div><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=La+Rocca+Cefal%C3%B9" target="_blank" rel="noopener">📍 Google Maps</a></div>
   </div>
 </section>
 
@@ -308,12 +327,16 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <h2><span class="emoji">🎭</span>Weitere Aktivitäten & Regentage</h2>
   <p class="section-sub">Ideen für die restlichen Tage</p>
 
-  <div class="card"><h3>🌿 Orto Botanico</h3><p>Tropisches Paradies mitten in Palermo. Teich mit Schildkröten und Goldfischen, riesige Bäume, viel Platz zum Rennen. 5 €, Kinder unter 6 frei.</p></div>
-  <div class="card"><h3>🎭 Teatro dei Pupi</h3><p>Klassisches sizilianisches Marionettentheater mit Ritter-Geschichten. Lilly und Miriam werden begeistert sein. Shows meist am Wochenende, ca. 10 €.</p></div>
-  <div class="card"><h3>🏰 Palazzo dei Normanni & Cappella Palatina</h3><p>Königspalast mit atemberaubenden Mosaiken. Ähnlich beeindruckend wie Monreale, aber mitten in der Stadt.</p></div>
-  <div class="card"><h3>🛝 Giardino Inglese</h3><p>Park mit grossem Spielplatz (Rutsche, Schaukel). Direkt an Bus-806-Linie. Perfekt zum Auspowern.</p></div>
-  <div class="card"><h3>💀 Katakomben der Kapuziner</h3><p>Faszinierend, aber evtl. zu gruselig für Miriam (3). Am besten nur Sebi + Opa + Lilly. Ca. 3 € Eintritt.</p></div>
-  <div class="card"><h3>⛵ Segeltag Richtung Osten</h3><p>Bagheria, Porticello, Santa Flavia. Schöne Küstenorte, weniger touristisch. Ankermöglichkeiten vorhanden.</p></div>
+  <div class="card"><h3>🌿 Orto Botanico</h3><p>Tropisches Paradies mitten in Palermo. Teich mit Schildkröten und Goldfischen, riesige Bäume, viel Platz zum Rennen. 5 €, Kinder unter 6 frei.</p><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Orto+Botanico+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+  <div class="card"><h3>🎭 Teatro dei Pupi</h3><p>Klassisches sizilianisches Marionettentheater mit Ritter-Geschichten. Lilly und Miriam werden begeistert sein. Shows meist am Wochenende, ca. 10 €.</p><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Teatro+dei+Pupi+Mimmo+Cuticchio+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+  <div class="card"><h3>🏰 Palazzo dei Normanni & Cappella Palatina</h3><p>Königspalast mit atemberaubenden Mosaiken. Ähnlich beeindruckend wie Monreale, aber mitten in der Stadt.</p><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Palazzo+dei+Normanni+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+  <div class="card"><h3>🛝 Giardino Inglese</h3><p>Park mit grossem Spielplatz (Rutsche, Schaukel). Direkt an Bus-806-Linie. Perfekt zum Auspowern.</p><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Giardino+Inglese+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+  <div class="card"><h3>💀 Katakomben der Kapuziner</h3><p>Faszinierend, aber evtl. zu gruselig für Miriam (3). Am besten nur Sebi + Opa + Lilly. Ca. 3 € Eintritt.</p><a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Catacombe+dei+Cappuccini+Palermo" target="_blank" rel="noopener">📍 Google Maps</a></div>
+  <div class="card"><h3>⛵ Segeltag Richtung Osten</h3><p>
+    <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Bagheria+Sicily" target="_blank" rel="noopener">📍 Bagheria</a>,
+    <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Porticello+Sicily" target="_blank" rel="noopener">📍 Porticello</a>,
+    <a class="gmap-inline" href="https://www.google.com/maps/search/?api=1&amp;query=Santa+Flavia+Sicily" target="_blank" rel="noopener">📍 Santa Flavia</a>.
+    Schöne Küstenorte, weniger touristisch. Ankermöglichkeiten vorhanden.</p></div>
 </section>
 
 <!-- NAUTISCHE KARTE -->
@@ -326,12 +349,12 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <div class="card">
     <h3>Ankerplätze</h3>
     <table class="wind-table">
-      <tr><th>Nr</th><th>Ort</th><th>Info</th><th>Mit Kids</th></tr>
-      <tr><td>1</td><td>La Cala Marina</td><td>Stadthafen, Strom/Wasser/Diesel</td><td>Zentral, kurze Wege</td></tr>
-      <tr><td>2</td><td>Mondello Bucht</td><td>Ankern vor dem Strand</td><td>Dingi zum Strand</td></tr>
-      <tr><td>3</td><td>Capo Gallo</td><td>Geschützte Buchten, Zone-A beachten</td><td>Schnorcheln ab Boot</td></tr>
-      <tr><td>4</td><td>Reede Palermo</td><td>Offener Ankerplatz vor der Stadt</td><td>Nur bei ruhiger See</td></tr>
-      <tr><td>5</td><td>Sferracavallo</td><td>Windgeschützt bei Westwind</td><td>Ruhige Ankernacht</td></tr>
+      <tr><th>Nr</th><th>Ort</th><th>Info</th><th>Mit Kids</th><th>Maps</th></tr>
+      <tr><td>1</td><td>La Cala Marina</td><td>Stadthafen, Strom/Wasser/Diesel</td><td>Zentral, kurze Wege</td><td><a href="https://www.google.com/maps/search/?api=1&amp;query=La+Cala+Marina+Palermo" target="_blank" rel="noopener">📍</a></td></tr>
+      <tr><td>2</td><td>Mondello Bucht</td><td>Ankern vor dem Strand</td><td>Dingi zum Strand</td><td><a href="https://www.google.com/maps/search/?api=1&amp;query=Mondello+Beach+Palermo" target="_blank" rel="noopener">📍</a></td></tr>
+      <tr><td>3</td><td>Capo Gallo</td><td>Geschützte Buchten, Zone-A beachten</td><td>Schnorcheln ab Boot</td><td><a href="https://www.google.com/maps/search/?api=1&amp;query=Riserva+Naturale+Capo+Gallo" target="_blank" rel="noopener">📍</a></td></tr>
+      <tr><td>4</td><td>Reede Palermo</td><td>Offener Ankerplatz vor der Stadt</td><td>Nur bei ruhiger See</td><td><a href="https://www.google.com/maps/search/?api=1&amp;query=38.145,13.390" target="_blank" rel="noopener">📍</a></td></tr>
+      <tr><td>5</td><td>Sferracavallo</td><td>Windgeschützt bei Westwind</td><td>Ruhige Ankernacht</td><td><a href="https://www.google.com/maps/search/?api=1&amp;query=Sferracavallo+Palermo" target="_blank" rel="noopener">📍</a></td></tr>
     </table>
   </div>
 
@@ -360,12 +383,21 @@ footer { background:var(--navy); color:rgba(255,255,255,0.6); text-align:center;
   <h2><span class="emoji">📋</span>Praktische Infos</h2>
 
   <div class="info-grid">
-    <div class="info-item"><h4>🛒 Bunkern</h4><p>Famila Superstore, Salita Partanna 1. 5 Min vom Hafen. Mo–Sa 8–21h, So 8–20:30h. Alternative: Lidl, Via Roma 59 (grösser, günstiger).</p></div>
-    <div class="info-item"><h4>⚓ Marina La Cala</h4><p>Kurzzeit-Liegeplatz ca. 30–50 €/Nacht. Strom, Wasser, Diesel. Toiletten/Duschen an Land.</p></div>
+    <div class="info-item"><h4>🛒 Bunkern</h4><p>Famila Superstore, Salita Partanna 1. 5 Min vom Hafen. Mo–Sa 8–21h, So 8–20:30h. Alternative: Lidl, Via Roma 59 (grösser, günstiger).</p>
+      <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Famila+Superstore+Salita+Partanna+Palermo" target="_blank" rel="noopener">📍 Famila</a>
+      <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Lidl+Via+Roma+59+Palermo" target="_blank" rel="noopener">📍 Lidl</a>
+    </div>
+    <div class="info-item"><h4>⚓ Marina La Cala</h4><p>Kurzzeit-Liegeplatz ca. 30–50 €/Nacht. Strom, Wasser, Diesel. Toiletten/Duschen an Land.</p>
+      <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Marina+La+Cala+Palermo" target="_blank" rel="noopener">📍 Google Maps</a>
+    </div>
     <div class="info-item"><h4>🚌 Mobilität</h4><p>Altstadt per Buggy gut begehbar. AMAT-Busse 1.40 € (90 Min). Linie 806 für Mondello. Taxi Hafen–Zentrum ca. 10–12 €.</p></div>
-    <div class="info-item"><h4>🚗 Mietwagen</h4><p>Sinnvoll für Monreale + Cefalù-Kombi. Anbieter am Hauptbahnhof. Vorab buchen (DiscoverCars).</p></div>
+    <div class="info-item"><h4>🚗 Mietwagen</h4><p>Sinnvoll für Monreale + Cefalù-Kombi. Anbieter am Hauptbahnhof. Vorab buchen (DiscoverCars).</p>
+      <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Palermo+Centrale+Bahnhof" target="_blank" rel="noopener">📍 Palermo Centrale</a>
+    </div>
     <div class="info-item"><h4>👶 Essen mit 3 Kids</h4><p>Sizilianer extrem kinderfreundlich! Hochstühle fast überall. Hits: Arancini, Pasta al Pomodoro, Granita con Brioche.</p></div>
-    <div class="info-item"><h4>🚨 Notfälle</h4><p>Notruf: 112. Ospedale Civico (10 Min vom Hafen). Guardia Medica am Wochenende. Apotheken häufig.</p></div>
+    <div class="info-item"><h4>🚨 Notfälle</h4><p>Notruf: 112. Ospedale Civico (10 Min vom Hafen). Guardia Medica am Wochenende. Apotheken häufig.</p>
+      <a class="gmap-link" href="https://www.google.com/maps/search/?api=1&amp;query=Ospedale+Civico+Palermo" target="_blank" rel="noopener">📍 Ospedale Civico</a>
+    </div>
     <div class="info-item"><h4>🎒 Packliste Kids</h4><p>Sonnencreme 50+, Sonnenhüte, Schwimmflügel, Taucherbrille (Lilly), Sandspielzeug, Snacks, Regenjacke.</p></div>
     <div class="info-item"><h4>🌡 Wasser</h4><p>Ca. 15°C – zu kalt zum Schwimmen für die meisten, aber Füsse reinhalten geht. An warmen Tagen traut sich Lilly bestimmt rein!</p></div>
   </div>
@@ -412,8 +444,18 @@ weather.forEach(w => {
 // ─── RESTAURANT LIST ───
 const rl = document.getElementById('restoList');
 restos.forEach((r,i) => {
-  rl.innerHTML += `<div class="resto"><div class="num">${i+1}</div><div class="info"><div class="name">${r.n}</div><div class="addr">${r.a}</div><div class="desc">${r.desc}</div><span class="price">${r.p}</span></div></div>`;
+  const gurl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.n + ', ' + r.a + ', Palermo');
+  rl.innerHTML += `<div class="resto"><div class="num">${i+1}</div><div class="info"><div class="name">${r.n}</div><div class="addr">${r.a}</div><div class="desc">${r.desc}</div><span class="price">${r.p}</span> <a class="gmap-link" href="${gurl}" target="_blank" rel="noopener">📍 Google Maps</a></div></div>`;
 });
+
+// ─── GOOGLE MAPS URL HELPERS ───
+function gmapsCoords(lat, lng, label) {
+  const q = label ? encodeURIComponent(label) + '@' + lat + ',' + lng : lat + ',' + lng;
+  return 'https://www.google.com/maps/search/?api=1&query=' + (label ? encodeURIComponent(label) : lat + ',' + lng);
+}
+function gmapsQuery(q) {
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+}
 
 // ─── MAP HELPER ───
 function makeMap(id, center, zoom, markers, opts={}) {
@@ -433,7 +475,11 @@ function makeMap(id, center, zoom, markers, opts={}) {
       html: `<div style="background:${color};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${i+1}</div>`,
       iconSize: [26,26], iconAnchor: [13,13]
     });
-    L.marker([m.lat, m.lng], {icon}).addTo(map).bindPopup(`<strong>${m.name}</strong>${m.info?'<br>'+m.info:''}`);
+    const gurl = gmapsQuery(m.name + ', Palermo');
+    L.marker([m.lat, m.lng], {icon}).addTo(map).bindPopup(
+      `<strong>${m.name}</strong>${m.info?'<br>'+m.info:''}`
+      + `<br><a href="${gurl}" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;color:#2e6ea6;font-weight:600;text-decoration:none">📍 Google Maps</a>`
+    );
   });
   return map;
 }
