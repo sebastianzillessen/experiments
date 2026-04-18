@@ -4,7 +4,7 @@
 //  - App shell (HTML, CSS, JS, fonts, Leaflet, icon): cache-first
 //  - Map tiles (OSM, OpenSeaMap): stale-while-revalidate, so offline use keeps old tiles
 
-const VERSION = 'palermo-v7';
+const VERSION = 'palermo-v8';
 const SHELL = 'palermo-shell-' + VERSION;
 const TILES = 'palermo-tiles';
 
