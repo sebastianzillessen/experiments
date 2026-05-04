@@ -1,0 +1,42 @@
+# Copy to profile.yaml and fill in. profile.yaml is gitignored.
+# Used by the booking flow to fill the registration form fast.
+
+course:
+  url: "https://www.stadt-zuerich.ch/sport-portal/angebot/27212/Mountainbike"
+  id: "27212"
+  title: "Mountainbike"
+  # If multiple variants/dates exist, set the exact label of the one you want.
+  # Filled in during recon.
+  variant_label: ""
+
+login:
+  # The Stadt Zürich sport-portal login. URL filled in during recon.
+  url: ""
+  username: ""
+  password: ""
+
+person:
+  salutation: "Herr"          # Herr | Frau
+  first_name: ""
+  last_name: ""
+  date_of_birth: "1990-01-01" # YYYY-MM-DD
+  email: ""
+  phone: "+41 79 000 00 00"
+  street: ""
+  zip: ""
+  city: "Zürich"
+  country: "Schweiz"
+  ahv_number: ""              # if requested
+
+payment:
+  # Likely options: invoice / twint / card. Confirm during recon.
+  method: "invoice"
+
+# Anything the form asks that we don't know yet — add keys here once we see it.
+extras: {}
+
+timing:
+  # Local Zurich time. The script polls until this moment, then strikes.
+  open_at: "2026-05-05T07:00:00+02:00"
+  # How early to warm up the session (login + park on course page).
+  warmup_minutes_before: 5

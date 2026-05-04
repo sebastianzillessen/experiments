@@ -1,0 +1,6 @@
+profile.yaml
+profile.local.yaml
+.env
+*.session
+recon/*.html
+recon/*.png
