@@ -1,0 +1,11 @@
+{
+  // Cloudflare Workers Static Assets config.
+  // The build step (./build.sh) writes the site to ./_site,
+  // which `wrangler versions upload` then publishes as static assets.
+  "name": "experiments",
+  "compatibility_date": "2026-05-08",
+  "assets": {
+    "directory": "./_site",
+    "not_found_handling": "404-page"
+  }
+}
