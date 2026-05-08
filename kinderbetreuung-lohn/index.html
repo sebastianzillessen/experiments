@@ -32,6 +32,20 @@
   </div>
 </div>
 
+<!-- CREATE HOUSEHOLD OVERLAY (signed in but no membership and no invite) -->
+<div id="create-household-screen" class="auth-screen" hidden>
+  <div class="auth-card">
+    <h1>Haushalt anlegen</h1>
+    <p>Du bist angemeldet, gehörst aber noch keinem Haushalt an. Erstelle einen — du wirst automatisch Owner und kannst danach weitere Personen einladen.</p>
+    <form id="create-household-form" novalidate style="display:flex; flex-direction:column; gap:12px;">
+      <input type="text" id="create-household-name" placeholder="z.B. Familie Muster" required style="text-align:center;">
+      <button type="submit" id="btn-create-household" class="btn">Haushalt anlegen</button>
+    </form>
+    <button type="button" id="btn-create-household-signout" class="btn btn-secondary" style="margin-top:10px;">Abmelden</button>
+    <div id="create-household-error" class="auth-error" hidden style="margin-top:14px;"></div>
+  </div>
+</div>
+
 <header>
   <h1>Lohnabrechnung Kinderbetreuung</h1>
   <div class="sub">Vereinfachte Abrechnung · Kanton Zürich · Stand 1.1.2026</div>
