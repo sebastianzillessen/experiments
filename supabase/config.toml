@@ -1,0 +1,5 @@
+# Supabase project configuration.
+# Used by the Supabase CLI when running `supabase link` / `supabase db push`.
+# Auto-applied via .github/workflows/supabase-migrate.yml on pushes to main.
+
+project_id = "tbknudbcgaarqixweizj"
