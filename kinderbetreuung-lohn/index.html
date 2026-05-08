@@ -117,19 +117,21 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   <div class="sub">Vereinfachte Abrechnung · Kanton Zürich · Stand 1.1.2026</div>
 </header>
 
-<nav>
-  <button data-tab="erfassung" class="active">Stundenerfassung</button>
-  <button data-tab="monat">Monatsabrechnung</button>
-  <button data-tab="jahr">Jahresübersicht</button>
-  <button data-tab="stammdaten">Stammdaten</button>
-  <button data-tab="einstellungen">Einstellungen</button>
-  <button data-tab="info">Info</button>
+<nav role="tablist" aria-label="Bereiche">
+  <button data-tab="erfassung"     id="tab-erfassung"     role="tab" aria-selected="true"  aria-controls="erfassung"     tabindex="0"  class="active">Stundenerfassung</button>
+  <button data-tab="monat"         id="tab-monat"         role="tab" aria-selected="false" aria-controls="monat"         tabindex="-1">Monatsabrechnung</button>
+  <button data-tab="jahr"          id="tab-jahr"          role="tab" aria-selected="false" aria-controls="jahr"          tabindex="-1">Jahresübersicht</button>
+  <button data-tab="stammdaten"    id="tab-stammdaten"    role="tab" aria-selected="false" aria-controls="stammdaten"    tabindex="-1">Stammdaten</button>
+  <button data-tab="einstellungen" id="tab-einstellungen" role="tab" aria-selected="false" aria-controls="einstellungen" tabindex="-1">Einstellungen</button>
+  <button data-tab="info"          id="tab-info"          role="tab" aria-selected="false" aria-controls="info"          tabindex="-1">Info</button>
 </nav>
+
+<div id="storage-warn" class="danger no-print" hidden role="alert" style="margin:0; border-radius:0; text-align:center;"></div>
 
 <main>
 
 <!-- STUNDENERFASSUNG -->
-<section id="erfassung" class="active">
+<section id="erfassung" role="tabpanel" aria-labelledby="tab-erfassung" tabindex="0" class="active">
   <h2>Stundenerfassung</h2>
   <div class="section-sub">Trage hier jeden Einsatz mit Datum und geleisteten Stunden ein.</div>
 
@@ -161,7 +163,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 </section>
 
 <!-- MONATSABRECHNUNG -->
-<section id="monat">
+<section id="monat" role="tabpanel" aria-labelledby="tab-monat" tabindex="0">
   <h2>Monatsabrechnung</h2>
   <div class="section-sub">Wähle einen Monat aus, um die druckfähige Lohnabrechnung anzuzeigen.</div>
 
@@ -181,7 +183,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 </section>
 
 <!-- JAHRESÜBERSICHT -->
-<section id="jahr">
+<section id="jahr" role="tabpanel" aria-labelledby="tab-jahr" tabindex="0">
   <h2>Jahresübersicht</h2>
   <div class="section-sub">Monatszusammenfassung und Jahres-Lohndeklaration für die SVA Zürich.</div>
 
@@ -201,7 +203,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 </section>
 
 <!-- STAMMDATEN -->
-<section id="stammdaten">
+<section id="stammdaten" role="tabpanel" aria-labelledby="tab-stammdaten" tabindex="0">
   <h2>Stammdaten</h2>
   <div class="section-sub">Diese Daten erscheinen auf jeder Lohnabrechnung.</div>
 
@@ -255,7 +257,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 </section>
 
 <!-- EINSTELLUNGEN -->
-<section id="einstellungen">
+<section id="einstellungen" role="tabpanel" aria-labelledby="tab-einstellungen" tabindex="0">
   <h2>Einstellungen &amp; Beitragssätze</h2>
   <div class="section-sub">Vorausgefüllt mit den Werten 2026 für die vereinfachte Abrechnung im Kanton Zürich. Vor dem ersten Einsatz prüfen.</div>
 
@@ -339,7 +341,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 </section>
 
 <!-- INFO -->
-<section id="info">
+<section id="info" role="tabpanel" aria-labelledby="tab-info" tabindex="0">
   <h2>Info zum vereinfachten Abrechnungsverfahren</h2>
   <div class="section-sub">Kurzüberblick. Ersetzt keine Beratung durch SVA Zürich oder Treuhand.</div>
 
@@ -390,9 +392,6 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   </div>
 </section>
 
-<!-- HIDDEN PRINT-ONLY SECTION -->
-<section id="print-target" class="no-print"></section>
-
 </main>
 
 <script>
@@ -400,13 +399,6 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 
 const STORAGE_KEY = 'kinderbetreuung-lohn-v1';
 const LIMIT_VEREINFACHT = 22680; // CHF/Jahr brutto pro Person 2026
-
-const DEFAULT_STATE = {
-  arbeitgeber: { name:'', adresse:'', ahvAbrechnungsnr:'' },
-  arbeitnehmer: { name:'', adresse:'', geburtsdatum:'', ahvNr:'', iban:'', wochenstundenSchwelle8h:false },
-  einstellungen: defaultSaetze(),
-  einsaetze: []
-};
 
 function defaultSaetze() {
   return {
@@ -423,32 +415,93 @@ function defaultSaetze() {
   };
 }
 
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'id-' + Math.random().toString(36).slice(2) + Date.now();
+}
+
+/* ---- TYPE COERCION / SANITIZATION ---- */
+const asString = v => typeof v === 'string' ? v : (v == null ? '' : String(v));
+const asNumber = (v, fallback) => { const n = Number(v); return Number.isFinite(n) ? n : fallback; };
+
+function sanitizeState(raw) {
+  raw = (raw && typeof raw === 'object') ? raw : {};
+  const def = defaultSaetze();
+  const e = (raw.einstellungen && typeof raw.einstellungen === 'object') ? raw.einstellungen : {};
+  const ag = (raw.arbeitgeber && typeof raw.arbeitgeber === 'object') ? raw.arbeitgeber : {};
+  const an = (raw.arbeitnehmer && typeof raw.arbeitnehmer === 'object') ? raw.arbeitnehmer : {};
+  return {
+    arbeitgeber: {
+      name: asString(ag.name),
+      adresse: asString(ag.adresse),
+      ahvAbrechnungsnr: asString(ag.ahvAbrechnungsnr)
+    },
+    arbeitnehmer: {
+      name: asString(an.name),
+      adresse: asString(an.adresse),
+      geburtsdatum: asString(an.geburtsdatum),
+      ahvNr: asString(an.ahvNr),
+      iban: asString(an.iban),
+      wochenstundenSchwelle8h: !!an.wochenstundenSchwelle8h
+    },
+    einstellungen: {
+      stundenlohn:             asNumber(e.stundenlohn,             def.stundenlohn),
+      ferienzulageProzent:     asNumber(e.ferienzulageProzent,     def.ferienzulageProzent),
+      satzAhvIvEoAN:           asNumber(e.satzAhvIvEoAN,           def.satzAhvIvEoAN),
+      satzAhvIvEoAG:           asNumber(e.satzAhvIvEoAG,           def.satzAhvIvEoAG),
+      satzAlvAN:               asNumber(e.satzAlvAN,               def.satzAlvAN),
+      satzAlvAG:               asNumber(e.satzAlvAG,               def.satzAlvAG),
+      satzFakAG:               asNumber(e.satzFakAG,               def.satzFakAG),
+      satzQuellensteuer:       asNumber(e.satzQuellensteuer,       def.satzQuellensteuer),
+      satzVerwaltungskostenAG: asNumber(e.satzVerwaltungskostenAG, def.satzVerwaltungskostenAG),
+      uvgAktiv:                e.uvgAktiv === undefined ? def.uvgAktiv : !!e.uvgAktiv,
+      satzUvgBuAG:             asNumber(e.satzUvgBuAG,             def.satzUvgBuAG),
+      satzUvgNbuAN:            asNumber(e.satzUvgNbuAN,            def.satzUvgNbuAN)
+    },
+    einsaetze: Array.isArray(raw.einsaetze)
+      ? raw.einsaetze.map(x => {
+          if (!x || typeof x !== 'object') return null;
+          const stunden = asNumber(x.stunden, NaN);
+          const datum = asString(x.datum);
+          if (!datum || !Number.isFinite(stunden) || stunden <= 0) return null;
+          return { id: asString(x.id) || uuid(), datum, stunden, notiz: asString(x.notiz) };
+        }).filter(Boolean)
+      : []
+  };
+}
+
 let state = loadState();
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(DEFAULT_STATE);
-    const parsed = JSON.parse(raw);
-    return {
-      arbeitgeber: { ...DEFAULT_STATE.arbeitgeber, ...(parsed.arbeitgeber||{}) },
-      arbeitnehmer: { ...DEFAULT_STATE.arbeitnehmer, ...(parsed.arbeitnehmer||{}) },
-      einstellungen: { ...defaultSaetze(), ...(parsed.einstellungen||{}) },
-      einsaetze: Array.isArray(parsed.einsaetze) ? parsed.einsaetze : []
-    };
-  } catch(e) {
+    if (!raw) return sanitizeState({});
+    return sanitizeState(JSON.parse(raw));
+  } catch (e) {
     console.warn('localStorage parse failed', e);
-    return structuredClone(DEFAULT_STATE);
+    return sanitizeState({});
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+const storageWarnEl = document.getElementById('storage-warn');
+
+function showStorageError(err) {
+  if (!storageWarnEl) return;
+  storageWarnEl.textContent = 'Speichern im Browser fehlgeschlagen: ' + (err && err.message ? err.message : err) + '. Änderungen gehen beim Neuladen verloren.';
+  storageWarnEl.hidden = false;
 }
 
-function uuid() {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  return 'id-' + Math.random().toString(36).slice(2) + Date.now();
+function clearStorageError() {
+  if (storageWarnEl) storageWarnEl.hidden = true;
+}
+
+function safeStorage(fn) {
+  try { fn(); clearStorageError(); }
+  catch (e) { console.warn('localStorage op failed', e); showStorageError(e); }
+}
+
+function saveState() {
+  safeStorage(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 }
 
 function fmtChf(n) {
@@ -501,16 +554,37 @@ function berechneAbrechnung(einsaetze, einst, arbeitnehmer) {
   return { stundenTotal: round2(stundenTotal), bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable };
 }
 
-/* ---- TAB SWITCHING ---- */
+/* ---- TAB SWITCHING (ARIA tabs pattern) ---- */
+const tabButtons = document.querySelectorAll('nav button[role="tab"]');
+const tabPanels  = document.querySelectorAll('section[role="tabpanel"]');
+
 function showTab(id) {
-  document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === id));
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  tabPanels.forEach(s => s.classList.toggle('active', s.id === id));
+  tabButtons.forEach(b => {
+    const active = b.dataset.tab === id;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+    b.tabIndex = active ? 0 : -1;
+  });
   if (id === 'monat') renderMonatTab();
   if (id === 'jahr')  renderJahrTab();
   if (id === 'erfassung') renderEntries();
 }
-document.querySelectorAll('nav button').forEach(b => {
+
+tabButtons.forEach((b, idx) => {
   b.addEventListener('click', () => showTab(b.dataset.tab));
+  b.addEventListener('keydown', (e) => {
+    let next = null;
+    if (e.key === 'ArrowRight') next = (idx + 1) % tabButtons.length;
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + tabButtons.length) % tabButtons.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabButtons.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    const target = tabButtons[next];
+    showTab(target.dataset.tab);
+    target.focus();
+  });
 });
 
 /* ---- BIND FORM FIELDS ---- */
@@ -833,10 +907,15 @@ document.getElementById('btn-print-jahr').addEventListener('click', () => printS
 
 /* ---- PRINT ---- */
 function printSection(id) {
-  document.querySelectorAll('section').forEach(s => s.classList.remove('printing'));
-  document.getElementById(id).classList.add('printing');
+  tabPanels.forEach(s => s.classList.remove('printing'));
+  const el = document.getElementById(id);
+  el.classList.add('printing');
+  const cleanup = () => {
+    el.classList.remove('printing');
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
   window.print();
-  setTimeout(() => document.getElementById(id).classList.remove('printing'), 200);
 }
 
 /* ---- DATEN VERWALTEN ---- */
@@ -846,8 +925,12 @@ document.getElementById('btn-export').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   a.download = `kinderbetreuung-lohn-export-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 });
 
 document.getElementById('btn-import').addEventListener('click', () => {
@@ -862,12 +945,7 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
     try {
       const parsed = JSON.parse(reader.result);
       if (!confirm('Aktuelle Daten überschreiben?')) return;
-      state = {
-        arbeitgeber: { ...DEFAULT_STATE.arbeitgeber, ...(parsed.arbeitgeber||{}) },
-        arbeitnehmer: { ...DEFAULT_STATE.arbeitnehmer, ...(parsed.arbeitnehmer||{}) },
-        einstellungen: { ...defaultSaetze(), ...(parsed.einstellungen||{}) },
-        einsaetze: Array.isArray(parsed.einsaetze) ? parsed.einsaetze : []
-      };
+      state = sanitizeState(parsed);
       saveState();
       refreshFns.forEach(fn => fn());
       renderEntries();
@@ -890,8 +968,8 @@ document.getElementById('btn-reset-saetze').addEventListener('click', () => {
 document.getElementById('btn-clear-all').addEventListener('click', () => {
   if (!confirm('Wirklich ALLE Daten (Stammdaten, Einsätze, Einstellungen) löschen?')) return;
   if (!confirm('Sicher? Dies kann nicht rückgängig gemacht werden.')) return;
-  localStorage.removeItem(STORAGE_KEY);
-  state = structuredClone(DEFAULT_STATE);
+  safeStorage(() => localStorage.removeItem(STORAGE_KEY));
+  state = sanitizeState({});
   refreshFns.forEach(fn => fn());
   renderEntries();
 });
