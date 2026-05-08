@@ -7,7 +7,7 @@ const SUPABASE_KEY = 'sb_publishable_YHSXK9ryn8RQQe__e3aB2Q_lQo13XaP';
 const LIMIT_VEREINFACHT = 22680; // CHF/Jahr brutto pro Person 2026
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, flowType: 'pkce' }
+  auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, flowType: 'implicit' }
 });
 
 let currentUser = null;
