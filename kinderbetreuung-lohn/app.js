@@ -297,8 +297,9 @@ async function onSignedIn(user) {
 async function fetchMembership() {
   const { data, error } = await supabase
     .from('memberships')
-    .select('household_id, role')
+    .select('household_id, role, created_at')
     .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: true })
     .limit(1);
   if (error) { console.warn(error); return null; }
   return (data && data[0]) || null;
@@ -317,7 +318,7 @@ async function fetchPendingInvite() {
 
 function showInviteBanner(invite) {
   const householdName = (invite.households && invite.households.name) || 'einem Haushalt';
-  inviteText.textContent = `Du wurdest in „${householdName}" als ${invite.role} eingeladen.`;
+  inviteText.textContent = `Du wurdest in „${householdName}“ als ${invite.role} eingeladen.`;
   inviteBanner.hidden = false;
 
   document.getElementById('btn-accept-invite').onclick = async () => {
@@ -915,9 +916,7 @@ document.getElementById('btn-clear-all').addEventListener('click', async () => {
 /* ---- MITGLIEDER ---- */
 async function loadMembers() {
   const { data, error } = await supabase
-    .from('membership_users')
-    .select('*')
-    .eq('household_id', currentHouseholdId);
+    .rpc('members_of_household', { h: currentHouseholdId });
   if (error) throw error;
   membersCache = new Map((data || []).map(m => [m.user_id, m]));
   return data || [];
