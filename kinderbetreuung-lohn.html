@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lohnabrechnung Kinderbetreuung – Vereinfachte Abrechnung Kt. ZH</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #2e6ea6; --primary-dark: #1a3a5c; --accent: #d4654a;
+  --green: #3a7d44; --amber: #c49000; --red: #b03a2e;
+  --bg: #f5f7fa; --card: #ffffff; --border: #e1e6eb;
+  --text: #1f2933; --muted: #6b7480; --soft: #f0f4f8;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:var(--bg); color:var(--text); font-family:'Source Sans 3',-apple-system,BlinkMacSystemFont,sans-serif; line-height:1.5; font-size:15px; }
+
+/* NAV */
+nav { position:sticky; top:0; z-index:100; background:var(--primary-dark); padding:10px 16px; display:flex; gap:6px; overflow-x:auto; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+nav button { background:transparent; color:#fff; border:none; cursor:pointer; font-size:13px; font-weight:600; padding:7px 14px; border-radius:18px; white-space:nowrap; transition:background .15s; font-family:inherit; }
+nav button:hover { background:rgba(255,255,255,0.1); }
+nav button.active { background:var(--primary); }
+
+/* HEADER */
+header { background:linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color:#fff; padding:28px 20px 24px; text-align:center; }
+header h1 { font-size:clamp(22px,4vw,30px); font-weight:700; margin-bottom:4px; }
+header .sub { font-size:14px; opacity:0.85; font-weight:300; }
+
+main { max-width:960px; margin:0 auto; padding:24px 16px 60px; }
+section { display:none; }
+section.active { display:block; }
+section h2 { font-size:22px; color:var(--primary-dark); margin-bottom:6px; }
+section h2 .emoji { margin-right:6px; }
+.section-sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+
+/* CARDS */
+.card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+.card h3 { color:var(--primary-dark); font-size:16px; margin-bottom:12px; font-weight:700; }
+.card h4 { color:var(--primary); font-size:14px; margin:14px 0 6px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+
+/* FORM */
+.grid-2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+.grid-3 { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; }
+label { display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.03em; }
+input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], select, textarea {
+  width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; color:var(--text);
+}
+input:focus, select:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(46,110,166,0.15); }
+.checkbox-row { display:flex; align-items:center; gap:8px; margin:10px 0; }
+.checkbox-row input { width:auto; }
+.checkbox-row label { margin:0; text-transform:none; font-size:14px; color:var(--text); font-weight:400; letter-spacing:0; }
+
+/* BUTTONS */
+button.btn { background:var(--primary); color:#fff; border:none; padding:9px 16px; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; transition:background .15s; }
+button.btn:hover { background:var(--primary-dark); }
+button.btn-secondary { background:#fff; color:var(--primary); border:1px solid var(--primary); }
+button.btn-secondary:hover { background:var(--soft); }
+button.btn-danger { background:var(--red); }
+button.btn-danger:hover { background:#7a261c; }
+button.btn-small { padding:5px 10px; font-size:12px; }
+.btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+
+/* TABLES */
+table { width:100%; border-collapse:collapse; font-size:14px; }
+table th { background:var(--soft); color:var(--primary-dark); padding:9px 10px; text-align:left; font-weight:600; border-bottom:2px solid var(--border); font-size:12px; text-transform:uppercase; letter-spacing:0.03em; }
+table td { padding:8px 10px; border-bottom:1px solid var(--border); }
+table tr:last-child td { border-bottom:none; }
+table .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+table .actions { text-align:right; white-space:nowrap; }
+table .total-row td { font-weight:700; background:var(--soft); border-top:2px solid var(--primary-dark); }
+
+/* PRINTABLE LOHNABRECHNUNG */
+.print-doc { background:#fff; border:1px solid var(--border); padding:32px; border-radius:6px; font-size:13px; max-width:780px; margin:0 auto; }
+.print-doc .doc-header { display:flex; justify-content:space-between; gap:24px; margin-bottom:24px; }
+.print-doc .party { font-size:12px; line-height:1.4; }
+.print-doc .party .label-small { font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:4px; }
+.print-doc .party .name { font-weight:700; font-size:13px; }
+.print-doc .doc-title { text-align:center; margin:18px 0 24px; }
+.print-doc .doc-title h1 { font-size:18px; color:var(--primary-dark); margin-bottom:4px; }
+.print-doc .doc-title .period { font-size:14px; color:var(--muted); }
+.print-doc table { font-size:12px; margin:10px 0; }
+.print-doc h4 { color:var(--primary-dark); font-size:13px; margin:16px 0 6px; text-transform:none; letter-spacing:0; font-weight:700; border-bottom:1px solid var(--border); padding-bottom:3px; }
+.print-doc .summary-row { display:flex; justify-content:space-between; padding:4px 0; }
+.print-doc .summary-row.total { font-weight:700; border-top:1px solid var(--border); padding-top:6px; margin-top:6px; }
+.print-doc .summary-row.netto { font-weight:700; font-size:15px; background:var(--soft); padding:8px 12px; border-radius:4px; margin:8px 0; color:var(--primary-dark); }
+.print-doc .footnote { font-size:10px; color:var(--muted); margin-top:24px; line-height:1.4; }
+.print-doc .signatures { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:36px; }
+.print-doc .signatures .sig { border-top:1px solid var(--text); padding-top:6px; font-size:11px; color:var(--muted); text-align:center; }
+
+/* INFO BOXES */
+.info { background:#eff6fc; border-left:3px solid var(--primary); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
+.warn { background:#fef5e7; border-left:3px solid var(--amber); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
+.danger { background:#fbeae5; border-left:3px solid var(--red); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; color:var(--red); font-weight:600; }
+.success { background:#e8f3ea; border-left:3px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
+
+.empty-state { text-align:center; padding:32px 16px; color:var(--muted); font-style:italic; font-size:14px; }
+.muted { color:var(--muted); }
+.tag { display:inline-block; background:var(--soft); color:var(--primary-dark); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+
+/* PRINT */
+@media print {
+  nav, header, .no-print, button { display:none !important; }
+  body, html { background:#fff; }
+  main { max-width:none; padding:0; }
+  section { display:none !important; }
+  section.printing { display:block !important; }
+  .card { border:none; box-shadow:none; padding:0; margin:0; }
+  .print-doc { border:none; padding:0; max-width:none; }
+  @page { margin:18mm; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Lohnabrechnung Kinderbetreuung</h1>
+  <div class="sub">Vereinfachte Abrechnung · Kanton Zürich · Stand 1.1.2026</div>
+</header>
+
+<nav>
+  <button data-tab="erfassung" class="active">Stundenerfassung</button>
+  <button data-tab="monat">Monatsabrechnung</button>
+  <button data-tab="jahr">Jahresübersicht</button>
+  <button data-tab="stammdaten">Stammdaten</button>
+  <button data-tab="einstellungen">Einstellungen</button>
+  <button data-tab="info">Info</button>
+</nav>
+
+<main>
+
+<!-- STUNDENERFASSUNG -->
+<section id="erfassung" class="active">
+  <h2>Stundenerfassung</h2>
+  <div class="section-sub">Trage hier jeden Einsatz mit Datum und geleisteten Stunden ein.</div>
+
+  <div class="card">
+    <h3>Neuer Einsatz</h3>
+    <div class="grid-3">
+      <div>
+        <label for="e-datum">Datum</label>
+        <input type="date" id="e-datum">
+      </div>
+      <div>
+        <label for="e-stunden">Stunden</label>
+        <input type="number" id="e-stunden" step="0.25" min="0" placeholder="z.B. 4.5">
+      </div>
+      <div>
+        <label for="e-notiz">Notiz (optional)</label>
+        <input type="text" id="e-notiz" placeholder="z.B. Kinderbetreuung 17–21h">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btn-add">Einsatz hinzufügen</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Erfasste Einsätze</h3>
+    <div id="entries-list"></div>
+  </div>
+</section>
+
+<!-- MONATSABRECHNUNG -->
+<section id="monat">
+  <h2>Monatsabrechnung</h2>
+  <div class="section-sub">Wähle einen Monat aus, um die druckfähige Lohnabrechnung anzuzeigen.</div>
+
+  <div class="card no-print">
+    <div class="grid-2">
+      <div>
+        <label for="m-monat">Monat</label>
+        <input type="month" id="m-monat">
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button class="btn" id="btn-print-monat">Drucken / als PDF speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="monat-doc"></div>
+</section>
+
+<!-- JAHRESÜBERSICHT -->
+<section id="jahr">
+  <h2>Jahresübersicht</h2>
+  <div class="section-sub">Monatszusammenfassung und Jahres-Lohndeklaration für die SVA Zürich.</div>
+
+  <div class="card no-print">
+    <div class="grid-2">
+      <div>
+        <label for="j-jahr">Jahr</label>
+        <input type="number" id="j-jahr" min="2020" max="2099" step="1">
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button class="btn" id="btn-print-jahr">Drucken / als PDF speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="jahr-doc"></div>
+</section>
+
+<!-- STAMMDATEN -->
+<section id="stammdaten">
+  <h2>Stammdaten</h2>
+  <div class="section-sub">Diese Daten erscheinen auf jeder Lohnabrechnung.</div>
+
+  <div class="card">
+    <h3>Arbeitgeber/in (Privathaushalt)</h3>
+    <div class="grid-2">
+      <div>
+        <label for="ag-name">Name</label>
+        <input type="text" id="ag-name" placeholder="Max Muster">
+      </div>
+      <div>
+        <label for="ag-adresse">Adresse</label>
+        <input type="text" id="ag-adresse" placeholder="Bahnhofstrasse 1, 8001 Zürich">
+      </div>
+      <div>
+        <label for="ag-abrechnungsnr">SVA Abrechnungs-Nr. (optional)</label>
+        <input type="text" id="ag-abrechnungsnr" placeholder="von SVA Zürich nach Anmeldung">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Arbeitnehmer/in (Hilfe im Haushalt)</h3>
+    <div class="grid-2">
+      <div>
+        <label for="an-name">Name</label>
+        <input type="text" id="an-name" placeholder="Erika Beispiel">
+      </div>
+      <div>
+        <label for="an-adresse">Adresse</label>
+        <input type="text" id="an-adresse">
+      </div>
+      <div>
+        <label for="an-geburtsdatum">Geburtsdatum</label>
+        <input type="date" id="an-geburtsdatum">
+      </div>
+      <div>
+        <label for="an-ahvnr">AHV-Nr. (756.xxxx.xxxx.xx)</label>
+        <input type="text" id="an-ahvnr" placeholder="756.0000.0000.00">
+      </div>
+      <div>
+        <label for="an-iban">IBAN für Lohnzahlung</label>
+        <input type="text" id="an-iban" placeholder="CH00 0000 0000 0000 0000 0">
+      </div>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="an-8h">
+      <label for="an-8h">Arbeitet ≥ 8 Stunden pro Woche beim selben Arbeitgeber (Pflicht NBU-Versicherung)</label>
+    </div>
+  </div>
+</section>
+
+<!-- EINSTELLUNGEN -->
+<section id="einstellungen">
+  <h2>Einstellungen &amp; Beitragssätze</h2>
+  <div class="section-sub">Vorausgefüllt mit den Werten 2026 für die vereinfachte Abrechnung im Kanton Zürich. Vor dem ersten Einsatz prüfen.</div>
+
+  <div class="card">
+    <h3>Lohn</h3>
+    <div class="grid-2">
+      <div>
+        <label for="s-stundenlohn">Stundenlohn (CHF, brutto, exkl. Ferienzulage)</label>
+        <input type="number" id="s-stundenlohn" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-ferien">Ferienzulage (% auf Bruttostunden, üblich 8.33 %)</label>
+        <input type="number" id="s-ferien" step="0.01" min="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Sozialversicherungs-Beitragssätze (%)</h3>
+    <div class="grid-3">
+      <div>
+        <label for="s-ahv-an">AHV/IV/EO Arbeitnehmer</label>
+        <input type="number" id="s-ahv-an" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-ahv-ag">AHV/IV/EO Arbeitgeber</label>
+        <input type="number" id="s-ahv-ag" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-alv-an">ALV Arbeitnehmer</label>
+        <input type="number" id="s-alv-an" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-alv-ag">ALV Arbeitgeber</label>
+        <input type="number" id="s-alv-ag" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-fak-ag">FAK Arbeitgeber (Kt. ZH)</label>
+        <input type="number" id="s-fak-ag" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-verw-ag">Verwaltungskosten Arbeitgeber</label>
+        <input type="number" id="s-verw-ag" step="0.01" min="0">
+      </div>
+      <div>
+        <label for="s-quellen">Quellensteuer (VAV, einheitlich 5 %)</label>
+        <input type="number" id="s-quellen" step="0.01" min="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>UVG (Unfallversicherung)</h3>
+    <div class="checkbox-row">
+      <input type="checkbox" id="s-uvg-aktiv">
+      <label for="s-uvg-aktiv">UVG via SVA Zürich abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label for="s-bu-ag">UVG-BU Arbeitgeber (%)</label>
+        <input type="number" id="s-bu-ag" step="0.001" min="0">
+      </div>
+      <div>
+        <label for="s-nbu-an">UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)</label>
+        <input type="number" id="s-nbu-an" step="0.001" min="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Daten verwalten</h3>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btn-export">Export JSON</button>
+      <button class="btn btn-secondary" id="btn-import">Import JSON</button>
+      <input type="file" id="import-file" accept="application/json" style="display:none;">
+      <button class="btn btn-secondary" id="btn-reset-saetze">Beitragssätze auf 2026-Standard zurücksetzen</button>
+      <button class="btn btn-danger" id="btn-clear-all">Alle Daten löschen</button>
+    </div>
+    <div class="info" style="margin-top:12px;">Alle Daten werden lokal im Browser (localStorage) gespeichert. Es erfolgt keine Übertragung an Server.</div>
+  </div>
+</section>
+
+<!-- INFO -->
+<section id="info">
+  <h2>Info zum vereinfachten Abrechnungsverfahren</h2>
+  <div class="section-sub">Kurzüberblick. Ersetzt keine Beratung durch SVA Zürich oder Treuhand.</div>
+
+  <div class="card">
+    <h3>Voraussetzungen vereinfachte Abrechnung (VAV / VAVplus)</h3>
+    <ul style="padding-left:20px; line-height:1.7;">
+      <li>Bruttolohn pro Angestellte/r ≤ <strong>CHF 22'680/Jahr</strong> (= 2× max. AHV-Jahresrente).</li>
+      <li>Total Lohnsumme aller Angestellten ≤ CHF 60'480/Jahr.</li>
+      <li>Person ist nicht obligatorisch in der 2. Säule (BVG) versichert.</li>
+      <li>Kinderbetreuung gilt als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
+      <li>Anmeldung bei der Ausgleichskasse: SVA Zürich (Formular «Hausangestellte / Vereinfachte Abrechnung VAV oder VAVplus»).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Beitragssätze 2026 (im Tool vorausgefüllt)</h3>
+    <table>
+      <thead>
+        <tr><th>Beitrag</th><th class="num">Arbeitnehmer</th><th class="num">Arbeitgeber</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>AHV / IV / EO</td><td class="num">5.30 %</td><td class="num">5.30 %</td></tr>
+        <tr><td>ALV (Arbeitslosenversicherung)</td><td class="num">1.10 %</td><td class="num">1.10 %</td></tr>
+        <tr><td>FAK Familienausgleichskasse Kt. ZH</td><td class="num">–</td><td class="num">~1.00 % (kassenabhängig)</td></tr>
+        <tr><td>Verwaltungskosten Ausgleichskasse</td><td class="num">–</td><td class="num">~0.40 %</td></tr>
+        <tr><td>Quellensteuer (für alle Nationalitäten)</td><td class="num">5.00 %</td><td class="num">–</td></tr>
+        <tr><td>UVG-BU (VAVplus, optional)</td><td class="num">–</td><td class="num">0.505 %</td></tr>
+        <tr><td>UVG-NBU (ab 8 h/Woche, Prämie versicherer­abhängig)</td><td class="num">~1.47 %</td><td class="num">–</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" style="font-size:12px; margin-top:10px;">Quellen: SVA Zürich Merkblätter «Hausangestellte», AHV-IV Merkblätter 2.06 / 2.07 (Stand 1.1.2026).</div>
+  </div>
+
+  <div class="card">
+    <h3>Ablauf</h3>
+    <ol style="padding-left:20px; line-height:1.7;">
+      <li>Bei SVA Zürich anmelden (VAV oder VAVplus).</li>
+      <li>UVG-Versicherung abschliessen, falls VAVplus nicht gewählt (Suva nicht zuständig für Privathaushalte).</li>
+      <li>Pro Einsatz: Stunden in diesem Tool erfassen.</li>
+      <li>Pro Monat: Lohnabrechnung drucken, Nettolohn an Arbeitnehmer/in auszahlen.</li>
+      <li>Jahresende: Lohndeklaration (Bruttosumme) an SVA Zürich übermitteln (Frist üblicherweise Ende Januar).</li>
+      <li>SVA stellt Rechnung über Sozialversicherungsbeiträge + Quellensteuer (+ UVG bei VAVplus).</li>
+    </ol>
+  </div>
+
+  <div class="warn">
+    <strong>Wichtige Schwelle:</strong> Sobald der Bruttolohn CHF 22'680/Jahr überschreitet, ist die vereinfachte Abrechnung nicht mehr möglich — dann gilt die ordentliche Abrechnung mit Quellensteuer-Tarif gemäss Aufenthaltsstatus. Das Tool warnt automatisch ab 90 % der Schwelle.
+  </div>
+</section>
+
+<!-- HIDDEN PRINT-ONLY SECTION -->
+<section id="print-target" class="no-print"></section>
+
+</main>
+
+<script>
+'use strict';
+
+const STORAGE_KEY = 'kinderbetreuung-lohn-v1';
+const LIMIT_VEREINFACHT = 22680; // CHF/Jahr brutto pro Person 2026
+
+const DEFAULT_STATE = {
+  arbeitgeber: { name:'', adresse:'', ahvAbrechnungsnr:'' },
+  arbeitnehmer: { name:'', adresse:'', geburtsdatum:'', ahvNr:'', iban:'', wochenstundenSchwelle8h:false },
+  einstellungen: defaultSaetze(),
+  einsaetze: []
+};
+
+function defaultSaetze() {
+  return {
+    stundenlohn: 30.00,
+    ferienzulageProzent: 8.33,
+    satzAhvIvEoAN: 5.30, satzAhvIvEoAG: 5.30,
+    satzAlvAN: 1.10,     satzAlvAG: 1.10,
+    satzFakAG: 1.00,
+    satzQuellensteuer: 5.00,
+    satzVerwaltungskostenAG: 0.40,
+    uvgAktiv: true,
+    satzUvgBuAG: 0.505,
+    satzUvgNbuAN: 1.47
+  };
+}
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(DEFAULT_STATE);
+    const parsed = JSON.parse(raw);
+    return {
+      arbeitgeber: { ...DEFAULT_STATE.arbeitgeber, ...(parsed.arbeitgeber||{}) },
+      arbeitnehmer: { ...DEFAULT_STATE.arbeitnehmer, ...(parsed.arbeitnehmer||{}) },
+      einstellungen: { ...defaultSaetze(), ...(parsed.einstellungen||{}) },
+      einsaetze: Array.isArray(parsed.einsaetze) ? parsed.einsaetze : []
+    };
+  } catch(e) {
+    console.warn('localStorage parse failed', e);
+    return structuredClone(DEFAULT_STATE);
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'id-' + Math.random().toString(36).slice(2) + Date.now();
+}
+
+function fmtChf(n) {
+  if (!isFinite(n)) n = 0;
+  return n.toLocaleString('de-CH', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+
+function round2(n) { return Math.round(n*100)/100; }
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+function monthLabel(yyyymm) {
+  const [y, m] = yyyymm.split('-').map(Number);
+  const months = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  return `${months[m-1]} ${y}`;
+}
+
+/* ---- BERECHNUNG ---- */
+function berechneAbrechnung(einsaetze, einst, arbeitnehmer) {
+  const stundenTotal = einsaetze.reduce((s,e) => s + (Number(e.stunden)||0), 0);
+  const bruttoStunden = round2(stundenTotal * einst.stundenlohn);
+  const ferienzulage  = round2(bruttoStunden * einst.ferienzulageProzent / 100);
+  const bruttoTotal   = round2(bruttoStunden + ferienzulage);
+
+  const nbuApplicable = einst.uvgAktiv && arbeitnehmer.wochenstundenSchwelle8h;
+
+  const an = {
+    ahvIvEo:    round2(bruttoTotal * einst.satzAhvIvEoAN / 100),
+    alv:        round2(bruttoTotal * einst.satzAlvAN / 100),
+    nbu:        nbuApplicable ? round2(bruttoTotal * einst.satzUvgNbuAN / 100) : 0,
+    quellenst:  round2(bruttoTotal * einst.satzQuellensteuer / 100)
+  };
+  an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
+  const netto = round2(bruttoTotal - an.total);
+
+  const ag = {
+    ahvIvEo: round2(bruttoTotal * einst.satzAhvIvEoAG / 100),
+    alv:     round2(bruttoTotal * einst.satzAlvAG / 100),
+    fak:     round2(bruttoTotal * einst.satzFakAG / 100),
+    bu:      einst.uvgAktiv ? round2(bruttoTotal * einst.satzUvgBuAG / 100) : 0,
+    verw:    round2(bruttoTotal * einst.satzVerwaltungskostenAG / 100)
+  };
+  ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
+  const agKostenTotal = round2(bruttoTotal + ag.total);
+
+  return { stundenTotal: round2(stundenTotal), bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable };
+}
+
+/* ---- TAB SWITCHING ---- */
+function showTab(id) {
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === id));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  if (id === 'monat') renderMonatTab();
+  if (id === 'jahr')  renderJahrTab();
+  if (id === 'erfassung') renderEntries();
+}
+document.querySelectorAll('nav button').forEach(b => {
+  b.addEventListener('click', () => showTab(b.dataset.tab));
+});
+
+/* ---- BIND FORM FIELDS ---- */
+function bind(id, getter, setter, type) {
+  const el = document.getElementById(id);
+  const apply = () => {
+    const v = getter();
+    if (type === 'checkbox') el.checked = !!v;
+    else el.value = v == null ? '' : v;
+  };
+  apply();
+  const evtName = type === 'checkbox' ? 'change' : 'input';
+  el.addEventListener(evtName, () => {
+    let v = type === 'checkbox' ? el.checked : el.value;
+    if (type === 'number') v = v === '' ? 0 : Number(v);
+    setter(v);
+    saveState();
+  });
+  return apply;
+}
+
+const refreshFns = [];
+
+function bindStammdatenAndSettings() {
+  refreshFns.push(bind('ag-name',          () => state.arbeitgeber.name,          v => state.arbeitgeber.name = v));
+  refreshFns.push(bind('ag-adresse',       () => state.arbeitgeber.adresse,       v => state.arbeitgeber.adresse = v));
+  refreshFns.push(bind('ag-abrechnungsnr', () => state.arbeitgeber.ahvAbrechnungsnr, v => state.arbeitgeber.ahvAbrechnungsnr = v));
+
+  refreshFns.push(bind('an-name',         () => state.arbeitnehmer.name,         v => state.arbeitnehmer.name = v));
+  refreshFns.push(bind('an-adresse',      () => state.arbeitnehmer.adresse,      v => state.arbeitnehmer.adresse = v));
+  refreshFns.push(bind('an-geburtsdatum', () => state.arbeitnehmer.geburtsdatum, v => state.arbeitnehmer.geburtsdatum = v));
+  refreshFns.push(bind('an-ahvnr',        () => state.arbeitnehmer.ahvNr,        v => state.arbeitnehmer.ahvNr = v));
+  refreshFns.push(bind('an-iban',         () => state.arbeitnehmer.iban,         v => state.arbeitnehmer.iban = v));
+  refreshFns.push(bind('an-8h',           () => state.arbeitnehmer.wochenstundenSchwelle8h, v => state.arbeitnehmer.wochenstundenSchwelle8h = v, 'checkbox'));
+
+  const e = state.einstellungen;
+  refreshFns.push(bind('s-stundenlohn', () => e.stundenlohn,             v => e.stundenlohn = v,             'number'));
+  refreshFns.push(bind('s-ferien',      () => e.ferienzulageProzent,     v => e.ferienzulageProzent = v,     'number'));
+  refreshFns.push(bind('s-ahv-an',      () => e.satzAhvIvEoAN,           v => e.satzAhvIvEoAN = v,           'number'));
+  refreshFns.push(bind('s-ahv-ag',      () => e.satzAhvIvEoAG,           v => e.satzAhvIvEoAG = v,           'number'));
+  refreshFns.push(bind('s-alv-an',      () => e.satzAlvAN,               v => e.satzAlvAN = v,               'number'));
+  refreshFns.push(bind('s-alv-ag',      () => e.satzAlvAG,               v => e.satzAlvAG = v,               'number'));
+  refreshFns.push(bind('s-fak-ag',      () => e.satzFakAG,               v => e.satzFakAG = v,               'number'));
+  refreshFns.push(bind('s-verw-ag',     () => e.satzVerwaltungskostenAG, v => e.satzVerwaltungskostenAG = v, 'number'));
+  refreshFns.push(bind('s-quellen',     () => e.satzQuellensteuer,       v => e.satzQuellensteuer = v,       'number'));
+  refreshFns.push(bind('s-uvg-aktiv',   () => e.uvgAktiv,                v => e.uvgAktiv = v,                'checkbox'));
+  refreshFns.push(bind('s-bu-ag',       () => e.satzUvgBuAG,             v => e.satzUvgBuAG = v,             'number'));
+  refreshFns.push(bind('s-nbu-an',      () => e.satzUvgNbuAN,            v => e.satzUvgNbuAN = v,            'number'));
+}
+
+/* ---- ERFASSUNG ---- */
+const eDatum = document.getElementById('e-datum');
+const eStunden = document.getElementById('e-stunden');
+const eNotiz = document.getElementById('e-notiz');
+eDatum.value = new Date().toISOString().slice(0,10);
+
+document.getElementById('btn-add').addEventListener('click', () => {
+  const datum = eDatum.value;
+  const stunden = Number(eStunden.value);
+  const notiz = eNotiz.value.trim();
+  if (!datum) { alert('Bitte ein Datum eingeben.'); return; }
+  if (!stunden || stunden <= 0) { alert('Bitte gültige Stundenzahl eingeben.'); return; }
+  state.einsaetze.push({ id: uuid(), datum, stunden, notiz });
+  state.einsaetze.sort((a,b) => a.datum.localeCompare(b.datum));
+  saveState();
+  eStunden.value = '';
+  eNotiz.value = '';
+  renderEntries();
+});
+
+function renderEntries() {
+  const list = document.getElementById('entries-list');
+  if (!state.einsaetze.length) {
+    list.innerHTML = '<div class="empty-state">Noch keine Einsätze erfasst.</div>';
+    return;
+  }
+  const rows = state.einsaetze.map(e => {
+    const betrag = round2(e.stunden * state.einstellungen.stundenlohn);
+    return `<tr>
+      <td>${fmtDate(e.datum)}</td>
+      <td>${e.notiz ? escapeHtml(e.notiz) : '<span class="muted">–</span>'}</td>
+      <td class="num">${e.stunden.toLocaleString('de-CH')}</td>
+      <td class="num">CHF ${fmtChf(betrag)}</td>
+      <td class="actions"><button class="btn btn-small btn-danger" data-del="${e.id}">Löschen</button></td>
+    </tr>`;
+  }).join('');
+  const totalH = state.einsaetze.reduce((s,e) => s + e.stunden, 0);
+  const totalB = round2(totalH * state.einstellungen.stundenlohn);
+  list.innerHTML = `<table>
+    <thead><tr><th>Datum</th><th>Notiz</th><th class="num">Stunden</th><th class="num">Betrag (Stundenlohn)</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr class="total-row"><td colspan="2">Total</td><td class="num">${totalH.toLocaleString('de-CH')}</td><td class="num">CHF ${fmtChf(totalB)}</td><td></td></tr></tfoot>
+  </table>`;
+  list.querySelectorAll('button[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.del;
+      if (!confirm('Eintrag wirklich löschen?')) return;
+      state.einsaetze = state.einsaetze.filter(e => e.id !== id);
+      saveState();
+      renderEntries();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---- MONATSABRECHNUNG ---- */
+const mInput = document.getElementById('m-monat');
+mInput.value = new Date().toISOString().slice(0,7);
+mInput.addEventListener('input', renderMonatTab);
+
+function renderMonatTab() {
+  const yyyymm = mInput.value;
+  const target = document.getElementById('monat-doc');
+  if (!yyyymm) { target.innerHTML = ''; return; }
+  const eintraege = state.einsaetze.filter(e => e.datum.startsWith(yyyymm));
+  target.innerHTML = renderLohnabrechnung(eintraege, yyyymm);
+}
+
+function renderLohnabrechnung(eintraege, yyyymm) {
+  const e = state.einstellungen;
+  const ag = state.arbeitgeber;
+  const an = state.arbeitnehmer;
+  const calc = berechneAbrechnung(eintraege, e, an);
+
+  if (!eintraege.length) {
+    return `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))} erfasst.</div>`;
+  }
+
+  const stundenRows = eintraege.map(x => `
+    <tr>
+      <td>${fmtDate(x.datum)}</td>
+      <td>${x.notiz ? escapeHtml(x.notiz) : ''}</td>
+      <td class="num">${x.stunden.toLocaleString('de-CH')}</td>
+      <td class="num">CHF ${fmtChf(e.stundenlohn)}</td>
+      <td class="num">CHF ${fmtChf(round2(x.stunden * e.stundenlohn))}</td>
+    </tr>`).join('');
+
+  const nbuLine = e.uvgAktiv && an.wochenstundenSchwelle8h
+    ? `<div class="summary-row"><span>– UVG-NBU (${e.satzUvgNbuAN} %)</span><span>CHF ${fmtChf(calc.an.nbu)}</span></div>`
+    : '';
+
+  const buLine = e.uvgAktiv
+    ? `<div class="summary-row"><span>UVG-BU (${e.satzUvgBuAG} %)</span><span>CHF ${fmtChf(calc.ag.bu)}</span></div>`
+    : '';
+
+  return `<div class="print-doc">
+    <div class="doc-header">
+      <div class="party">
+        <div class="label-small">Arbeitgeber/in</div>
+        <div class="name">${escapeHtml(ag.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
+        <div>${escapeHtml(ag.adresse)}</div>
+        ${ag.ahvAbrechnungsnr ? `<div class="muted">SVA-Abr.-Nr.: ${escapeHtml(ag.ahvAbrechnungsnr)}</div>` : ''}
+      </div>
+      <div class="party" style="text-align:right;">
+        <div class="label-small">Arbeitnehmer/in</div>
+        <div class="name">${escapeHtml(an.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
+        <div>${escapeHtml(an.adresse)}</div>
+        ${an.ahvNr ? `<div class="muted">AHV-Nr.: ${escapeHtml(an.ahvNr)}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="doc-title">
+      <h1>Lohnabrechnung Kinderbetreuung</h1>
+      <div class="period">${escapeHtml(monthLabel(yyyymm))}</div>
+    </div>
+
+    <h4>Geleistete Stunden</h4>
+    <table>
+      <thead><tr><th>Datum</th><th>Notiz</th><th class="num">Stunden</th><th class="num">Stundenlohn</th><th class="num">Betrag</th></tr></thead>
+      <tbody>${stundenRows}</tbody>
+      <tfoot><tr class="total-row"><td colspan="2">Total</td><td class="num">${calc.stundenTotal.toLocaleString('de-CH')}</td><td></td><td class="num">CHF ${fmtChf(calc.bruttoStunden)}</td></tr></tfoot>
+    </table>
+
+    <h4>Bruttolohn</h4>
+    <div class="summary-row"><span>Stundenlohn-Summe</span><span>CHF ${fmtChf(calc.bruttoStunden)}</span></div>
+    <div class="summary-row"><span>+ Ferienzulage (${e.ferienzulageProzent} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
+    <div class="summary-row total"><span>Bruttolohn</span><span>CHF ${fmtChf(calc.bruttoTotal)}</span></div>
+
+    <h4>Abzüge Arbeitnehmer/in</h4>
+    <div class="summary-row"><span>– AHV/IV/EO (${e.satzAhvIvEoAN} %)</span><span>CHF ${fmtChf(calc.an.ahvIvEo)}</span></div>
+    <div class="summary-row"><span>– ALV (${e.satzAlvAN} %)</span><span>CHF ${fmtChf(calc.an.alv)}</span></div>
+    ${nbuLine}
+    <div class="summary-row"><span>– Quellensteuer (${e.satzQuellensteuer} %)</span><span>CHF ${fmtChf(calc.an.quellenst)}</span></div>
+    <div class="summary-row total"><span>Total Abzüge</span><span>CHF ${fmtChf(calc.an.total)}</span></div>
+
+    <div class="summary-row netto"><span>Auszahlung netto</span><span>CHF ${fmtChf(calc.netto)}</span></div>
+
+    <h4>Arbeitgeberbeiträge (informativ, nicht vom Lohn abgezogen)</h4>
+    <div class="summary-row"><span>AHV/IV/EO (${e.satzAhvIvEoAG} %)</span><span>CHF ${fmtChf(calc.ag.ahvIvEo)}</span></div>
+    <div class="summary-row"><span>ALV (${e.satzAlvAG} %)</span><span>CHF ${fmtChf(calc.ag.alv)}</span></div>
+    <div class="summary-row"><span>FAK (${e.satzFakAG} %)</span><span>CHF ${fmtChf(calc.ag.fak)}</span></div>
+    ${buLine}
+    <div class="summary-row"><span>Verwaltungskosten (${e.satzVerwaltungskostenAG} %)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
+    <div class="summary-row total"><span>Total Arbeitgeberbeiträge</span><span>CHF ${fmtChf(calc.ag.total)}</span></div>
+    <div class="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF ${fmtChf(calc.agKostenTotal)}</span></div>
+
+    <div class="footnote">
+      Vereinfachtes Abrechnungsverfahren der SVA Zürich (${e.uvgAktiv ? 'VAVplus' : 'VAV'}). Quellensteuer und Sozialversicherungsbeiträge werden direkt mit der Ausgleichskasse abgerechnet. ${e.uvgAktiv ? 'Unfallversicherung über SVA Zürich.' : 'Unfallversicherung separat über privaten Versicherer.'}
+    </div>
+
+    <div class="signatures">
+      <div class="sig">Ort, Datum &amp; Unterschrift Arbeitgeber/in</div>
+      <div class="sig">Ort, Datum &amp; Unterschrift Arbeitnehmer/in (Empfangsbestätigung)</div>
+    </div>
+  </div>`;
+}
+
+document.getElementById('btn-print-monat').addEventListener('click', () => printSection('monat'));
+
+/* ---- JAHRESÜBERSICHT ---- */
+const jInput = document.getElementById('j-jahr');
+jInput.value = new Date().getFullYear();
+jInput.addEventListener('input', renderJahrTab);
+
+function renderJahrTab() {
+  const jahr = Number(jInput.value);
+  const target = document.getElementById('jahr-doc');
+  if (!jahr) { target.innerHTML = ''; return; }
+  const eintraege = state.einsaetze.filter(e => e.datum.startsWith(String(jahr)));
+  target.innerHTML = renderJahresuebersicht(eintraege, jahr);
+}
+
+function renderJahresuebersicht(eintraege, jahr) {
+  const e = state.einstellungen;
+  const an = state.arbeitnehmer;
+  const ag = state.arbeitgeber;
+
+  const monatsRows = [];
+  let yJahresBrutto = 0, yJahresStunden = 0, yJahresNetto = 0, yJahresAG = 0, yJahresAN = 0;
+
+  for (let m = 1; m <= 12; m++) {
+    const mm = String(m).padStart(2, '0');
+    const yyyymm = `${jahr}-${mm}`;
+    const monatEintraege = eintraege.filter(x => x.datum.startsWith(yyyymm));
+    if (!monatEintraege.length) continue;
+    const calc = berechneAbrechnung(monatEintraege, e, an);
+    yJahresStunden += calc.stundenTotal;
+    yJahresBrutto += calc.bruttoTotal;
+    yJahresNetto += calc.netto;
+    yJahresAG += calc.ag.total;
+    yJahresAN += calc.an.total;
+    monatsRows.push(`<tr>
+      <td>${monthLabel(yyyymm)}</td>
+      <td class="num">${calc.stundenTotal.toLocaleString('de-CH')}</td>
+      <td class="num">CHF ${fmtChf(calc.bruttoTotal)}</td>
+      <td class="num">CHF ${fmtChf(calc.an.total)}</td>
+      <td class="num">CHF ${fmtChf(calc.netto)}</td>
+      <td class="num">CHF ${fmtChf(calc.ag.total)}</td>
+    </tr>`);
+  }
+
+  yJahresBrutto = round2(yJahresBrutto);
+  yJahresNetto = round2(yJahresNetto);
+  yJahresAG = round2(yJahresAG);
+  yJahresAN = round2(yJahresAN);
+  yJahresStunden = round2(yJahresStunden);
+  const agKostenTotal = round2(yJahresBrutto + yJahresAG);
+
+  let warnung = '';
+  if (yJahresBrutto > LIMIT_VEREINFACHT) {
+    warnung = `<div class="danger">Bruttolohn übersteigt CHF ${fmtChf(LIMIT_VEREINFACHT)} — vereinfachte Abrechnung nicht mehr möglich. Wechsel zur ordentlichen Abrechnung erforderlich.</div>`;
+  } else if (yJahresBrutto >= LIMIT_VEREINFACHT * 0.9) {
+    warnung = `<div class="warn"><strong>Achtung:</strong> Schon ${Math.round(yJahresBrutto / LIMIT_VEREINFACHT * 100)} % der Jahresgrenze (CHF ${fmtChf(LIMIT_VEREINFACHT)}) erreicht. Restbudget für ${jahr}: CHF ${fmtChf(round2(LIMIT_VEREINFACHT - yJahresBrutto))}.</div>`;
+  }
+
+  if (!monatsRows.length) {
+    return `<div class="empty-state">Keine Einsätze im Jahr ${jahr} erfasst.</div>`;
+  }
+
+  return `<div class="print-doc">
+    <div class="doc-header">
+      <div class="party">
+        <div class="label-small">Arbeitgeber/in</div>
+        <div class="name">${escapeHtml(ag.name) || '<span class="muted">(Stammdaten)</span>'}</div>
+        <div>${escapeHtml(ag.adresse)}</div>
+      </div>
+      <div class="party" style="text-align:right;">
+        <div class="label-small">Arbeitnehmer/in</div>
+        <div class="name">${escapeHtml(an.name) || '<span class="muted">(Stammdaten)</span>'}</div>
+        ${an.ahvNr ? `<div class="muted">AHV-Nr.: ${escapeHtml(an.ahvNr)}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="doc-title">
+      <h1>Jahresübersicht ${jahr}</h1>
+      <div class="period">Vereinfachte Abrechnung Kanton Zürich</div>
+    </div>
+
+    ${warnung}
+
+    <h4>Monatsübersicht</h4>
+    <table>
+      <thead><tr><th>Monat</th><th class="num">Stunden</th><th class="num">Brutto</th><th class="num">AN-Abzüge</th><th class="num">Netto</th><th class="num">AG-Beiträge</th></tr></thead>
+      <tbody>${monatsRows.join('')}</tbody>
+      <tfoot><tr class="total-row">
+        <td>Total ${jahr}</td>
+        <td class="num">${yJahresStunden.toLocaleString('de-CH')}</td>
+        <td class="num">CHF ${fmtChf(yJahresBrutto)}</td>
+        <td class="num">CHF ${fmtChf(yJahresAN)}</td>
+        <td class="num">CHF ${fmtChf(yJahresNetto)}</td>
+        <td class="num">CHF ${fmtChf(yJahresAG)}</td>
+      </tr></tfoot>
+    </table>
+
+    <h4>Lohndeklaration SVA Zürich</h4>
+    <div class="summary-row"><span>Bruttolohnsumme ${jahr}</span><span>CHF ${fmtChf(yJahresBrutto)}</span></div>
+    <div class="summary-row"><span>Total Arbeitgeberbeiträge</span><span>CHF ${fmtChf(yJahresAG)}</span></div>
+    <div class="summary-row total"><span>Total Arbeitgeberkosten</span><span>CHF ${fmtChf(agKostenTotal)}</span></div>
+
+    <div class="info" style="margin-top:14px;">
+      Den Bruttolohn von <strong>CHF ${fmtChf(yJahresBrutto)}</strong> bei der SVA Zürich als Lohndeklaration ${jahr} einreichen (Frist üblicherweise Ende Januar ${jahr+1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge${e.uvgAktiv ? ', UVG-Prämien' : ''} und Quellensteuer.
+    </div>
+  </div>`;
+}
+
+document.getElementById('btn-print-jahr').addEventListener('click', () => printSection('jahr'));
+
+/* ---- PRINT ---- */
+function printSection(id) {
+  document.querySelectorAll('section').forEach(s => s.classList.remove('printing'));
+  document.getElementById(id).classList.add('printing');
+  window.print();
+  setTimeout(() => document.getElementById(id).classList.remove('printing'), 200);
+}
+
+/* ---- DATEN VERWALTEN ---- */
+document.getElementById('btn-export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kinderbetreuung-lohn-export-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+
+document.getElementById('import-file').addEventListener('change', (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!confirm('Aktuelle Daten überschreiben?')) return;
+      state = {
+        arbeitgeber: { ...DEFAULT_STATE.arbeitgeber, ...(parsed.arbeitgeber||{}) },
+        arbeitnehmer: { ...DEFAULT_STATE.arbeitnehmer, ...(parsed.arbeitnehmer||{}) },
+        einstellungen: { ...defaultSaetze(), ...(parsed.einstellungen||{}) },
+        einsaetze: Array.isArray(parsed.einsaetze) ? parsed.einsaetze : []
+      };
+      saveState();
+      refreshFns.forEach(fn => fn());
+      renderEntries();
+      alert('Daten importiert.');
+    } catch(err) {
+      alert('Import fehlgeschlagen: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+});
+
+document.getElementById('btn-reset-saetze').addEventListener('click', () => {
+  if (!confirm('Beitragssätze auf 2026-Standard zurücksetzen?')) return;
+  state.einstellungen = defaultSaetze();
+  saveState();
+  refreshFns.forEach(fn => fn());
+});
+
+document.getElementById('btn-clear-all').addEventListener('click', () => {
+  if (!confirm('Wirklich ALLE Daten (Stammdaten, Einsätze, Einstellungen) löschen?')) return;
+  if (!confirm('Sicher? Dies kann nicht rückgängig gemacht werden.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = structuredClone(DEFAULT_STATE);
+  refreshFns.forEach(fn => fn());
+  renderEntries();
+});
+
+/* ---- INIT ---- */
+bindStammdatenAndSettings();
+renderEntries();
+</script>
+</body>
+</html>
