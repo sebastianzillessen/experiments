@@ -1,6 +1,6 @@
 'use strict';
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 
 const SUPABASE_URL = 'https://tbknudbcgaarqixweizj.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_YHSXK9ryn8RQQe__e3aB2Q_lQo13XaP';
@@ -256,8 +256,24 @@ document.getElementById('create-household-form').addEventListener('submit', asyn
   btnCreateHousehold.disabled = true;
   btnCreateHousehold.textContent = 'Wird angelegt …';
   try {
-    const { error } = await supabase.rpc('create_household_for_self', { p_name: name });
-    if (error) throw error;
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('[create-household] session snapshot:', {
+      hasSession: !!session,
+      hasAccessToken: !!session?.access_token,
+      userId: session?.user?.id,
+      expiresAt: session?.expires_at
+    });
+    const { data: userCheck, error: userErr } = await supabase.auth.getUser();
+    console.log('[create-household] server getUser:', { hasUser: !!userCheck?.user, error: userErr });
+    if (userErr || !userCheck?.user) {
+      throw new Error('Server akzeptiert die Sitzung nicht: ' + (userErr?.message || 'no user'));
+    }
+    const { data, error } = await supabase.rpc('create_household_for_self', { p_name: name });
+    if (error) {
+      console.error('[create-household] RPC error:', error);
+      throw error;
+    }
+    console.log('[create-household] RPC ok, household_id:', data);
     createHouseholdScreen.hidden = true;
     if (currentUser) await onSignedIn(currentUser);
   } catch (e) {
@@ -276,11 +292,26 @@ document.getElementById('btn-create-household-signout').addEventListener('click'
 /* ---- AUTH FLOW ---- */
 async function bootstrap() {
   const { data: { session } } = await supabase.auth.getSession();
-  if (session && session.user) {
-    await onSignedIn(session.user);
-  } else {
+  if (!session?.user) {
     showLogin();
+    return;
   }
+  // Verify the local session is actually accepted by the server. A stale
+  // local session (e.g. from a rotated JWT secret or expired refresh token
+  // that the SDK can't refresh) leaves the UI thinking we're authenticated
+  // while every request goes through unauthenticated -- we get stuck on
+  // "Haushalt anlegen" and the RPC barfs "Not authenticated".
+  const { data: verified, error: verifyErr } = await supabase.auth.getUser();
+  if (verifyErr || !verified?.user) {
+    console.warn('[auth] local session rejected by server, signing out:', verifyErr);
+    await supabase.auth.signOut().catch(() => {});
+    authError.textContent = 'Sitzung abgelaufen. Bitte erneut anmelden.'
+      + (verifyErr?.message ? ' (' + verifyErr.message + ')' : '');
+    authError.hidden = false;
+    showLogin();
+    return;
+  }
+  await onSignedIn(verified.user);
 }
 
 supabase.auth.onAuthStateChange((event, session) => {
