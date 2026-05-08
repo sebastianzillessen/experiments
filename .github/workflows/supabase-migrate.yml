@@ -1,0 +1,41 @@
+name: Apply Supabase migrations
+
+# On push to main, apply any new SQL migrations in supabase/migrations/
+# to the linked Supabase project. Requires two repository secrets:
+#   - SUPABASE_ACCESS_TOKEN: personal access token from
+#     https://supabase.com/dashboard/account/tokens
+#   - SUPABASE_DB_PASSWORD:  the project's database password from
+#     Project Settings -> Database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-migrate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: tbknudbcgaarqixweizj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Push migrations
+        run: supabase db push --include-all
