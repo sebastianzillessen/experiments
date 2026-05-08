@@ -45,9 +45,12 @@ as $$
   from public.memberships m
   join auth.users u on u.id = m.user_id
   where m.household_id = h
-    and public.role_in(h) is not null;
+    and public.role_in(h) in ('owner', 'admin');
 $$;
 
+-- Functions are EXECUTE-able by PUBLIC by default, so a bare GRANT to
+-- `authenticated` would not actually restrict anything. Revoke first, then grant.
+revoke all on function public.members_of_household(uuid) from public;
 grant execute on function public.members_of_household(uuid) to authenticated;
 
 -- 3. case-insensitive uniqueness for invites --------------------------------

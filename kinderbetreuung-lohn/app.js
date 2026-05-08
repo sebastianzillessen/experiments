@@ -300,6 +300,7 @@ async function fetchMembership() {
     .select('household_id, role, created_at')
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: true })
+    .order('household_id', { ascending: true })
     .limit(1);
   if (error) { console.warn(error); return null; }
   return (data && data[0]) || null;
