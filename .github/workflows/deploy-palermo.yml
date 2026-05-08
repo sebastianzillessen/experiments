@@ -1,0 +1,41 @@
+name: Deploy Palermo Travel Plan
+
+# Deploys palermo-travel-plan/ to GitHub Pages at /palermo/
+
+on:
+  push:
+    branches:
+      - main
+      - claude/add-palermo-travel-plan-Ok0Su
+    paths:
+      - palermo-travel-plan/**
+      - .github/workflows/deploy-palermo.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Stage site with /palermo/ subpath
+        run: |
+          mkdir -p _site/palermo
+          cp -r palermo-travel-plan/. _site/palermo/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
