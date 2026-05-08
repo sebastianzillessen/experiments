@@ -178,17 +178,36 @@ const inviteBanner = document.getElementById('invite-banner');
 const inviteText = document.getElementById('invite-text');
 const authError = document.getElementById('auth-error');
 const authInfo = document.getElementById('auth-info');
+const createHouseholdScreen = document.getElementById('create-household-screen');
+const createHouseholdNameInput = document.getElementById('create-household-name');
+const createHouseholdError = document.getElementById('create-household-error');
+const btnCreateHousehold = document.getElementById('btn-create-household');
 
 function showLogin() {
   loginScreen.hidden = false;
   userStrip.hidden = true;
   syncStatusEl.hidden = true;
   inviteBanner.hidden = true;
+  createHouseholdScreen.hidden = true;
 }
 
 function hideLogin() {
   loginScreen.hidden = true;
   userStrip.hidden = false;
+}
+
+function showCreateHousehold(user) {
+  loginScreen.hidden = true;
+  inviteBanner.hidden = true;
+  syncStatusEl.hidden = true;
+  userStrip.hidden = true;
+  createHouseholdScreen.hidden = false;
+  createHouseholdError.hidden = true;
+  if (createHouseholdNameInput && !createHouseholdNameInput.value) {
+    const guess = (user && user.email) ? user.email.split('@')[0] : '';
+    createHouseholdNameInput.value = guess ? `${guess} Haushalt` : 'Mein Haushalt';
+  }
+  setTimeout(() => createHouseholdNameInput && createHouseholdNameInput.focus(), 50);
 }
 
 document.getElementById('magic-link-form').addEventListener('submit', async (ev) => {
@@ -222,6 +241,35 @@ document.getElementById('magic-link-form').addEventListener('submit', async (ev)
 });
 
 document.getElementById('btn-signout').addEventListener('click', async () => {
+  await supabase.auth.signOut();
+});
+
+document.getElementById('create-household-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  createHouseholdError.hidden = true;
+  const name = createHouseholdNameInput.value.trim();
+  if (!name) {
+    createHouseholdError.textContent = 'Bitte einen Namen eingeben.';
+    createHouseholdError.hidden = false;
+    return;
+  }
+  btnCreateHousehold.disabled = true;
+  btnCreateHousehold.textContent = 'Wird angelegt …';
+  try {
+    const { error } = await supabase.rpc('create_household_for_self', { p_name: name });
+    if (error) throw error;
+    createHouseholdScreen.hidden = true;
+    if (currentUser) await onSignedIn(currentUser);
+  } catch (e) {
+    createHouseholdError.textContent = 'Anlegen fehlgeschlagen: ' + (e.message || e);
+    createHouseholdError.hidden = false;
+  } finally {
+    btnCreateHousehold.disabled = false;
+    btnCreateHousehold.textContent = 'Haushalt anlegen';
+  }
+});
+
+document.getElementById('btn-create-household-signout').addEventListener('click', async () => {
   await supabase.auth.signOut();
 });
 
@@ -266,9 +314,7 @@ async function onSignedIn(user) {
   }
 
   if (!membership) {
-    authError.textContent = 'Kein Haushalt zugeordnet. Bitte den Owner um eine Einladung bitten.';
-    authError.hidden = false;
-    showLogin();
+    showCreateHousehold(currentUser);
     return;
   }
 
