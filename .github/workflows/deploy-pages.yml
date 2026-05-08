@@ -1,0 +1,58 @@
+name: Deploy Pages
+
+# Deploys all static apps to GitHub Pages:
+#   palermo-travel-plan/      -> /palermo/
+#   kinderbetreuung-lohn/     -> /kinderbetreuung-lohn/
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - palermo-travel-plan/**
+      - kinderbetreuung-lohn/**
+      - .github/workflows/deploy-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Stage apps into subpaths
+        run: |
+          mkdir -p _site/palermo _site/kinderbetreuung-lohn
+          cp -r palermo-travel-plan/. _site/palermo/
+          cp -r kinderbetreuung-lohn/. _site/kinderbetreuung-lohn/
+          cat > _site/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="de"><head><meta charset="UTF-8"><title>Experiments</title>
+          <style>body{font-family:system-ui,sans-serif;max-width:560px;margin:60px auto;padding:0 20px;color:#1f2933;line-height:1.6}
+          h1{color:#1a3a5c}a{color:#2e6ea6;text-decoration:none;font-weight:600}a:hover{text-decoration:underline}
+          ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.muted{color:#6b7480;font-size:14px}</style>
+          </head><body>
+          <h1>Experiments</h1>
+          <ul>
+            <li><a href="palermo/">Palermo Urlaubshandbuch</a><div class="muted">Reisefuehrer Palermo (April 2026)</div></li>
+            <li><a href="kinderbetreuung-lohn/">Lohnabrechnung Kinderbetreuung</a><div class="muted">Vereinfachte Abrechnung Kanton Zuerich</div></li>
+          </ul>
+          </body></html>
+          EOF
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
