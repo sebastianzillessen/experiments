@@ -1047,12 +1047,22 @@ async function renderMitglieder() {
           const userId = btn.dataset.remove;
           setSyncStatus('pending');
           try {
-            const { error } = await supabase
+            // .select() so the response body returns the deleted rows. Without
+            // it PostgREST returns 204 even when RLS filters every row, which
+            // hid an earlier bug where the click looked successful but the
+            // member stayed.
+            const { data, error } = await supabase
               .from('memberships')
               .delete()
               .eq('household_id', currentHouseholdId)
-              .eq('user_id', userId);
+              .eq('user_id', userId)
+              .select('user_id');
             if (error) throw error;
+            if (!data || data.length === 0) {
+              throw new Error(
+                'Keine Zeile gelöscht. Vermutlich fehlen die nötigen Rechte (nur Owner darf Mitglieder entfernen) oder das Mitglied existiert nicht mehr.'
+              );
+            }
             setSyncStatus('ok');
             renderMitglieder();
           } catch (e) { setSyncStatus('error', e); }
