@@ -53,6 +53,10 @@ button.btn-small { padding:5px 10px; font-size:12px; }
 .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
 
 /* TABLES */
+/* Tables can overflow on narrow viewports; let their container scroll
+   instead of pushing the page wider than the screen. */
+#entries-list, #monat-doc, #jahr-doc, #members-list, #invites-list,
+.card:has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width:100%; border-collapse:collapse; font-size:14px; }
 table th { background:var(--soft); color:var(--primary-dark); padding:9px 10px; text-align:left; font-weight:600; border-bottom:2px solid var(--border); font-size:12px; text-transform:uppercase; letter-spacing:0.03em; }
 table td { padding:8px 10px; border-bottom:1px solid var(--border); }
