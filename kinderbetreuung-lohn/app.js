@@ -1094,6 +1094,25 @@ async function renderMitglieder() {
   }
 }
 
+function openInviteFallbackMail(email, role) {
+  // Fallback when the edge function is unreachable / not configured. Opens
+  // the user's mail client with a German message ready to send.
+  const subject = 'Einladung — Lohnabrechnung Kinderbetreuung';
+  const body =
+    `Hallo,\n\n` +
+    `du wurdest als ${role} zu unserem Haushalt in „Lohnabrechnung Kinderbetreuung" eingeladen.\n\n` +
+    `Öffne dieses Tool und melde dich mit dieser E-Mail-Adresse (${email}) an, ` +
+    `dann erscheint die Einladung automatisch:\n${location.origin}${location.pathname}\n\n` +
+    `Danke!`;
+  window.location.href =
+    'mailto:' +
+    encodeURIComponent(email) +
+    '?subject=' +
+    encodeURIComponent(subject) +
+    '&body=' +
+    encodeURIComponent(body);
+}
+
 document.getElementById('btn-invite').addEventListener('click', async () => {
   const emailEl = document.getElementById('inv-email');
   const roleEl = document.getElementById('inv-role');
@@ -1102,16 +1121,43 @@ document.getElementById('btn-invite').addEventListener('click', async () => {
   if (!email || !email.includes('@')) { alert('Bitte gültige E-Mail-Adresse eingeben.'); return; }
   setSyncStatus('pending');
   try {
-    const { error } = await supabase.from('invites').insert({
-      household_id: currentHouseholdId,
-      email, role,
-      invited_by: currentUser.id
-    });
+    const { data: inserted, error } = await supabase
+      .from('invites')
+      .insert({
+        household_id: currentHouseholdId,
+        email,
+        role,
+        invited_by: currentUser.id,
+      })
+      .select('id')
+      .single();
     if (error) throw error;
     emailEl.value = '';
     setSyncStatus('ok');
     renderMitglieder();
-  } catch (e) { setSyncStatus('error', e); }
+
+    // Fire-and-await the edge function that sends the actual email. We don't
+    // want to block the UI on failure — if it errors we offer a mailto
+    // fallback so the inviter can still notify the person.
+    const { error: fnErr } = await supabase.functions.invoke(
+      'send-invite-email',
+      { body: { invite_id: inserted.id } }
+    );
+    if (fnErr) {
+      console.warn('[invite] send-invite-email failed:', fnErr);
+      const useMailto = confirm(
+        'Einladung gespeichert, aber automatische E-Mail konnte nicht versendet werden.\n\n' +
+          'Möchtest du eine E-Mail aus deinem Mail-Programm an ' +
+          email +
+          ' verfassen?'
+      );
+      if (useMailto) openInviteFallbackMail(email, role);
+    } else {
+      alert('Einladung an ' + email + ' versendet.');
+    }
+  } catch (e) {
+    setSyncStatus('error', e);
+  }
 });
 
 /* ---- BOOTSTRAP ---- */
