@@ -35,12 +35,30 @@ function defaultSaetze() {
 const asString = v => typeof v === 'string' ? v : (v == null ? '' : String(v));
 const asNumber = (v, fallback) => { const n = Number(v); return Number.isFinite(n) ? n : fallback; };
 
+function sanitizeEinstellungen(e, fallback) {
+  e = (e && typeof e === 'object') ? e : {};
+  const def = fallback || defaultSaetze();
+  return {
+    stundenlohn:             asNumber(e.stundenlohn,             def.stundenlohn),
+    ferienzulageProzent:     asNumber(e.ferienzulageProzent,     def.ferienzulageProzent),
+    satzAhvIvEoAN:           asNumber(e.satzAhvIvEoAN,           def.satzAhvIvEoAN),
+    satzAhvIvEoAG:           asNumber(e.satzAhvIvEoAG,           def.satzAhvIvEoAG),
+    satzAlvAN:               asNumber(e.satzAlvAN,               def.satzAlvAN),
+    satzAlvAG:               asNumber(e.satzAlvAG,               def.satzAlvAG),
+    satzFakAG:               asNumber(e.satzFakAG,               def.satzFakAG),
+    satzQuellensteuer:       asNumber(e.satzQuellensteuer,       def.satzQuellensteuer),
+    satzVerwaltungskostenAG: asNumber(e.satzVerwaltungskostenAG, def.satzVerwaltungskostenAG),
+    uvgAktiv:                e.uvgAktiv === undefined ? def.uvgAktiv : !!e.uvgAktiv,
+    satzUvgBuAG:             asNumber(e.satzUvgBuAG,             def.satzUvgBuAG),
+    satzUvgNbuAN:            asNumber(e.satzUvgNbuAN,            def.satzUvgNbuAN)
+  };
+}
+
 function sanitizeState(raw) {
   raw = (raw && typeof raw === 'object') ? raw : {};
-  const def = defaultSaetze();
-  const e = (raw.einstellungen && typeof raw.einstellungen === 'object') ? raw.einstellungen : {};
   const ag = (raw.arbeitgeber && typeof raw.arbeitgeber === 'object') ? raw.arbeitgeber : {};
   const an = (raw.arbeitnehmer && typeof raw.arbeitnehmer === 'object') ? raw.arbeitnehmer : {};
+  const einst = sanitizeEinstellungen(raw.einstellungen);
   return {
     arbeitgeber: {
       name: asString(ag.name),
@@ -55,20 +73,7 @@ function sanitizeState(raw) {
       iban: asString(an.iban),
       wochenstundenSchwelle8h: !!an.wochenstundenSchwelle8h
     },
-    einstellungen: {
-      stundenlohn:             asNumber(e.stundenlohn,             def.stundenlohn),
-      ferienzulageProzent:     asNumber(e.ferienzulageProzent,     def.ferienzulageProzent),
-      satzAhvIvEoAN:           asNumber(e.satzAhvIvEoAN,           def.satzAhvIvEoAN),
-      satzAhvIvEoAG:           asNumber(e.satzAhvIvEoAG,           def.satzAhvIvEoAG),
-      satzAlvAN:               asNumber(e.satzAlvAN,               def.satzAlvAN),
-      satzAlvAG:               asNumber(e.satzAlvAG,               def.satzAlvAG),
-      satzFakAG:               asNumber(e.satzFakAG,               def.satzFakAG),
-      satzQuellensteuer:       asNumber(e.satzQuellensteuer,       def.satzQuellensteuer),
-      satzVerwaltungskostenAG: asNumber(e.satzVerwaltungskostenAG, def.satzVerwaltungskostenAG),
-      uvgAktiv:                e.uvgAktiv === undefined ? def.uvgAktiv : !!e.uvgAktiv,
-      satzUvgBuAG:             asNumber(e.satzUvgBuAG,             def.satzUvgBuAG),
-      satzUvgNbuAN:            asNumber(e.satzUvgNbuAN,            def.satzUvgNbuAN)
-    },
+    einstellungen: einst,
     einsaetze: Array.isArray(raw.einsaetze)
       ? raw.einsaetze.map(x => {
           if (!x || typeof x !== 'object') return null;
@@ -79,7 +84,8 @@ function sanitizeState(raw) {
             id: asString(x.id),
             datum, stunden,
             notiz: asString(x.notiz),
-            entered_by: asString(x.entered_by)
+            entered_by: asString(x.entered_by),
+            einstellungen: sanitizeEinstellungen(x.einstellungen, einst)
           };
         }).filter(Boolean)
       : []
@@ -112,35 +118,61 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ---- BERECHNUNG ---- */
-function berechneAbrechnung(einsaetze, einst, arbeitnehmer) {
-  const stundenTotal = einsaetze.reduce((s,e) => s + (Number(e.stunden)||0), 0);
-  const bruttoStunden = round2(stundenTotal * einst.stundenlohn);
-  const ferienzulage  = round2(bruttoStunden * einst.ferienzulageProzent / 100);
-  const bruttoTotal   = round2(bruttoStunden + ferienzulage);
+/* ---- BERECHNUNG ----
+   Each einsatz carries its own einstellungen snapshot (Stundenlohn, Ferien-
+   zulage, SV-Sätze, UVG-Flags) captured at insert time. Berechnung iteriert
+   pro Einsatz, damit eine spätere Änderung in „Einstellungen" (z.B. Lohn-
+   erhöhung) bestehende Einsätze nicht rückwirkend neu rechnet.
+   `fallbackEinst` wird nur für displaywerte (Sätze in der Übersicht) und für
+   Altbestand ohne Snapshot verwendet. */
+function berechneAbrechnung(einsaetze, fallbackEinst, arbeitnehmer) {
+  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, bruttoTotal = 0;
+  const an = { ahvIvEo: 0, alv: 0, nbu: 0, quellenst: 0 };
+  const ag = { ahvIvEo: 0, alv: 0, fak: 0, bu: 0, verw: 0 };
+  let nbuApplicable = false;
+  let uvgAktivAny = false;
 
-  const nbuApplicable = einst.uvgAktiv && arbeitnehmer.wochenstundenSchwelle8h;
+  for (const x of einsaetze) {
+    const e = x.einstellungen || fallbackEinst;
+    const stunden = Number(x.stunden) || 0;
+    const xBrutto = stunden * e.stundenlohn;
+    const xFerien = xBrutto * e.ferienzulageProzent / 100;
+    const xBruttoTotal = xBrutto + xFerien;
 
-  const an = {
-    ahvIvEo:    round2(bruttoTotal * einst.satzAhvIvEoAN / 100),
-    alv:        round2(bruttoTotal * einst.satzAlvAN / 100),
-    nbu:        nbuApplicable ? round2(bruttoTotal * einst.satzUvgNbuAN / 100) : 0,
-    quellenst:  round2(bruttoTotal * einst.satzQuellensteuer / 100)
-  };
+    stundenTotal += stunden;
+    bruttoStunden += xBrutto;
+    ferienzulage += xFerien;
+    bruttoTotal += xBruttoTotal;
+
+    const xNbuApplicable = e.uvgAktiv && arbeitnehmer.wochenstundenSchwelle8h;
+    if (xNbuApplicable) nbuApplicable = true;
+    if (e.uvgAktiv) uvgAktivAny = true;
+
+    an.ahvIvEo   += xBruttoTotal * e.satzAhvIvEoAN / 100;
+    an.alv       += xBruttoTotal * e.satzAlvAN / 100;
+    an.nbu       += xNbuApplicable ? xBruttoTotal * e.satzUvgNbuAN / 100 : 0;
+    an.quellenst += xBruttoTotal * e.satzQuellensteuer / 100;
+
+    ag.ahvIvEo += xBruttoTotal * e.satzAhvIvEoAG / 100;
+    ag.alv     += xBruttoTotal * e.satzAlvAG / 100;
+    ag.fak     += xBruttoTotal * e.satzFakAG / 100;
+    ag.bu      += e.uvgAktiv ? xBruttoTotal * e.satzUvgBuAG / 100 : 0;
+    ag.verw    += xBruttoTotal * e.satzVerwaltungskostenAG / 100;
+  }
+
+  stundenTotal = round2(stundenTotal);
+  bruttoStunden = round2(bruttoStunden);
+  ferienzulage = round2(ferienzulage);
+  bruttoTotal = round2(bruttoTotal);
+  for (const k of Object.keys(an)) an[k] = round2(an[k]);
+  for (const k of Object.keys(ag)) ag[k] = round2(ag[k]);
+
   an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
   const netto = round2(bruttoTotal - an.total);
-
-  const ag = {
-    ahvIvEo: round2(bruttoTotal * einst.satzAhvIvEoAG / 100),
-    alv:     round2(bruttoTotal * einst.satzAlvAG / 100),
-    fak:     round2(bruttoTotal * einst.satzFakAG / 100),
-    bu:      einst.uvgAktiv ? round2(bruttoTotal * einst.satzUvgBuAG / 100) : 0,
-    verw:    round2(bruttoTotal * einst.satzVerwaltungskostenAG / 100)
-  };
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal: round2(stundenTotal), bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable };
+  return { stundenTotal, bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
 }
 
 /* ---- SYNC STATUS ---- */
@@ -421,7 +453,7 @@ function showInviteBanner(invite) {
 async function loadFromCloud() {
   const [stateRes, einsRes] = await Promise.all([
     supabase.from('household_state').select('*').eq('household_id', currentHouseholdId).maybeSingle(),
-    supabase.from('einsaetze').select('id, datum, stunden, notiz, entered_by').eq('household_id', currentHouseholdId).order('datum')
+    supabase.from('einsaetze').select('id, datum, stunden, notiz, entered_by, einstellungen').eq('household_id', currentHouseholdId).order('datum')
   ]);
   if (stateRes.error) throw stateRes.error;
   if (einsRes.error) throw einsRes.error;
@@ -432,7 +464,8 @@ async function loadFromCloud() {
     arbeitnehmer:  stateRow.arbeitnehmer,
     einstellungen: stateRow.einstellungen,
     einsaetze: (einsRes.data || []).map(r => ({
-      id: r.id, datum: r.datum, stunden: Number(r.stunden), notiz: r.notiz || '', entered_by: r.entered_by
+      id: r.id, datum: r.datum, stunden: Number(r.stunden), notiz: r.notiz || '',
+      entered_by: r.entered_by, einstellungen: r.einstellungen
     }))
   });
 }
@@ -466,19 +499,24 @@ function persistHouseholdState() {
 async function addEinsatzCloud({ datum, stunden, notiz }) {
   setSyncStatus('pending');
   try {
+    // Snapshot der aktuellen Sätze, damit eine spätere Lohnerhöhung diesen
+    // Einsatz nicht rückwirkend neu bewertet.
+    const snapshot = sanitizeEinstellungen(state.einstellungen);
     const { data, error } = await supabase
       .from('einsaetze')
       .insert({
         household_id: currentHouseholdId,
         datum, stunden, notiz,
-        entered_by: currentUser.id
+        entered_by: currentUser.id,
+        einstellungen: snapshot
       })
       .select()
       .single();
     if (error) throw error;
     state.einsaetze.push({
       id: data.id, datum: data.datum, stunden: Number(data.stunden),
-      notiz: data.notiz || '', entered_by: data.entered_by
+      notiz: data.notiz || '', entered_by: data.entered_by,
+      einstellungen: sanitizeEinstellungen(data.einstellungen, state.einstellungen)
     });
     state.einsaetze.sort((a,b) => a.datum.localeCompare(b.datum));
     setSyncStatus('ok');
@@ -645,7 +683,8 @@ function renderEntries() {
     return m.full_name || m.email || '–';
   };
   const rows = visible.map(e => {
-    const betrag = round2(e.stunden * state.einstellungen.stundenlohn);
+    const lohn = (e.einstellungen && e.einstellungen.stundenlohn) || state.einstellungen.stundenlohn;
+    const betrag = round2(e.stunden * lohn);
     const canDelete = currentRole !== 'employee' || e.entered_by === userId;
     const delBtn = canDelete ? `<button class="btn btn-small btn-danger" data-del="${e.id}">Löschen</button>` : '';
     const enteredCell = showEnteredBy ? `<td>${escapeHtml(enteredByLabel(e.entered_by))}</td>` : '';
@@ -654,18 +693,22 @@ function renderEntries() {
       ${enteredCell}
       <td>${e.notiz ? escapeHtml(e.notiz) : '<span class="muted">–</span>'}</td>
       <td class="num">${e.stunden.toLocaleString('de-CH')}</td>
+      <td class="num">CHF ${fmtChf(lohn)}</td>
       <td class="num">CHF ${fmtChf(betrag)}</td>
       <td class="actions">${delBtn}</td>
     </tr>`;
   }).join('');
   const totalH = visible.reduce((s,e) => s + e.stunden, 0);
-  const totalB = round2(totalH * state.einstellungen.stundenlohn);
+  const totalB = round2(visible.reduce((s,e) => {
+    const lohn = (e.einstellungen && e.einstellungen.stundenlohn) || state.einstellungen.stundenlohn;
+    return s + e.stunden * lohn;
+  }, 0));
   const enteredHead = showEnteredBy ? '<th>Erfasst von</th>' : '';
   const totalColspan = showEnteredBy ? 3 : 2;
   list.innerHTML = `<table>
-    <thead><tr><th>Datum</th>${enteredHead}<th>Notiz</th><th class="num">Stunden</th><th class="num">Betrag (Stundenlohn)</th><th></th></tr></thead>
+    <thead><tr><th>Datum</th>${enteredHead}<th>Notiz</th><th class="num">Stunden</th><th class="num">Stundenlohn</th><th class="num">Betrag</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr class="total-row"><td colspan="${totalColspan}">Total</td><td class="num">${totalH.toLocaleString('de-CH')}</td><td class="num">CHF ${fmtChf(totalB)}</td><td></td></tr></tfoot>
+    <tfoot><tr class="total-row"><td colspan="${totalColspan}">Total</td><td class="num">${totalH.toLocaleString('de-CH')}</td><td></td><td class="num">CHF ${fmtChf(totalB)}</td><td></td></tr></tfoot>
   </table>`;
   list.querySelectorAll('button[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -689,29 +732,38 @@ function renderMonatTab() {
 }
 
 function renderLohnabrechnung(eintraege, yyyymm) {
-  const e = state.einstellungen;
   const ag = state.arbeitgeber;
   const an = state.arbeitnehmer;
-  const calc = berechneAbrechnung(eintraege, e, an);
+  const calc = berechneAbrechnung(eintraege, state.einstellungen, an);
 
   if (!eintraege.length) {
     return `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))} erfasst.</div>`;
   }
 
-  const stundenRows = eintraege.map(x => `
+  // For label/percentage display: use the rates of the most recent Einsatz
+  // in this period (those are the rates that were active for the latest
+  // entry). Amounts in `calc` are computed per-einsatz with each one's own
+  // snapshot, so they remain correct even if rates differ within the month.
+  const sorted = [...eintraege].sort((a, b) => a.datum.localeCompare(b.datum));
+  const e = (sorted[sorted.length - 1].einstellungen) || state.einstellungen;
+
+  const stundenRows = sorted.map(x => {
+    const xE = x.einstellungen || e;
+    return `
     <tr>
       <td>${fmtDate(x.datum)}</td>
       <td>${x.notiz ? escapeHtml(x.notiz) : ''}</td>
       <td class="num">${x.stunden.toLocaleString('de-CH')}</td>
-      <td class="num">CHF ${fmtChf(e.stundenlohn)}</td>
-      <td class="num">CHF ${fmtChf(round2(x.stunden * e.stundenlohn))}</td>
-    </tr>`).join('');
+      <td class="num">CHF ${fmtChf(xE.stundenlohn)}</td>
+      <td class="num">CHF ${fmtChf(round2(x.stunden * xE.stundenlohn))}</td>
+    </tr>`;
+  }).join('');
 
-  const nbuLine = e.uvgAktiv && an.wochenstundenSchwelle8h
+  const nbuLine = calc.nbuApplicable
     ? `<div class="summary-row"><span>– UVG-NBU (${e.satzUvgNbuAN} %)</span><span>CHF ${fmtChf(calc.an.nbu)}</span></div>`
     : '';
 
-  const buLine = e.uvgAktiv
+  const buLine = calc.uvgAktivAny
     ? `<div class="summary-row"><span>UVG-BU (${e.satzUvgBuAG} %)</span><span>CHF ${fmtChf(calc.ag.bu)}</span></div>`
     : '';
 
@@ -793,9 +845,9 @@ function renderJahrTab() {
 }
 
 function renderJahresuebersicht(eintraege, jahr) {
-  const e = state.einstellungen;
   const an = state.arbeitnehmer;
   const ag = state.arbeitgeber;
+  const uvgUsedAnywhere = eintraege.some(x => (x.einstellungen || state.einstellungen).uvgAktiv);
 
   const monatsRows = [];
   let yJahresBrutto = 0, yJahresStunden = 0, yJahresNetto = 0, yJahresAG = 0, yJahresAN = 0;
@@ -805,7 +857,7 @@ function renderJahresuebersicht(eintraege, jahr) {
     const yyyymm = `${jahr}-${mm}`;
     const monatEintraege = eintraege.filter(x => x.datum.startsWith(yyyymm));
     if (!monatEintraege.length) continue;
-    const calc = berechneAbrechnung(monatEintraege, e, an);
+    const calc = berechneAbrechnung(monatEintraege, state.einstellungen, an);
     yJahresStunden += calc.stundenTotal;
     yJahresBrutto += calc.bruttoTotal;
     yJahresNetto += calc.netto;
@@ -880,7 +932,7 @@ function renderJahresuebersicht(eintraege, jahr) {
     <div class="summary-row total"><span>Total Arbeitgeberkosten</span><span>CHF ${fmtChf(agKostenTotal)}</span></div>
 
     <div class="info" style="margin-top:14px;">
-      Den Bruttolohn von <strong>CHF ${fmtChf(yJahresBrutto)}</strong> bei der SVA Zürich als Lohndeklaration ${jahr} einreichen (Frist üblicherweise Ende Januar ${jahr+1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge${e.uvgAktiv ? ', UVG-Prämien' : ''} und Quellensteuer.
+      Den Bruttolohn von <strong>CHF ${fmtChf(yJahresBrutto)}</strong> bei der SVA Zürich als Lohndeklaration ${jahr} einreichen (Frist üblicherweise Ende Januar ${jahr+1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge${uvgUsedAnywhere ? ', UVG-Prämien' : ''} und Quellensteuer.
     </div>
   </div>`;
 }
@@ -940,7 +992,8 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
         const rows = fresh.einsaetze.map(e => ({
           household_id: currentHouseholdId,
           datum: e.datum, stunden: e.stunden, notiz: e.notiz,
-          entered_by: currentUser.id
+          entered_by: currentUser.id,
+          einstellungen: sanitizeEinstellungen(e.einstellungen, fresh.einstellungen)
         }));
         const { error: insErr } = await supabase.from('einsaetze').insert(rows);
         if (insErr) throw insErr;
