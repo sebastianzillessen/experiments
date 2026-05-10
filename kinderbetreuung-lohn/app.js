@@ -16,18 +16,18 @@ let currentRole = null; // 'owner' | 'admin' | 'employee'
 let membersCache = new Map();
 
 /* ---- DEFAULTS ---- */
-function defaultSaetze() {
+function defaultPaySettingsData() {
   return {
-    stundenlohn: 30.00,
-    ferienzulageProzent: 8.33,
-    satzAhvIvEoAN: 5.30, satzAhvIvEoAG: 5.30,
-    satzAlvAN: 1.10,     satzAlvAG: 1.10,
-    satzFakAG: 1.00,
-    satzQuellensteuer: 5.00,
-    satzVerwaltungskostenAG: 0.40,
-    uvgAktiv: true,
-    satzUvgBuAG: 0.505,
-    satzUvgNbuAN: 1.47
+    hourlyRate: 30.00,
+    vacationPercent: 8.33,
+    ahvIvEoEmployee: 5.30, ahvIvEoEmployer: 5.30,
+    alvEmployee: 1.10,     alvEmployer: 1.10,
+    fakEmployer: 1.00,
+    withholdingTax: 5.00,
+    adminFeeEmployer: 0.40,
+    uvgEnabled: true,
+    uvgBuEmployer: 0.505,
+    uvgNbuEmployee: 1.47
   };
 }
 
@@ -35,55 +35,82 @@ function defaultSaetze() {
 const asString = v => typeof v === 'string' ? v : (v == null ? '' : String(v));
 const asNumber = (v, fallback) => { const n = Number(v); return Number.isFinite(n) ? n : fallback; };
 
+function sanitizePaySettingsData(d) {
+  d = (d && typeof d === 'object') ? d : {};
+  const def = defaultPaySettingsData();
+  return {
+    hourlyRate:       asNumber(d.hourlyRate,       def.hourlyRate),
+    vacationPercent:  asNumber(d.vacationPercent,  def.vacationPercent),
+    ahvIvEoEmployee:  asNumber(d.ahvIvEoEmployee,  def.ahvIvEoEmployee),
+    ahvIvEoEmployer:  asNumber(d.ahvIvEoEmployer,  def.ahvIvEoEmployer),
+    alvEmployee:      asNumber(d.alvEmployee,      def.alvEmployee),
+    alvEmployer:      asNumber(d.alvEmployer,      def.alvEmployer),
+    fakEmployer:      asNumber(d.fakEmployer,      def.fakEmployer),
+    withholdingTax:   asNumber(d.withholdingTax,   def.withholdingTax),
+    adminFeeEmployer: asNumber(d.adminFeeEmployer, def.adminFeeEmployer),
+    uvgEnabled:       d.uvgEnabled === undefined ? def.uvgEnabled : !!d.uvgEnabled,
+    uvgBuEmployer:    asNumber(d.uvgBuEmployer,    def.uvgBuEmployer),
+    uvgNbuEmployee:   asNumber(d.uvgNbuEmployee,   def.uvgNbuEmployee)
+  };
+}
+
 function sanitizeState(raw) {
   raw = (raw && typeof raw === 'object') ? raw : {};
-  const def = defaultSaetze();
-  const e = (raw.einstellungen && typeof raw.einstellungen === 'object') ? raw.einstellungen : {};
-  const ag = (raw.arbeitgeber && typeof raw.arbeitgeber === 'object') ? raw.arbeitgeber : {};
-  const an = (raw.arbeitnehmer && typeof raw.arbeitnehmer === 'object') ? raw.arbeitnehmer : {};
+  const er = (raw.employer && typeof raw.employer === 'object') ? raw.employer : {};
+  const ee = (raw.employee && typeof raw.employee === 'object') ? raw.employee : {};
+  const paySettings = Array.isArray(raw.paySettings)
+    ? raw.paySettings.map(v => {
+        if (!v || typeof v !== 'object') return null;
+        const effectiveMonth = normalizeEffectiveMonth(v.effectiveMonth);
+        if (!effectiveMonth) return null;
+        return {
+          id: asString(v.id) || null,
+          effectiveMonth,
+          data: sanitizePaySettingsData(v.data)
+        };
+      }).filter(Boolean)
+        .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
+    : [];
   return {
-    arbeitgeber: {
-      name: asString(ag.name),
-      adresse: asString(ag.adresse),
-      ahvAbrechnungsnr: asString(ag.ahvAbrechnungsnr)
+    employer: {
+      name:           asString(er.name),
+      address:        asString(er.address),
+      billingNumber:  asString(er.billingNumber)
     },
-    arbeitnehmer: {
-      name: asString(an.name),
-      adresse: asString(an.adresse),
-      geburtsdatum: asString(an.geburtsdatum),
-      ahvNr: asString(an.ahvNr),
-      iban: asString(an.iban),
-      wochenstundenSchwelle8h: !!an.wochenstundenSchwelle8h
+    employee: {
+      name:           asString(ee.name),
+      address:        asString(ee.address),
+      birthDate:      asString(ee.birthDate),
+      ahvNumber:      asString(ee.ahvNumber),
+      iban:           asString(ee.iban),
+      weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h
     },
-    einstellungen: {
-      stundenlohn:             asNumber(e.stundenlohn,             def.stundenlohn),
-      ferienzulageProzent:     asNumber(e.ferienzulageProzent,     def.ferienzulageProzent),
-      satzAhvIvEoAN:           asNumber(e.satzAhvIvEoAN,           def.satzAhvIvEoAN),
-      satzAhvIvEoAG:           asNumber(e.satzAhvIvEoAG,           def.satzAhvIvEoAG),
-      satzAlvAN:               asNumber(e.satzAlvAN,               def.satzAlvAN),
-      satzAlvAG:               asNumber(e.satzAlvAG,               def.satzAlvAG),
-      satzFakAG:               asNumber(e.satzFakAG,               def.satzFakAG),
-      satzQuellensteuer:       asNumber(e.satzQuellensteuer,       def.satzQuellensteuer),
-      satzVerwaltungskostenAG: asNumber(e.satzVerwaltungskostenAG, def.satzVerwaltungskostenAG),
-      uvgAktiv:                e.uvgAktiv === undefined ? def.uvgAktiv : !!e.uvgAktiv,
-      satzUvgBuAG:             asNumber(e.satzUvgBuAG,             def.satzUvgBuAG),
-      satzUvgNbuAN:            asNumber(e.satzUvgNbuAN,            def.satzUvgNbuAN)
-    },
-    einsaetze: Array.isArray(raw.einsaetze)
-      ? raw.einsaetze.map(x => {
+    paySettings,
+    shifts: Array.isArray(raw.shifts)
+      ? raw.shifts.map(x => {
           if (!x || typeof x !== 'object') return null;
-          const stunden = asNumber(x.stunden, NaN);
-          const datum = asString(x.datum);
-          if (!datum || !Number.isFinite(stunden) || stunden <= 0) return null;
+          const hours = asNumber(x.hours, NaN);
+          const date = asString(x.date);
+          if (!date || !Number.isFinite(hours) || hours <= 0) return null;
           return {
             id: asString(x.id),
-            datum, stunden,
-            notiz: asString(x.notiz),
+            date, hours,
+            note: asString(x.note),
             entered_by: asString(x.entered_by)
           };
         }).filter(Boolean)
       : []
   };
+}
+
+// Accept "YYYY-MM" or "YYYY-MM-DD"; return "YYYY-MM-01" or null on bad input.
+function normalizeEffectiveMonth(value) {
+  const s = asString(value);
+  const m = s.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  if (!m) return null;
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return `${m[1]}-${m[2]}-01`;
 }
 
 let state = sanitizeState({});
@@ -112,35 +139,97 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ---- BERECHNUNG ---- */
-function berechneAbrechnung(einsaetze, einst, arbeitnehmer) {
-  const stundenTotal = einsaetze.reduce((s,e) => s + (Number(e.stunden)||0), 0);
-  const bruttoStunden = round2(stundenTotal * einst.stundenlohn);
-  const ferienzulage  = round2(bruttoStunden * einst.ferienzulageProzent / 100);
-  const bruttoTotal   = round2(bruttoStunden + ferienzulage);
+/* ---- PAY SETTINGS LOOKUP ---- */
+// Returns the active pay_settings.data for a given ISO date string. Falls
+// back to defaults when no version covers the date (no versions yet, or
+// the date predates the earliest version).
+function activePaySettingsFor(date) {
+  const versions = state.paySettings;
+  let active = null;
+  for (const v of versions) {
+    if (v.effectiveMonth <= date) active = v;
+    else break;
+  }
+  return active ? active.data : defaultPaySettingsData();
+}
 
-  const nbuApplicable = einst.uvgAktiv && arbeitnehmer.wochenstundenSchwelle8h;
+// Find the version that owns a given ISO date (or null if no version covers it).
+function activePaySettingsVersionFor(date) {
+  const versions = state.paySettings;
+  let active = null;
+  for (const v of versions) {
+    if (v.effectiveMonth <= date) active = v;
+    else break;
+  }
+  return active;
+}
 
-  const an = {
-    ahvIvEo:    round2(bruttoTotal * einst.satzAhvIvEoAN / 100),
-    alv:        round2(bruttoTotal * einst.satzAlvAN / 100),
-    nbu:        nbuApplicable ? round2(bruttoTotal * einst.satzUvgNbuAN / 100) : 0,
-    quellenst:  round2(bruttoTotal * einst.satzQuellensteuer / 100)
-  };
+// Returns true iff at least one shift falls within the effective period
+// of `version` (i.e. between version.effectiveMonth and the next version's
+// effectiveMonth, exclusive).
+function versionHasShifts(version) {
+  const idx = state.paySettings.findIndex(v => v.id === version.id);
+  const next = state.paySettings[idx + 1];
+  const start = version.effectiveMonth;
+  const end = next ? next.effectiveMonth : null;
+  return state.shifts.some(s => s.date >= start && (!end || s.date < end));
+}
+
+/* ---- BERECHNUNG ----
+   Each shift's calculation uses the pay_settings version that was active
+   on shift.date. So a future "Lohnerhöhung" via a new version cannot
+   retroactively change past Lohnabrechnungen.
+   For label/percentage display in summaries we use the rates of the most
+   recent shift's version in the period (which equals the only version if
+   rates didn't change within the period). */
+function berechneAbrechnung(shifts, employee) {
+  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, bruttoTotal = 0;
+  const an = { ahvIvEo: 0, alv: 0, nbu: 0, quellenst: 0 };
+  const ag = { ahvIvEo: 0, alv: 0, fak: 0, bu: 0, verw: 0 };
+  let nbuApplicable = false;
+  let uvgAktivAny = false;
+
+  for (const x of shifts) {
+    const e = activePaySettingsFor(x.date);
+    const hours = Number(x.hours) || 0;
+    const xBrutto = hours * e.hourlyRate;
+    const xFerien = xBrutto * e.vacationPercent / 100;
+    const xBruttoTotal = xBrutto + xFerien;
+
+    stundenTotal += hours;
+    bruttoStunden += xBrutto;
+    ferienzulage += xFerien;
+    bruttoTotal += xBruttoTotal;
+
+    const xNbuApplicable = e.uvgEnabled && employee.weeklyHoursThreshold8h;
+    if (xNbuApplicable) nbuApplicable = true;
+    if (e.uvgEnabled) uvgAktivAny = true;
+
+    an.ahvIvEo   += xBruttoTotal * e.ahvIvEoEmployee / 100;
+    an.alv       += xBruttoTotal * e.alvEmployee / 100;
+    an.nbu       += xNbuApplicable ? xBruttoTotal * e.uvgNbuEmployee / 100 : 0;
+    an.quellenst += xBruttoTotal * e.withholdingTax / 100;
+
+    ag.ahvIvEo += xBruttoTotal * e.ahvIvEoEmployer / 100;
+    ag.alv     += xBruttoTotal * e.alvEmployer / 100;
+    ag.fak     += xBruttoTotal * e.fakEmployer / 100;
+    ag.bu      += e.uvgEnabled ? xBruttoTotal * e.uvgBuEmployer / 100 : 0;
+    ag.verw    += xBruttoTotal * e.adminFeeEmployer / 100;
+  }
+
+  stundenTotal = round2(stundenTotal);
+  bruttoStunden = round2(bruttoStunden);
+  ferienzulage = round2(ferienzulage);
+  bruttoTotal = round2(bruttoTotal);
+  for (const k of Object.keys(an)) an[k] = round2(an[k]);
+  for (const k of Object.keys(ag)) ag[k] = round2(ag[k]);
+
   an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
   const netto = round2(bruttoTotal - an.total);
-
-  const ag = {
-    ahvIvEo: round2(bruttoTotal * einst.satzAhvIvEoAG / 100),
-    alv:     round2(bruttoTotal * einst.satzAlvAG / 100),
-    fak:     round2(bruttoTotal * einst.satzFakAG / 100),
-    bu:      einst.uvgAktiv ? round2(bruttoTotal * einst.satzUvgBuAG / 100) : 0,
-    verw:    round2(bruttoTotal * einst.satzVerwaltungskostenAG / 100)
-  };
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal: round2(stundenTotal), bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable };
+  return { stundenTotal, bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
 }
 
 /* ---- SYNC STATUS ---- */
@@ -296,11 +385,6 @@ async function bootstrap() {
     showLogin();
     return;
   }
-  // Verify the local session is actually accepted by the server. A stale
-  // local session (e.g. from a rotated JWT secret or expired refresh token
-  // that the SDK can't refresh) leaves the UI thinking we're authenticated
-  // while every request goes through unauthenticated -- we get stuck on
-  // "Haushalt anlegen" and the RPC barfs "Not authenticated".
   const { data: verified, error: verifyErr } = await supabase.auth.getUser();
   if (verifyErr || !verified?.user) {
     console.warn('[auth] local session rejected by server, signing out:', verifyErr);
@@ -339,7 +423,6 @@ async function onSignedIn(user) {
       showInviteBanner(invite);
       return;
     }
-    // Trigger may need a moment after signup
     await new Promise(r => setTimeout(r, 800));
     membership = await fetchMembership();
   }
@@ -368,6 +451,7 @@ async function onSignedIn(user) {
   applyRoleVisibility(currentRole);
   refreshFns.forEach(fn => fn());
   renderEntries();
+  renderPaySettingsTab();
   setSyncStatus('ok');
 }
 
@@ -419,39 +503,45 @@ function showInviteBanner(invite) {
 
 /* ---- CLOUD LOAD ---- */
 async function loadFromCloud() {
-  const [stateRes, einsRes] = await Promise.all([
-    supabase.from('household_state').select('*').eq('household_id', currentHouseholdId).maybeSingle(),
-    supabase.from('einsaetze').select('id, datum, stunden, notiz, entered_by').eq('household_id', currentHouseholdId).order('datum')
+  const [profileRes, shiftsRes, settingsRes] = await Promise.all([
+    supabase.from('household_profile').select('*').eq('household_id', currentHouseholdId).maybeSingle(),
+    supabase.from('shifts').select('id, date, hours, note, entered_by').eq('household_id', currentHouseholdId).order('date'),
+    supabase.from('pay_settings').select('id, effective_month, data').eq('household_id', currentHouseholdId).order('effective_month')
   ]);
-  if (stateRes.error) throw stateRes.error;
-  if (einsRes.error) throw einsRes.error;
+  if (profileRes.error) throw profileRes.error;
+  if (shiftsRes.error) throw shiftsRes.error;
+  if (settingsRes.error) throw settingsRes.error;
 
-  const stateRow = stateRes.data || {};
+  const profileRow = profileRes.data || {};
   state = sanitizeState({
-    arbeitgeber:   stateRow.arbeitgeber,
-    arbeitnehmer:  stateRow.arbeitnehmer,
-    einstellungen: stateRow.einstellungen,
-    einsaetze: (einsRes.data || []).map(r => ({
-      id: r.id, datum: r.datum, stunden: Number(r.stunden), notiz: r.notiz || '', entered_by: r.entered_by
+    employer: profileRow.employer,
+    employee: profileRow.employee,
+    paySettings: (settingsRes.data || []).map(r => ({
+      id: r.id,
+      effectiveMonth: r.effective_month,
+      data: r.data
+    })),
+    shifts: (shiftsRes.data || []).map(r => ({
+      id: r.id, date: r.date, hours: Number(r.hours),
+      note: r.note || '', entered_by: r.entered_by
     }))
   });
 }
 
-/* ---- CLOUD SAVE: household_state (debounced) ---- */
-let stateSaveTimer = null;
-function persistHouseholdState() {
+/* ---- CLOUD SAVE: household_profile (debounced) ---- */
+let profileSaveTimer = null;
+function persistHouseholdProfile() {
   if (currentRole !== 'owner' && currentRole !== 'admin') return;
   setSyncStatus('pending');
-  clearTimeout(stateSaveTimer);
-  stateSaveTimer = setTimeout(async () => {
+  clearTimeout(profileSaveTimer);
+  profileSaveTimer = setTimeout(async () => {
     try {
       const { error } = await supabase
-        .from('household_state')
+        .from('household_profile')
         .upsert({
           household_id: currentHouseholdId,
-          arbeitgeber: state.arbeitgeber,
-          arbeitnehmer: state.arbeitnehmer,
-          einstellungen: state.einstellungen,
+          employer: state.employer,
+          employee: state.employee,
           updated_at: new Date().toISOString()
         });
       if (error) throw error;
@@ -462,39 +552,99 @@ function persistHouseholdState() {
   }, 1000);
 }
 
-/* ---- CLOUD SAVE: einsaetze ---- */
-async function addEinsatzCloud({ datum, stunden, notiz }) {
+/* ---- CLOUD SAVE: shifts ---- */
+async function addShiftCloud({ date, hours, note }) {
   setSyncStatus('pending');
   try {
     const { data, error } = await supabase
-      .from('einsaetze')
+      .from('shifts')
       .insert({
         household_id: currentHouseholdId,
-        datum, stunden, notiz,
+        date, hours, note,
         entered_by: currentUser.id
       })
       .select()
       .single();
     if (error) throw error;
-    state.einsaetze.push({
-      id: data.id, datum: data.datum, stunden: Number(data.stunden),
-      notiz: data.notiz || '', entered_by: data.entered_by
+    state.shifts.push({
+      id: data.id, date: data.date, hours: Number(data.hours),
+      note: data.note || '', entered_by: data.entered_by
     });
-    state.einsaetze.sort((a,b) => a.datum.localeCompare(b.datum));
+    state.shifts.sort((a, b) => a.date.localeCompare(b.date));
     setSyncStatus('ok');
     renderEntries();
+    renderPaySettingsTab(); // shift may now lock a pay_settings version
   } catch (e) { setSyncStatus('error', e); }
 }
 
-async function deleteEinsatzCloud(id) {
+async function deleteShiftCloud(id) {
   setSyncStatus('pending');
   try {
-    const { error } = await supabase.from('einsaetze').delete().eq('id', id);
+    const { error } = await supabase.from('shifts').delete().eq('id', id);
     if (error) throw error;
-    state.einsaetze = state.einsaetze.filter(x => x.id !== id);
+    state.shifts = state.shifts.filter(x => x.id !== id);
     setSyncStatus('ok');
     renderEntries();
+    renderPaySettingsTab(); // shift removal may unlock a version
   } catch (e) { setSyncStatus('error', e); }
+}
+
+/* ---- CLOUD SAVE: pay_settings ---- */
+async function addPaySettingsCloud(effectiveMonth, data) {
+  setSyncStatus('pending');
+  try {
+    const { data: row, error } = await supabase
+      .from('pay_settings')
+      .insert({
+        household_id: currentHouseholdId,
+        effective_month: effectiveMonth,
+        data
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    state.paySettings.push({ id: row.id, effectiveMonth: row.effective_month, data: row.data });
+    state.paySettings.sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth));
+    setSyncStatus('ok');
+    return true;
+  } catch (e) {
+    setSyncStatus('error', e);
+    return false;
+  }
+}
+
+async function updatePaySettingsCloud(id, data) {
+  setSyncStatus('pending');
+  try {
+    const { data: row, error } = await supabase
+      .from('pay_settings')
+      .update({ data })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    const v = state.paySettings.find(v => v.id === id);
+    if (v) v.data = row.data;
+    setSyncStatus('ok');
+    return true;
+  } catch (e) {
+    setSyncStatus('error', e);
+    return false;
+  }
+}
+
+async function deletePaySettingsCloud(id) {
+  setSyncStatus('pending');
+  try {
+    const { error } = await supabase.from('pay_settings').delete().eq('id', id);
+    if (error) throw error;
+    state.paySettings = state.paySettings.filter(v => v.id !== id);
+    setSyncStatus('ok');
+    return true;
+  } catch (e) {
+    setSyncStatus('error', e);
+    return false;
+  }
 }
 
 /* ---- TAB SWITCHING (ARIA tabs pattern, role-aware) ---- */
@@ -511,10 +661,11 @@ function showTab(id) {
     b.setAttribute('aria-selected', active ? 'true' : 'false');
     b.tabIndex = active ? 0 : -1;
   });
-  if (id === 'monat')      renderMonatTab();
-  if (id === 'jahr')       renderJahrTab();
-  if (id === 'erfassung')  renderEntries();
-  if (id === 'mitglieder') renderMitglieder();
+  if (id === 'monat')         renderMonatTab();
+  if (id === 'jahr')          renderJahrTab();
+  if (id === 'erfassung')     renderEntries();
+  if (id === 'einstellungen') renderPaySettingsTab();
+  if (id === 'mitglieder')    renderMitglieder();
 }
 
 tabButtons.forEach((b, idx) => {
@@ -573,37 +724,24 @@ function bind(id, getter, setter, type) {
     let v = type === 'checkbox' ? el.checked : el.value;
     if (type === 'number') v = v === '' ? 0 : Number(v);
     setter(v);
-    persistHouseholdState();
+    persistHouseholdProfile();
   });
   return apply;
 }
 
 const refreshFns = [];
 
-function bindStammdatenAndSettings() {
-  refreshFns.push(bind('ag-name',          () => state.arbeitgeber.name,             v => state.arbeitgeber.name = v));
-  refreshFns.push(bind('ag-adresse',       () => state.arbeitgeber.adresse,          v => state.arbeitgeber.adresse = v));
-  refreshFns.push(bind('ag-abrechnungsnr', () => state.arbeitgeber.ahvAbrechnungsnr, v => state.arbeitgeber.ahvAbrechnungsnr = v));
+function bindStammdaten() {
+  refreshFns.push(bind('ag-name',          () => state.employer.name,          v => state.employer.name = v));
+  refreshFns.push(bind('ag-adresse',       () => state.employer.address,       v => state.employer.address = v));
+  refreshFns.push(bind('ag-abrechnungsnr', () => state.employer.billingNumber, v => state.employer.billingNumber = v));
 
-  refreshFns.push(bind('an-name',         () => state.arbeitnehmer.name,         v => state.arbeitnehmer.name = v));
-  refreshFns.push(bind('an-adresse',      () => state.arbeitnehmer.adresse,      v => state.arbeitnehmer.adresse = v));
-  refreshFns.push(bind('an-geburtsdatum', () => state.arbeitnehmer.geburtsdatum, v => state.arbeitnehmer.geburtsdatum = v));
-  refreshFns.push(bind('an-ahvnr',        () => state.arbeitnehmer.ahvNr,        v => state.arbeitnehmer.ahvNr = v));
-  refreshFns.push(bind('an-iban',         () => state.arbeitnehmer.iban,         v => state.arbeitnehmer.iban = v));
-  refreshFns.push(bind('an-8h',           () => state.arbeitnehmer.wochenstundenSchwelle8h, v => state.arbeitnehmer.wochenstundenSchwelle8h = v, 'checkbox'));
-
-  refreshFns.push(bind('s-stundenlohn', () => state.einstellungen.stundenlohn,             v => state.einstellungen.stundenlohn = v,             'number'));
-  refreshFns.push(bind('s-ferien',      () => state.einstellungen.ferienzulageProzent,     v => state.einstellungen.ferienzulageProzent = v,     'number'));
-  refreshFns.push(bind('s-ahv-an',      () => state.einstellungen.satzAhvIvEoAN,           v => state.einstellungen.satzAhvIvEoAN = v,           'number'));
-  refreshFns.push(bind('s-ahv-ag',      () => state.einstellungen.satzAhvIvEoAG,           v => state.einstellungen.satzAhvIvEoAG = v,           'number'));
-  refreshFns.push(bind('s-alv-an',      () => state.einstellungen.satzAlvAN,               v => state.einstellungen.satzAlvAN = v,               'number'));
-  refreshFns.push(bind('s-alv-ag',      () => state.einstellungen.satzAlvAG,               v => state.einstellungen.satzAlvAG = v,               'number'));
-  refreshFns.push(bind('s-fak-ag',      () => state.einstellungen.satzFakAG,               v => state.einstellungen.satzFakAG = v,               'number'));
-  refreshFns.push(bind('s-verw-ag',     () => state.einstellungen.satzVerwaltungskostenAG, v => state.einstellungen.satzVerwaltungskostenAG = v, 'number'));
-  refreshFns.push(bind('s-quellen',     () => state.einstellungen.satzQuellensteuer,       v => state.einstellungen.satzQuellensteuer = v,       'number'));
-  refreshFns.push(bind('s-uvg-aktiv',   () => state.einstellungen.uvgAktiv,                v => state.einstellungen.uvgAktiv = v,                'checkbox'));
-  refreshFns.push(bind('s-bu-ag',       () => state.einstellungen.satzUvgBuAG,             v => state.einstellungen.satzUvgBuAG = v,             'number'));
-  refreshFns.push(bind('s-nbu-an',      () => state.einstellungen.satzUvgNbuAN,            v => state.einstellungen.satzUvgNbuAN = v,            'number'));
+  refreshFns.push(bind('an-name',         () => state.employee.name,      v => state.employee.name = v));
+  refreshFns.push(bind('an-adresse',      () => state.employee.address,   v => state.employee.address = v));
+  refreshFns.push(bind('an-geburtsdatum', () => state.employee.birthDate, v => state.employee.birthDate = v));
+  refreshFns.push(bind('an-ahvnr',        () => state.employee.ahvNumber, v => state.employee.ahvNumber = v));
+  refreshFns.push(bind('an-iban',         () => state.employee.iban,      v => state.employee.iban = v));
+  refreshFns.push(bind('an-8h',           () => state.employee.weeklyHoursThreshold8h, v => state.employee.weeklyHoursThreshold8h = v, 'checkbox'));
 }
 
 /* ---- ERFASSUNG ---- */
@@ -613,13 +751,13 @@ const eNotiz = document.getElementById('e-notiz');
 eDatum.value = new Date().toISOString().slice(0,10);
 
 document.getElementById('btn-add').addEventListener('click', async () => {
-  const datum = eDatum.value;
-  const stunden = Number(eStunden.value);
-  const notiz = eNotiz.value.trim();
-  if (!datum) { alert('Bitte ein Datum eingeben.'); return; }
-  if (!stunden || stunden <= 0) { alert('Bitte gültige Stundenzahl eingeben.'); return; }
+  const date = eDatum.value;
+  const hours = Number(eStunden.value);
+  const note = eNotiz.value.trim();
+  if (!date) { alert('Bitte ein Datum eingeben.'); return; }
+  if (!hours || hours <= 0) { alert('Bitte gültige Stundenzahl eingeben.'); return; }
   if (!currentHouseholdId) { alert('Nicht angemeldet.'); return; }
-  await addEinsatzCloud({ datum, stunden, notiz });
+  await addShiftCloud({ date, hours, note });
   eStunden.value = '';
   eNotiz.value = '';
 });
@@ -629,8 +767,8 @@ function renderEntries() {
   if (!list) return;
   const userId = currentUser ? currentUser.id : null;
   const visible = currentRole === 'employee'
-    ? state.einsaetze.filter(e => e.entered_by === userId)
-    : state.einsaetze;
+    ? state.shifts.filter(e => e.entered_by === userId)
+    : state.shifts;
 
   if (!visible.length) {
     list.innerHTML = '<div class="empty-state">Noch keine Einsätze erfasst.</div>';
@@ -645,32 +783,34 @@ function renderEntries() {
     return m.full_name || m.email || '–';
   };
   const rows = visible.map(e => {
-    const betrag = round2(e.stunden * state.einstellungen.stundenlohn);
+    const lohn = activePaySettingsFor(e.date).hourlyRate;
+    const betrag = round2(e.hours * lohn);
     const canDelete = currentRole !== 'employee' || e.entered_by === userId;
     const delBtn = canDelete ? `<button class="btn btn-small btn-danger" data-del="${e.id}">Löschen</button>` : '';
     const enteredCell = showEnteredBy ? `<td>${escapeHtml(enteredByLabel(e.entered_by))}</td>` : '';
     return `<tr>
-      <td>${fmtDate(e.datum)}</td>
+      <td>${fmtDate(e.date)}</td>
       ${enteredCell}
-      <td>${e.notiz ? escapeHtml(e.notiz) : '<span class="muted">–</span>'}</td>
-      <td class="num">${e.stunden.toLocaleString('de-CH')}</td>
+      <td>${e.note ? escapeHtml(e.note) : '<span class="muted">–</span>'}</td>
+      <td class="num">${e.hours.toLocaleString('de-CH')}</td>
+      <td class="num">CHF ${fmtChf(lohn)}</td>
       <td class="num">CHF ${fmtChf(betrag)}</td>
       <td class="actions">${delBtn}</td>
     </tr>`;
   }).join('');
-  const totalH = visible.reduce((s,e) => s + e.stunden, 0);
-  const totalB = round2(totalH * state.einstellungen.stundenlohn);
+  const totalH = visible.reduce((s,e) => s + e.hours, 0);
+  const totalB = round2(visible.reduce((s,e) => s + e.hours * activePaySettingsFor(e.date).hourlyRate, 0));
   const enteredHead = showEnteredBy ? '<th>Erfasst von</th>' : '';
   const totalColspan = showEnteredBy ? 3 : 2;
   list.innerHTML = `<table>
-    <thead><tr><th>Datum</th>${enteredHead}<th>Notiz</th><th class="num">Stunden</th><th class="num">Betrag (Stundenlohn)</th><th></th></tr></thead>
+    <thead><tr><th>Datum</th>${enteredHead}<th>Notiz</th><th class="num">Stunden</th><th class="num">Stundenlohn</th><th class="num">Betrag</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr class="total-row"><td colspan="${totalColspan}">Total</td><td class="num">${totalH.toLocaleString('de-CH')}</td><td class="num">CHF ${fmtChf(totalB)}</td><td></td></tr></tfoot>
+    <tfoot><tr class="total-row"><td colspan="${totalColspan}">Total</td><td class="num">${totalH.toLocaleString('de-CH')}</td><td></td><td class="num">CHF ${fmtChf(totalB)}</td><td></td></tr></tfoot>
   </table>`;
   list.querySelectorAll('button[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('Eintrag wirklich löschen?')) return;
-      await deleteEinsatzCloud(btn.dataset.del);
+      await deleteShiftCloud(btn.dataset.del);
     });
   });
 }
@@ -684,50 +824,57 @@ function renderMonatTab() {
   const yyyymm = mInput.value;
   const target = document.getElementById('monat-doc');
   if (!yyyymm) { target.innerHTML = ''; return; }
-  const eintraege = state.einsaetze.filter(e => e.datum.startsWith(yyyymm));
+  const eintraege = state.shifts.filter(e => e.date.startsWith(yyyymm));
   target.innerHTML = renderLohnabrechnung(eintraege, yyyymm);
 }
 
 function renderLohnabrechnung(eintraege, yyyymm) {
-  const e = state.einstellungen;
-  const ag = state.arbeitgeber;
-  const an = state.arbeitnehmer;
-  const calc = berechneAbrechnung(eintraege, e, an);
+  const er = state.employer;
+  const ee = state.employee;
+  const calc = berechneAbrechnung(eintraege, ee);
 
   if (!eintraege.length) {
     return `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))} erfasst.</div>`;
   }
 
-  const stundenRows = eintraege.map(x => `
-    <tr>
-      <td>${fmtDate(x.datum)}</td>
-      <td>${x.notiz ? escapeHtml(x.notiz) : ''}</td>
-      <td class="num">${x.stunden.toLocaleString('de-CH')}</td>
-      <td class="num">CHF ${fmtChf(e.stundenlohn)}</td>
-      <td class="num">CHF ${fmtChf(round2(x.stunden * e.stundenlohn))}</td>
-    </tr>`).join('');
+  // Use the rates of the latest shift in the period for label percentages.
+  // Per-shift amounts in `calc` are correct even if rates vary within a month.
+  const sorted = [...eintraege].sort((a, b) => a.date.localeCompare(b.date));
+  const e = activePaySettingsFor(sorted[sorted.length - 1].date);
 
-  const nbuLine = e.uvgAktiv && an.wochenstundenSchwelle8h
-    ? `<div class="summary-row"><span>– UVG-NBU (${e.satzUvgNbuAN} %)</span><span>CHF ${fmtChf(calc.an.nbu)}</span></div>`
+  const stundenRows = sorted.map(x => {
+    const xE = activePaySettingsFor(x.date);
+    return `
+    <tr>
+      <td>${fmtDate(x.date)}</td>
+      <td>${x.note ? escapeHtml(x.note) : ''}</td>
+      <td class="num">${x.hours.toLocaleString('de-CH')}</td>
+      <td class="num">CHF ${fmtChf(xE.hourlyRate)}</td>
+      <td class="num">CHF ${fmtChf(round2(x.hours * xE.hourlyRate))}</td>
+    </tr>`;
+  }).join('');
+
+  const nbuLine = calc.nbuApplicable
+    ? `<div class="summary-row"><span>– UVG-NBU (${e.uvgNbuEmployee} %)</span><span>CHF ${fmtChf(calc.an.nbu)}</span></div>`
     : '';
 
-  const buLine = e.uvgAktiv
-    ? `<div class="summary-row"><span>UVG-BU (${e.satzUvgBuAG} %)</span><span>CHF ${fmtChf(calc.ag.bu)}</span></div>`
+  const buLine = calc.uvgAktivAny
+    ? `<div class="summary-row"><span>UVG-BU (${e.uvgBuEmployer} %)</span><span>CHF ${fmtChf(calc.ag.bu)}</span></div>`
     : '';
 
   return `<div class="print-doc">
     <div class="doc-header">
       <div class="party">
         <div class="label-small">Arbeitgeber/in</div>
-        <div class="name">${escapeHtml(ag.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
-        <div>${escapeHtml(ag.adresse)}</div>
-        ${ag.ahvAbrechnungsnr ? `<div class="muted">SVA-Abr.-Nr.: ${escapeHtml(ag.ahvAbrechnungsnr)}</div>` : ''}
+        <div class="name">${escapeHtml(er.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
+        <div>${escapeHtml(er.address)}</div>
+        ${er.billingNumber ? `<div class="muted">SVA-Abr.-Nr.: ${escapeHtml(er.billingNumber)}</div>` : ''}
       </div>
       <div class="party" style="text-align:right;">
         <div class="label-small">Arbeitnehmer/in</div>
-        <div class="name">${escapeHtml(an.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
-        <div>${escapeHtml(an.adresse)}</div>
-        ${an.ahvNr ? `<div class="muted">AHV-Nr.: ${escapeHtml(an.ahvNr)}</div>` : ''}
+        <div class="name">${escapeHtml(ee.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
+        <div>${escapeHtml(ee.address)}</div>
+        ${ee.ahvNumber ? `<div class="muted">AHV-Nr.: ${escapeHtml(ee.ahvNumber)}</div>` : ''}
       </div>
     </div>
 
@@ -745,29 +892,29 @@ function renderLohnabrechnung(eintraege, yyyymm) {
 
     <h4>Bruttolohn</h4>
     <div class="summary-row"><span>Stundenlohn-Summe</span><span>CHF ${fmtChf(calc.bruttoStunden)}</span></div>
-    <div class="summary-row"><span>+ Ferienzulage (${e.ferienzulageProzent} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
+    <div class="summary-row"><span>+ Ferienzulage (${e.vacationPercent} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
     <div class="summary-row total"><span>Bruttolohn</span><span>CHF ${fmtChf(calc.bruttoTotal)}</span></div>
 
     <h4>Abzüge Arbeitnehmer/in</h4>
-    <div class="summary-row"><span>– AHV/IV/EO (${e.satzAhvIvEoAN} %)</span><span>CHF ${fmtChf(calc.an.ahvIvEo)}</span></div>
-    <div class="summary-row"><span>– ALV (${e.satzAlvAN} %)</span><span>CHF ${fmtChf(calc.an.alv)}</span></div>
+    <div class="summary-row"><span>– AHV/IV/EO (${e.ahvIvEoEmployee} %)</span><span>CHF ${fmtChf(calc.an.ahvIvEo)}</span></div>
+    <div class="summary-row"><span>– ALV (${e.alvEmployee} %)</span><span>CHF ${fmtChf(calc.an.alv)}</span></div>
     ${nbuLine}
-    <div class="summary-row"><span>– Quellensteuer (${e.satzQuellensteuer} %)</span><span>CHF ${fmtChf(calc.an.quellenst)}</span></div>
+    <div class="summary-row"><span>– Quellensteuer (${e.withholdingTax} %)</span><span>CHF ${fmtChf(calc.an.quellenst)}</span></div>
     <div class="summary-row total"><span>Total Abzüge</span><span>CHF ${fmtChf(calc.an.total)}</span></div>
 
     <div class="summary-row netto"><span>Auszahlung netto</span><span>CHF ${fmtChf(calc.netto)}</span></div>
 
     <h4>Arbeitgeberbeiträge (informativ, nicht vom Lohn abgezogen)</h4>
-    <div class="summary-row"><span>AHV/IV/EO (${e.satzAhvIvEoAG} %)</span><span>CHF ${fmtChf(calc.ag.ahvIvEo)}</span></div>
-    <div class="summary-row"><span>ALV (${e.satzAlvAG} %)</span><span>CHF ${fmtChf(calc.ag.alv)}</span></div>
-    <div class="summary-row"><span>FAK (${e.satzFakAG} %)</span><span>CHF ${fmtChf(calc.ag.fak)}</span></div>
+    <div class="summary-row"><span>AHV/IV/EO (${e.ahvIvEoEmployer} %)</span><span>CHF ${fmtChf(calc.ag.ahvIvEo)}</span></div>
+    <div class="summary-row"><span>ALV (${e.alvEmployer} %)</span><span>CHF ${fmtChf(calc.ag.alv)}</span></div>
+    <div class="summary-row"><span>FAK (${e.fakEmployer} %)</span><span>CHF ${fmtChf(calc.ag.fak)}</span></div>
     ${buLine}
-    <div class="summary-row"><span>Verwaltungskosten (${e.satzVerwaltungskostenAG} %)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
+    <div class="summary-row"><span>Verwaltungskosten (${e.adminFeeEmployer} %)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
     <div class="summary-row total"><span>Total Arbeitgeberbeiträge</span><span>CHF ${fmtChf(calc.ag.total)}</span></div>
     <div class="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF ${fmtChf(calc.agKostenTotal)}</span></div>
 
     <div class="footnote">
-      Vereinfachtes Abrechnungsverfahren der SVA Zürich (${e.uvgAktiv ? 'VAVplus' : 'VAV'}). Quellensteuer und Sozialversicherungsbeiträge werden direkt mit der Ausgleichskasse abgerechnet. ${e.uvgAktiv ? 'Unfallversicherung über SVA Zürich.' : 'Unfallversicherung separat über privaten Versicherer.'}
+      Vereinfachtes Abrechnungsverfahren der SVA Zürich (${e.uvgEnabled ? 'VAVplus' : 'VAV'}). Quellensteuer und Sozialversicherungsbeiträge werden direkt mit der Ausgleichskasse abgerechnet. ${e.uvgEnabled ? 'Unfallversicherung über SVA Zürich.' : 'Unfallversicherung separat über privaten Versicherer.'}
     </div>
 
     <div class="signatures">
@@ -788,14 +935,14 @@ function renderJahrTab() {
   const jahr = Number(jInput.value);
   const target = document.getElementById('jahr-doc');
   if (!jahr) { target.innerHTML = ''; return; }
-  const eintraege = state.einsaetze.filter(e => e.datum.startsWith(String(jahr)));
+  const eintraege = state.shifts.filter(e => e.date.startsWith(String(jahr)));
   target.innerHTML = renderJahresuebersicht(eintraege, jahr);
 }
 
 function renderJahresuebersicht(eintraege, jahr) {
-  const e = state.einstellungen;
-  const an = state.arbeitnehmer;
-  const ag = state.arbeitgeber;
+  const ee = state.employee;
+  const er = state.employer;
+  const uvgUsedAnywhere = eintraege.some(x => activePaySettingsFor(x.date).uvgEnabled);
 
   const monatsRows = [];
   let yJahresBrutto = 0, yJahresStunden = 0, yJahresNetto = 0, yJahresAG = 0, yJahresAN = 0;
@@ -803,9 +950,9 @@ function renderJahresuebersicht(eintraege, jahr) {
   for (let m = 1; m <= 12; m++) {
     const mm = String(m).padStart(2, '0');
     const yyyymm = `${jahr}-${mm}`;
-    const monatEintraege = eintraege.filter(x => x.datum.startsWith(yyyymm));
+    const monatEintraege = eintraege.filter(x => x.date.startsWith(yyyymm));
     if (!monatEintraege.length) continue;
-    const calc = berechneAbrechnung(monatEintraege, e, an);
+    const calc = berechneAbrechnung(monatEintraege, ee);
     yJahresStunden += calc.stundenTotal;
     yJahresBrutto += calc.bruttoTotal;
     yJahresNetto += calc.netto;
@@ -843,13 +990,13 @@ function renderJahresuebersicht(eintraege, jahr) {
     <div class="doc-header">
       <div class="party">
         <div class="label-small">Arbeitgeber/in</div>
-        <div class="name">${escapeHtml(ag.name) || '<span class="muted">(Stammdaten)</span>'}</div>
-        <div>${escapeHtml(ag.adresse)}</div>
+        <div class="name">${escapeHtml(er.name) || '<span class="muted">(Stammdaten)</span>'}</div>
+        <div>${escapeHtml(er.address)}</div>
       </div>
       <div class="party" style="text-align:right;">
         <div class="label-small">Arbeitnehmer/in</div>
-        <div class="name">${escapeHtml(an.name) || '<span class="muted">(Stammdaten)</span>'}</div>
-        ${an.ahvNr ? `<div class="muted">AHV-Nr.: ${escapeHtml(an.ahvNr)}</div>` : ''}
+        <div class="name">${escapeHtml(ee.name) || '<span class="muted">(Stammdaten)</span>'}</div>
+        ${ee.ahvNumber ? `<div class="muted">AHV-Nr.: ${escapeHtml(ee.ahvNumber)}</div>` : ''}
       </div>
     </div>
 
@@ -880,7 +1027,7 @@ function renderJahresuebersicht(eintraege, jahr) {
     <div class="summary-row total"><span>Total Arbeitgeberkosten</span><span>CHF ${fmtChf(agKostenTotal)}</span></div>
 
     <div class="info" style="margin-top:14px;">
-      Den Bruttolohn von <strong>CHF ${fmtChf(yJahresBrutto)}</strong> bei der SVA Zürich als Lohndeklaration ${jahr} einreichen (Frist üblicherweise Ende Januar ${jahr+1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge${e.uvgAktiv ? ', UVG-Prämien' : ''} und Quellensteuer.
+      Den Bruttolohn von <strong>CHF ${fmtChf(yJahresBrutto)}</strong> bei der SVA Zürich als Lohndeklaration ${jahr} einreichen (Frist üblicherweise Ende Januar ${jahr+1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge${uvgUsedAnywhere ? ', UVG-Prämien' : ''} und Quellensteuer.
     </div>
   </div>`;
 }
@@ -899,6 +1046,210 @@ function printSection(id) {
   window.addEventListener('afterprint', cleanup);
   window.print();
 }
+
+/* ---- EINSTELLUNGEN-TAB: versionierte pay_settings ---- */
+// Modes: { mode: 'list' } | { mode: 'edit', id, locked } | { mode: 'add' }
+let paySettingsUi = { mode: 'list' };
+let paySettingsDraft = null; // { effectiveMonth, data } while editing/adding
+
+const psListEl       = () => document.getElementById('pay-settings-list');
+const psEditPanel    = () => document.getElementById('pay-settings-edit-panel');
+const psEditTitle    = () => document.getElementById('pay-settings-edit-title');
+const psMonthInput   = () => document.getElementById('ps-month');
+const psLockedWarn   = () => document.getElementById('ps-locked-warn');
+const psBtnSave      = () => document.getElementById('btn-save-pay-settings');
+const psBtnCancel    = () => document.getElementById('btn-cancel-pay-settings');
+const psBtnDelete    = () => document.getElementById('btn-delete-pay-settings');
+const psFormError    = () => document.getElementById('pay-settings-form-error');
+
+const PS_NUMERIC_FIELDS = [
+  ['ps-hourly-rate',       'hourlyRate',       0.01],
+  ['ps-vacation-percent',  'vacationPercent',  0.01],
+  ['ps-ahv-employee',      'ahvIvEoEmployee',  0.01],
+  ['ps-ahv-employer',      'ahvIvEoEmployer',  0.01],
+  ['ps-alv-employee',      'alvEmployee',      0.01],
+  ['ps-alv-employer',      'alvEmployer',      0.01],
+  ['ps-fak-employer',      'fakEmployer',      0.01],
+  ['ps-admin-fee-employer','adminFeeEmployer', 0.01],
+  ['ps-withholding-tax',   'withholdingTax',   0.01],
+  ['ps-uvg-bu-employer',   'uvgBuEmployer',    0.001],
+  ['ps-uvg-nbu-employee',  'uvgNbuEmployee',   0.001]
+];
+
+function renderPaySettingsTab() {
+  // List
+  const list = psListEl();
+  if (!list) return;
+  if (!state.paySettings.length) {
+    list.innerHTML = '<div class="empty-state">Noch keine Sätze hinterlegt. Lege eine erste Version an, bevor du Lohnabrechnungen erstellst.</div>';
+  } else {
+    const rows = state.paySettings.map(v => {
+      const locked = versionHasShifts(v);
+      const monthYm = v.effectiveMonth.slice(0, 7);
+      const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Ferien ${v.data.vacationPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
+      const lockHint = locked
+        ? '<span class="muted" title="Einsätze in dieser Periode vorhanden">🔒 gesperrt</span>'
+        : '';
+      const editLabel = locked ? 'Anzeigen' : 'Bearbeiten';
+      return `
+        <div class="member-row">
+          <div class="info-block">
+            <div class="name">ab ${escapeHtml(monthLabel(monthYm))}</div>
+            <div class="meta">${escapeHtml(summary)}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            ${lockHint}
+            <button class="btn btn-small" data-edit-ps="${v.id}">${editLabel}</button>
+          </div>
+        </div>`;
+    }).join('');
+    list.innerHTML = rows;
+    list.querySelectorAll('button[data-edit-ps]').forEach(btn => {
+      btn.addEventListener('click', () => openEditPaySettings(btn.dataset.editPs));
+    });
+  }
+
+  // Edit panel
+  const panel = psEditPanel();
+  if (paySettingsUi.mode === 'list') {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const draft = paySettingsDraft;
+  const isAdd = paySettingsUi.mode === 'add';
+  const locked = !!paySettingsUi.locked;
+
+  psEditTitle().textContent = isAdd
+    ? 'Neue Version anlegen'
+    : (locked ? 'Version (gesperrt)' : 'Version bearbeiten');
+
+  // Month input: editable only on add. On edit it stays disabled.
+  const monthInput = psMonthInput();
+  monthInput.value = draft.effectiveMonth.slice(0, 7);
+  monthInput.disabled = !isAdd || locked;
+
+  // Numeric/checkbox fields: disabled when locked
+  for (const [domId, key] of PS_NUMERIC_FIELDS) {
+    const el = document.getElementById(domId);
+    el.value = draft.data[key];
+    el.disabled = locked;
+  }
+  const uvgEl = document.getElementById('ps-uvg-enabled');
+  uvgEl.checked = !!draft.data.uvgEnabled;
+  uvgEl.disabled = locked;
+
+  // Locked warning
+  psLockedWarn().hidden = !locked;
+
+  psBtnSave().hidden = locked;
+  psBtnDelete().hidden = isAdd || locked;
+  psFormError().hidden = true;
+}
+
+function openEditPaySettings(id) {
+  const v = state.paySettings.find(x => x.id === id);
+  if (!v) return;
+  const locked = versionHasShifts(v);
+  paySettingsUi = { mode: 'edit', id, locked };
+  paySettingsDraft = {
+    effectiveMonth: v.effectiveMonth,
+    data: { ...v.data }
+  };
+  renderPaySettingsTab();
+  psEditPanel().scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openAddPaySettings() {
+  // Default month: month after the latest shift, or current month.
+  const latestShiftDate = state.shifts.length ? state.shifts[state.shifts.length - 1].date : null;
+  let defaultMonth;
+  if (latestShiftDate) {
+    const [y, m] = latestShiftDate.split('-').map(Number);
+    const next = new Date(Date.UTC(y, m, 1));
+    defaultMonth = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  } else {
+    const now = new Date();
+    defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  }
+  // Prefill data from latest version, otherwise defaults.
+  const latest = state.paySettings[state.paySettings.length - 1];
+  paySettingsUi = { mode: 'add', locked: false };
+  paySettingsDraft = {
+    effectiveMonth: defaultMonth,
+    data: latest ? { ...latest.data } : defaultPaySettingsData()
+  };
+  renderPaySettingsTab();
+  psEditPanel().scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closePaySettingsEdit() {
+  paySettingsUi = { mode: 'list' };
+  paySettingsDraft = null;
+  renderPaySettingsTab();
+}
+
+// Read all form fields back into the draft.
+function collectDraftFromForm() {
+  const monthVal = psMonthInput().value;
+  const month = normalizeEffectiveMonth(monthVal);
+  if (!month) {
+    return { error: 'Bitte einen gültigen Monat wählen.' };
+  }
+  const data = { ...paySettingsDraft.data };
+  for (const [domId, key] of PS_NUMERIC_FIELDS) {
+    const el = document.getElementById(domId);
+    const v = el.value === '' ? 0 : Number(el.value);
+    if (!Number.isFinite(v) || v < 0) {
+      return { error: `Ungültiger Wert in ${el.previousElementSibling?.textContent || domId}.` };
+    }
+    data[key] = v;
+  }
+  data.uvgEnabled = !!document.getElementById('ps-uvg-enabled').checked;
+  return { effectiveMonth: month, data };
+}
+
+async function savePaySettings() {
+  const formError = psFormError();
+  formError.hidden = true;
+  const result = collectDraftFromForm();
+  if (result.error) {
+    formError.textContent = result.error;
+    formError.hidden = false;
+    return;
+  }
+  const { effectiveMonth, data } = result;
+  if (paySettingsUi.mode === 'add') {
+    // Client-side preflight: shifts on or after effectiveMonth would be retroactively shifted.
+    if (state.shifts.some(s => s.date >= effectiveMonth)) {
+      formError.textContent = 'Es existieren bereits Einsätze am oder nach diesem Monat — die Sätze würden rückwirkend gelten. Bitte späteren Monat wählen.';
+      formError.hidden = false;
+      return;
+    }
+    // Conflict with existing version on the exact same month.
+    if (state.paySettings.some(v => v.effectiveMonth === effectiveMonth)) {
+      formError.textContent = 'Für diesen Monat existiert bereits eine Version.';
+      formError.hidden = false;
+      return;
+    }
+    const ok = await addPaySettingsCloud(effectiveMonth, data);
+    if (ok) closePaySettingsEdit();
+  } else {
+    const ok = await updatePaySettingsCloud(paySettingsUi.id, data);
+    if (ok) closePaySettingsEdit();
+  }
+}
+
+async function deleteCurrentPaySettings() {
+  if (!confirm('Diese Version wirklich löschen? (Nur möglich, solange keine Einsätze in der Periode liegen.)')) return;
+  const ok = await deletePaySettingsCloud(paySettingsUi.id);
+  if (ok) closePaySettingsEdit();
+}
+
+document.getElementById('btn-add-pay-settings').addEventListener('click', openAddPaySettings);
+psBtnSave().addEventListener('click', savePaySettings);
+psBtnCancel().addEventListener('click', closePaySettingsEdit);
+psBtnDelete().addEventListener('click', deleteCurrentPaySettings);
 
 /* ---- DATEN VERWALTEN (Einstellungen-Tab, owner/admin) ---- */
 document.getElementById('btn-export').addEventListener('click', () => {
@@ -926,28 +1277,41 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
       if (!confirm('Aktuelle Daten überschreiben?')) return;
       const fresh = sanitizeState(parsed);
       setSyncStatus('pending');
-      const { error: stErr } = await supabase.from('household_state').upsert({
+      const { error: profErr } = await supabase.from('household_profile').upsert({
         household_id: currentHouseholdId,
-        arbeitgeber: fresh.arbeitgeber,
-        arbeitnehmer: fresh.arbeitnehmer,
-        einstellungen: fresh.einstellungen,
+        employer: fresh.employer,
+        employee: fresh.employee,
         updated_at: new Date().toISOString()
       });
-      if (stErr) throw stErr;
-      const { error: delErr } = await supabase.from('einsaetze').delete().eq('household_id', currentHouseholdId);
-      if (delErr) throw delErr;
-      if (fresh.einsaetze.length) {
-        const rows = fresh.einsaetze.map(e => ({
+      if (profErr) throw profErr;
+      // Order matters: triggers reject pay_settings changes while shifts cover the period.
+      // Drop shifts first, then pay_settings, then re-insert pay_settings, then shifts.
+      const { error: delShiftsErr } = await supabase.from('shifts').delete().eq('household_id', currentHouseholdId);
+      if (delShiftsErr) throw delShiftsErr;
+      const { error: delPsErr } = await supabase.from('pay_settings').delete().eq('household_id', currentHouseholdId);
+      if (delPsErr) throw delPsErr;
+      if (fresh.paySettings.length) {
+        const psRows = fresh.paySettings.map(v => ({
           household_id: currentHouseholdId,
-          datum: e.datum, stunden: e.stunden, notiz: e.notiz,
+          effective_month: v.effectiveMonth,
+          data: v.data
+        }));
+        const { error: insPsErr } = await supabase.from('pay_settings').insert(psRows);
+        if (insPsErr) throw insPsErr;
+      }
+      if (fresh.shifts.length) {
+        const rows = fresh.shifts.map(e => ({
+          household_id: currentHouseholdId,
+          date: e.date, hours: e.hours, note: e.note,
           entered_by: currentUser.id
         }));
-        const { error: insErr } = await supabase.from('einsaetze').insert(rows);
+        const { error: insErr } = await supabase.from('shifts').insert(rows);
         if (insErr) throw insErr;
       }
       await loadFromCloud();
       refreshFns.forEach(fn => fn());
       renderEntries();
+      renderPaySettingsTab();
       setSyncStatus('ok');
       alert('Daten importiert.');
     } catch (err) {
@@ -959,32 +1323,28 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
   ev.target.value = '';
 });
 
-document.getElementById('btn-reset-saetze').addEventListener('click', () => {
-  if (!confirm('Beitragssätze auf 2026-Standard zurücksetzen?')) return;
-  state.einstellungen = defaultSaetze();
-  refreshFns.forEach(fn => fn());
-  persistHouseholdState();
-});
-
 document.getElementById('btn-clear-all').addEventListener('click', async () => {
-  if (!confirm('Wirklich ALLE Daten (Stammdaten, Einsätze, Einstellungen) löschen?')) return;
+  if (!confirm('Wirklich ALLE Daten (Stammdaten, Einsätze, Sätze) löschen?')) return;
   if (!confirm('Sicher? Dies kann nicht rückgängig gemacht werden.')) return;
   setSyncStatus('pending');
   try {
-    const { error: delErr } = await supabase.from('einsaetze').delete().eq('household_id', currentHouseholdId);
-    if (delErr) throw delErr;
+    const { error: delShiftsErr } = await supabase.from('shifts').delete().eq('household_id', currentHouseholdId);
+    if (delShiftsErr) throw delShiftsErr;
+    const { error: delPsErr } = await supabase.from('pay_settings').delete().eq('household_id', currentHouseholdId);
+    if (delPsErr) throw delPsErr;
     const blank = sanitizeState({});
-    const { error: stErr } = await supabase.from('household_state').upsert({
+    const { error: profErr } = await supabase.from('household_profile').upsert({
       household_id: currentHouseholdId,
-      arbeitgeber: blank.arbeitgeber,
-      arbeitnehmer: blank.arbeitnehmer,
-      einstellungen: blank.einstellungen,
+      employer: blank.employer,
+      employee: blank.employee,
       updated_at: new Date().toISOString()
     });
-    if (stErr) throw stErr;
+    if (profErr) throw profErr;
     state = blank;
     refreshFns.forEach(fn => fn());
     renderEntries();
+    renderPaySettingsTab();
+    closePaySettingsEdit();
     setSyncStatus('ok');
   } catch (e) {
     setSyncStatus('error', e);
@@ -1115,6 +1475,6 @@ document.getElementById('btn-invite').addEventListener('click', async () => {
 });
 
 /* ---- BOOTSTRAP ---- */
-bindStammdatenAndSettings();
+bindStammdaten();
 showLogin();
 bootstrap();

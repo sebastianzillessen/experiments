@@ -200,70 +200,102 @@
 <!-- EINSTELLUNGEN -->
 <section id="einstellungen" role="tabpanel" aria-labelledby="tab-einstellungen" tabindex="0">
   <h2>Einstellungen &amp; Beitragssätze</h2>
-  <div class="section-sub">Vorausgefüllt mit den Werten 2026 für die vereinfachte Abrechnung im Kanton Zürich. Vor dem ersten Einsatz prüfen.</div>
+  <div class="section-sub">Sätze gelten ab dem gewählten Monatsanfang. Eine Lohnerhöhung oder geänderte SV-Sätze legst du als neue Version „gültig ab" an. Frühere Versionen sind gesperrt, sobald Einsätze in deren Periode liegen.</div>
 
   <div class="card">
-    <h3>Lohn</h3>
-    <div class="grid-2">
-      <div>
-        <label for="s-stundenlohn">Stundenlohn (CHF, brutto, exkl. Ferienzulage)</label>
-        <input type="number" id="s-stundenlohn" step="0.01" min="0">
-      </div>
-      <div>
-        <label for="s-ferien">Ferienzulage (% auf Bruttostunden, üblich 8.33 %)</label>
-        <input type="number" id="s-ferien" step="0.01" min="0">
-      </div>
+    <h3>Versionen</h3>
+    <div id="pay-settings-list"><div class="empty-state">Lade …</div></div>
+    <div class="btn-row">
+      <button class="btn" id="btn-add-pay-settings">Neue Version anlegen</button>
     </div>
   </div>
 
-  <div class="card">
-    <h3>Sozialversicherungs-Beitragssätze (%)</h3>
-    <div class="grid-3">
-      <div>
-        <label for="s-ahv-an">AHV/IV/EO Arbeitnehmer</label>
-        <input type="number" id="s-ahv-an" step="0.01" min="0">
+  <div id="pay-settings-edit-panel" hidden>
+    <div class="card">
+      <h3 id="pay-settings-edit-title">Version bearbeiten</h3>
+      <div class="grid-2">
+        <div>
+          <label for="ps-month">Gültig ab Monat</label>
+          <input type="month" id="ps-month">
+        </div>
       </div>
-      <div>
-        <label for="s-ahv-ag">AHV/IV/EO Arbeitgeber</label>
-        <input type="number" id="s-ahv-ag" step="0.01" min="0">
-      </div>
-      <div>
-        <label for="s-alv-an">ALV Arbeitnehmer</label>
-        <input type="number" id="s-alv-an" step="0.01" min="0">
-      </div>
-      <div>
-        <label for="s-alv-ag">ALV Arbeitgeber</label>
-        <input type="number" id="s-alv-ag" step="0.01" min="0">
-      </div>
-      <div>
-        <label for="s-fak-ag">FAK Arbeitgeber (Kt. ZH)</label>
-        <input type="number" id="s-fak-ag" step="0.01" min="0">
-      </div>
-      <div>
-        <label for="s-verw-ag">Verwaltungskosten Arbeitgeber</label>
-        <input type="number" id="s-verw-ag" step="0.01" min="0">
-      </div>
-      <div>
-        <label for="s-quellen">Quellensteuer (VAV, einheitlich 5 %)</label>
-        <input type="number" id="s-quellen" step="0.01" min="0">
+      <div id="ps-locked-warn" class="warn" hidden style="margin-top:10px;">
+        In dieser Periode existieren bereits Einsätze. Die Sätze sind gesperrt, damit bestehende Lohnabrechnungen nicht rückwirkend geändert werden. Lösche zuerst die Einsätze in dieser Periode, oder lege eine neue Version für einen späteren Monat an.
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <h3>UVG (Unfallversicherung)</h3>
-    <div class="checkbox-row">
-      <input type="checkbox" id="s-uvg-aktiv">
-      <label for="s-uvg-aktiv">UVG via SVA Zürich abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
-    </div>
-    <div class="grid-2">
-      <div>
-        <label for="s-bu-ag">UVG-BU Arbeitgeber (%)</label>
-        <input type="number" id="s-bu-ag" step="0.001" min="0">
+    <div class="card">
+      <h3>Lohn</h3>
+      <div class="grid-2">
+        <div>
+          <label for="ps-hourly-rate">Stundenlohn (CHF, brutto, exkl. Ferienzulage)</label>
+          <input type="number" id="ps-hourly-rate" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-vacation-percent">Ferienzulage (% auf Bruttostunden, üblich 8.33 %)</label>
+          <input type="number" id="ps-vacation-percent" step="0.01" min="0">
+        </div>
       </div>
-      <div>
-        <label for="s-nbu-an">UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)</label>
-        <input type="number" id="s-nbu-an" step="0.001" min="0">
+    </div>
+
+    <div class="card">
+      <h3>Sozialversicherungs-Beitragssätze (%)</h3>
+      <div class="grid-3">
+        <div>
+          <label for="ps-ahv-employee">AHV/IV/EO Arbeitnehmer</label>
+          <input type="number" id="ps-ahv-employee" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-ahv-employer">AHV/IV/EO Arbeitgeber</label>
+          <input type="number" id="ps-ahv-employer" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-alv-employee">ALV Arbeitnehmer</label>
+          <input type="number" id="ps-alv-employee" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-alv-employer">ALV Arbeitgeber</label>
+          <input type="number" id="ps-alv-employer" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-fak-employer">FAK Arbeitgeber (Kt. ZH)</label>
+          <input type="number" id="ps-fak-employer" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-admin-fee-employer">Verwaltungskosten Arbeitgeber</label>
+          <input type="number" id="ps-admin-fee-employer" step="0.01" min="0">
+        </div>
+        <div>
+          <label for="ps-withholding-tax">Quellensteuer (VAV, einheitlich 5 %)</label>
+          <input type="number" id="ps-withholding-tax" step="0.01" min="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>UVG (Unfallversicherung)</h3>
+      <div class="checkbox-row">
+        <input type="checkbox" id="ps-uvg-enabled">
+        <label for="ps-uvg-enabled">UVG via SVA Zürich abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label for="ps-uvg-bu-employer">UVG-BU Arbeitgeber (%)</label>
+          <input type="number" id="ps-uvg-bu-employer" step="0.001" min="0">
+        </div>
+        <div>
+          <label for="ps-uvg-nbu-employee">UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)</label>
+          <input type="number" id="ps-uvg-nbu-employee" step="0.001" min="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="pay-settings-form-error" class="auth-error" hidden></div>
+      <div class="btn-row">
+        <button class="btn" id="btn-save-pay-settings">Speichern</button>
+        <button class="btn btn-secondary" id="btn-cancel-pay-settings">Abbrechen</button>
+        <button class="btn btn-danger" id="btn-delete-pay-settings" hidden>Version löschen</button>
       </div>
     </div>
   </div>
@@ -274,7 +306,6 @@
       <button class="btn btn-secondary" id="btn-export">Export JSON</button>
       <button class="btn btn-secondary" id="btn-import">Import JSON</button>
       <input type="file" id="import-file" accept="application/json" style="display:none;">
-      <button class="btn btn-secondary" id="btn-reset-saetze">Beitragssätze auf 2026-Standard zurücksetzen</button>
       <button class="btn btn-danger" id="btn-clear-all">Alle Daten löschen</button>
     </div>
     <div class="info" style="margin-top:12px;">Alle Daten werden in deinem Supabase-Haushalt gespeichert und sind auf jedem angemeldeten Gerät verfügbar.</div>
@@ -377,6 +408,6 @@
   <span id="sync-status-text">Bereit</span>
 </div>
 
-<script type="module" src="app.js?v=20260509"></script>
+<script type="module" src="app.js?v=20260510"></script>
 </body>
 </html>
