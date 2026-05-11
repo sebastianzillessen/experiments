@@ -42,27 +42,47 @@ export async function magicLinkFromInbucket(email: string, timeoutMs = 20_000): 
     localPart.split('-')[0]   // in case subaddress stripping is enabled
   ])).map(encodeURIComponent);
 
+  const apiBases = [`${base}/api/v1`, `${base}/api/v2`];
+
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    for (const name of candidates) {
-      try {
-        const listResp = await fetch(`${base}/api/v1/mailbox/${name}`);
-        if (!listResp.ok) continue;
-        const list = await listResp.json() as Array<{ id: string; to?: string[] }>;
-        const mine = list.filter(m => !m.to || m.to.some(addr => addr.toLowerCase().includes(email.toLowerCase())));
-        const target = mine.length > 0 ? mine[mine.length - 1] : list[list.length - 1];
-        if (!target) continue;
-        const msgResp = await fetch(`${base}/api/v1/mailbox/${name}/${target.id}`);
-        if (!msgResp.ok) continue;
-        const msg = await msgResp.json() as { body?: { html?: string; text?: string } };
-        const content = msg.body?.html ?? msg.body?.text ?? '';
-        const match = content.match(/https?:\/\/[^\s"<>]+/);
-        if (match) return match[0];
-      } catch {
-        // transient — keep polling
+    for (const apiBase of apiBases) {
+      for (const name of candidates) {
+        try {
+          const listResp = await fetch(`${apiBase}/mailbox/${name}`);
+          if (!listResp.ok) continue;
+          const list = await listResp.json() as Array<{ id: string; to?: string[] }>;
+          if (!Array.isArray(list) || list.length === 0) continue;
+          const mine = list.filter(m => !m.to || m.to.some(addr => addr.toLowerCase().includes(email.toLowerCase())));
+          const target = mine.length > 0 ? mine[mine.length - 1] : list[list.length - 1];
+          const msgResp = await fetch(`${apiBase}/mailbox/${name}/${target.id}`);
+          if (!msgResp.ok) continue;
+          const msg = await msgResp.json() as { body?: { html?: string; text?: string } };
+          const content = msg.body?.html ?? msg.body?.text ?? '';
+          const match = content.match(/https?:\/\/[^\s"<>]+/);
+          if (match) return match[0];
+        } catch {
+          // transient — keep polling
+        }
       }
     }
     await new Promise(r => setTimeout(r, 250));
   }
-  throw new Error(`No Inbucket mail for ${email} within ${timeoutMs}ms (tried mailboxes: ${candidates.map(decodeURIComponent).join(', ')})`);
+
+  // Diagnostic dump — what does Inbucket actually have?
+  const diag: string[] = [];
+  for (const apiBase of apiBases) {
+    for (const name of candidates) {
+      try {
+        const r = await fetch(`${apiBase}/mailbox/${name}`);
+        diag.push(`GET ${apiBase}/mailbox/${decodeURIComponent(name)} → ${r.status} body=${(await r.text()).slice(0, 200)}`);
+      } catch (e) { diag.push(`GET ${apiBase}/mailbox/${decodeURIComponent(name)} threw ${String(e)}`); }
+    }
+  }
+  try {
+    const root = await fetch(base);
+    diag.push(`GET ${base}/ → ${root.status} ct=${root.headers.get('content-type')}`);
+  } catch (e) { diag.push(`GET ${base}/ threw ${String(e)}`); }
+
+  throw new Error(`No Inbucket mail for ${email} within ${timeoutMs}ms (base=${base}).\n${diag.join('\n')}`);
 }
