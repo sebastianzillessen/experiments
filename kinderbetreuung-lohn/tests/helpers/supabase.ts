@@ -1,5 +1,11 @@
 import { execSync } from 'node:child_process';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
+
+// Node 20 has no global WebSocket. supabase-js initialises the realtime
+// transport eagerly even though our tests never open channels — so we wire
+// in `ws` to satisfy that check. Remove once we move to Node 22+.
+const realtimeOptions = { transport: WebSocket as unknown as typeof globalThis.WebSocket };
 
 export type StackInfo = {
   url: string;
@@ -33,21 +39,24 @@ export function getStackInfo(): StackInfo {
 export function adminClient(): SupabaseClient {
   const s = getStackInfo();
   return createClient(s.url, s.serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
+    auth: { autoRefreshToken: false, persistSession: false },
+    realtime: realtimeOptions
   });
 }
 
 export function anonClient(): SupabaseClient {
   const s = getStackInfo();
   return createClient(s.url, s.anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
+    auth: { autoRefreshToken: false, persistSession: false },
+    realtime: realtimeOptions
   });
 }
 
 export function clientForUser(accessToken: string, refreshToken: string): SupabaseClient {
   const s = getStackInfo();
   const c = createClient(s.url, s.anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
+    auth: { autoRefreshToken: false, persistSession: false },
+    realtime: realtimeOptions
   });
   c.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
   return c;
