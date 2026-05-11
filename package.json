@@ -1,0 +1,9 @@
+{
+  "name": "experiments",
+  "private": true,
+  "workspaces": ["kinderbetreuung-lohn"],
+  "scripts": {
+    "test:kinderbetreuung": "npm test -w kinderbetreuung-lohn",
+    "test:kinderbetreuung:ui": "npm run test:ui -w kinderbetreuung-lohn"
+  }
+}
