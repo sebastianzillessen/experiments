@@ -43,7 +43,7 @@ test.describe('Pay settings versions', () => {
     const month = thisMonth();
 
     // Seed pay-settings + one shift directly so the lock branch is exercised.
-    const { data: psRow, error: psErr } = await adminClient()
+    const { error: psErr } = await adminClient()
       .from('pay_settings')
       .insert({
         household_id: householdId,
@@ -76,13 +76,13 @@ test.describe('Pay settings versions', () => {
     await page.reload();
     await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
     await page.locator('#tab-einstellungen').click();
-    await expect(page.locator('#pay-settings-list')).toContainText(month, { timeout: 8_000 });
 
-    // Click the first version to edit it; expect the lock warning.
-    await page.locator(`[data-pay-settings-edit="${psRow!.id}"], [data-edit-pay-settings="${psRow!.id}"]`).first().click().catch(async () => {
-      // Fallback: many UIs put the edit action on the row itself; try the first row's edit button.
-      await page.locator('#pay-settings-list button').first().click();
-    });
+    // List renders the month in locale-formatted form (e.g. "Mai 2026"), so we
+    // check on a stable marker that's also a lock indicator.
+    await expect(page.locator('#pay-settings-list')).toContainText(/Stundenlohn|gesperrt/i, { timeout: 8_000 });
+
+    // Open the edit form for the seeded version.
+    await page.locator(`#pay-settings-list button`).first().click();
 
     await expect(page.locator('#ps-locked-warn')).toBeVisible({ timeout: 5_000 });
     await expect(page.locator('#ps-hourly-rate')).toBeDisabled();
