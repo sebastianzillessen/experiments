@@ -5,6 +5,7 @@
   --text: #1f2933; --muted: #6b7480; --soft: #f0f4f8;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+[hidden] { display: none !important; }
 html, body { background:var(--bg); color:var(--text); font-family:'Source Sans 3',-apple-system,BlinkMacSystemFont,sans-serif; line-height:1.5; font-size:15px; }
 
 /* NAV */
