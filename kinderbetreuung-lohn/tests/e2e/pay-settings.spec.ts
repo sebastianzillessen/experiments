@@ -72,6 +72,9 @@ test.describe('Pay settings versions', () => {
       });
     expect(shiftErr).toBeNull();
 
+    // Seeds happen after page load, so the app's cached state is empty until reload.
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
     await page.locator('#tab-einstellungen').click();
     await expect(page.locator('#pay-settings-list')).toContainText(month, { timeout: 8_000 });
 

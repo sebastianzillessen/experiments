@@ -84,23 +84,25 @@ test.describe('Members & invitations', () => {
   });
 
   test('owner can remove a member via DELETE on memberships', async ({ signedInUser }) => {
-    const { householdId, userId } = signedInUser;
+    const { householdId } = signedInUser;
     const memberEmail = uniqueEmail('remove');
 
+    // Pre-existing invite so handle_new_user does not auto-create a household.
     await adminClient().from('invites').insert({
-      household_id: householdId, email: memberEmail, role: 'employee', invited_by: userId
+      household_id: householdId, email: memberEmail, role: 'employee', invited_by: signedInUser.userId
     });
     const member = await createConfirmedUser(memberEmail);
-    const { error: rpcErr } = await adminClient().rpc('accept_invite', {
-      invite_id: (await adminClient()
-        .from('invites')
-        .select('id')
-        .eq('email', memberEmail)
-        .single()).data!.id
-    });
-    expect(rpcErr).toBeNull();
 
-    // Sanity check: member is in the household.
+    // accept_invite is auth-context dependent (uses auth.uid()), so we skip the
+    // RPC here and insert the membership directly via service-role. The accept
+    // flow itself is covered by the previous test.
+    const { error: insErr } = await adminClient().from('memberships').insert({
+      household_id: householdId,
+      user_id: member.id,
+      role: 'employee'
+    });
+    expect(insErr).toBeNull();
+
     const before = await adminClient()
       .from('memberships')
       .select('user_id')

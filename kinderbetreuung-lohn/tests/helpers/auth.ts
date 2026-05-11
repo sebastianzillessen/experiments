@@ -27,9 +27,11 @@ export async function magicLinkFor(email: string): Promise<string> {
 
 // Full path: poll Inbucket for the actual mail Supabase sent after signInWithOtp.
 // Used by the auth smoke test to validate the mail template / redirect end-to-end.
+// Inbucket's default mailbox-naming mode is "local" — the mailbox name is the
+// local-part of the recipient email (everything before @).
 export async function magicLinkFromInbucket(email: string, timeoutMs = 15_000): Promise<string> {
   const base = getStackInfo().inbucketUrl;
-  const mailbox = encodeURIComponent(email);
+  const mailbox = encodeURIComponent(email.split('@')[0]);
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
