@@ -54,6 +54,19 @@ export async function magicLinkFromInbucket(email: string, timeoutMs = 20_000): 
   throw new Error(`No mail for ${email} within ${timeoutMs}ms at ${base}. Errors: ${errors.slice(-4).join(' | ')}`);
 }
 
+function extractMagicLink(htmlOrText: string): string | null {
+  // Prefer raw text bodies because HTML escapes & as &amp;, which makes
+  // the resulting URL's query string parse incorrectly when followed by
+  // page.goto().
+  const decoded = htmlOrText
+    .replace(/&amp;/g, '&')
+    .replace(/&#x2F;/g, '/')
+    .replace(/&#x3D;/g, '=')
+    .replace(/&quot;/g, '"');
+  const match = decoded.match(/https?:\/\/[^\s"<>]+/);
+  return match ? match[0] : null;
+}
+
 async function tryMailpit(base: string, email: string): Promise<string | null> {
   const resp = await fetch(`${base}/api/v1/messages?limit=50`);
   if (!resp.ok) return null;
@@ -66,9 +79,8 @@ async function tryMailpit(base: string, email: string): Promise<string | null> {
   const detailResp = await fetch(`${base}/api/v1/message/${target.ID}`);
   if (!detailResp.ok) return null;
   const detail = await detailResp.json() as { HTML?: string; Text?: string };
-  const content = detail.HTML ?? detail.Text ?? '';
-  const match = content.match(/https?:\/\/[^\s"<>]+/);
-  return match ? match[0] : null;
+  const content = detail.Text || detail.HTML || '';
+  return extractMagicLink(content);
 }
 
 async function tryInbucket(base: string, email: string): Promise<string | null> {
@@ -87,9 +99,9 @@ async function tryInbucket(base: string, email: string): Promise<string | null> 
     const msgResp = await fetch(`${base}/api/v1/mailbox/${name}/${target.id}`);
     if (!msgResp.ok) continue;
     const msg = await msgResp.json() as { body?: { html?: string; text?: string } };
-    const content = msg.body?.html ?? msg.body?.text ?? '';
-    const match = content.match(/https?:\/\/[^\s"<>]+/);
-    if (match) return match[0];
+    const content = msg.body?.text || msg.body?.html || '';
+    const link = extractMagicLink(content);
+    if (link) return link;
   }
   return null;
 }
