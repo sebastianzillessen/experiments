@@ -11,13 +11,51 @@ const CART_URL = 'https://www.coop.ch/de/cart';
 
 function parseArgs(argv) {
   const items = [];
+  const flags = { dryRun: false, headless: false, max: 5 };
   for (const raw of argv.slice(2)) {
-    if (!raw || raw.startsWith('--')) continue;
+    if (!raw) continue;
+    if (raw === '--dry-run') { flags.dryRun = true; continue; }
+    if (raw === '--headless') { flags.headless = true; continue; }
+    if (raw.startsWith('--max=')) { flags.max = Math.max(1, parseInt(raw.slice(6), 10) || 5); continue; }
+    if (raw.startsWith('--')) continue;
     const [name, qtyStr] = raw.split(':');
     const qty = Math.max(1, parseInt(qtyStr ?? '1', 10) || 1);
     items.push({ query: name.trim(), qty });
   }
-  return items;
+  return { items, flags };
+}
+
+async function extractProducts(page, max) {
+  return page.evaluate((max) => {
+    const seen = new Set();
+    const out = [];
+    const priceRe = /(?:CHF|Fr\.?|chf)\s*([0-9]+[.,][0-9]{2})|([0-9]+[.,][0-9]{2})\s*(?:CHF|Fr\.?)/i;
+    const links = document.querySelectorAll('a[href*="/p/"]');
+    for (const a of links) {
+      const href = a.getAttribute('href') || '';
+      if (!href || seen.has(href)) continue;
+      const card = a.closest('article, li, [class*="product" i], [data-testid*="product" i]') || a.parentElement;
+      if (!card) continue;
+      const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      const priceMatch = text.match(priceRe);
+      const price = priceMatch ? (priceMatch[1] || priceMatch[2]).replace(',', '.') : null;
+      const name = (a.getAttribute('aria-label') || a.innerText || text.split('CHF')[0]).replace(/\s+/g, ' ').trim().slice(0, 90);
+      if (!name) continue;
+      seen.add(href);
+      out.push({ name, price, url: href });
+      if (out.length >= max) break;
+    }
+    return out;
+  }, max);
+}
+
+async function dryRunQuery(page, query, max) {
+  await page.goto(SEARCH_URL(query), { waitUntil: 'domcontentloaded' });
+  await acceptCookies(page);
+  try { await page.waitForLoadState('networkidle', { timeout: 8000 }); } catch {}
+  try { await page.waitForSelector('a[href*="/p/"]', { timeout: 8000 }); } catch {}
+  return extractProducts(page, max);
 }
 
 function waitForEnter(prompt) {
@@ -106,18 +144,47 @@ async function shopItem(page, { query, qty }) {
 }
 
 async function main() {
-  const items = parseArgs(process.argv);
+  const { items, flags } = parseArgs(process.argv);
   if (items.length === 0) {
-    console.log('Usage: npm start -- "Milch:2" "Brot" "Bananen:3"');
-    console.log('Format: "Suchbegriff:Menge" (Menge optional, default 1)');
+    console.log('Usage:');
+    console.log('  npm start -- "Milch:2" "Brot" "Bananen:3"           (Warenkorb füllen, braucht Login)');
+    console.log('  npm start -- --dry-run "Milch" "Brot"               (nur listen, kein Login nötig)');
+    console.log('  Flags: --dry-run, --headless, --max=N');
     process.exit(1);
   }
 
-  console.log('Einkaufsliste:');
-  for (const it of items) console.log(`  • ${it.query} × ${it.qty}`);
+  console.log(flags.dryRun ? `Dry-Run (Top ${flags.max} pro Suchbegriff):` : 'Einkaufsliste:');
+  for (const it of items) console.log(`  • ${it.query}${flags.dryRun ? '' : ` × ${it.qty}`}`);
+
+  if (flags.dryRun) {
+    const browser = await chromium.launch({ headless: flags.headless || true });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'de-CH' });
+    const page = await context.newPage();
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await acceptCookies(page);
+    for (const item of items) {
+      console.log(`\n→ "${item.query}"`);
+      try {
+        const products = await dryRunQuery(page, item.query, flags.max);
+        if (products.length === 0) {
+          console.log('   (keine Produkte gefunden — Selektoren prüfen oder Bot-Block?)');
+        } else {
+          products.forEach((p, i) => {
+            const price = p.price ? `CHF ${p.price}` : '   ?  ';
+            console.log(`   ${i + 1}. ${p.name.padEnd(60)} ${price.padStart(10)}  ${p.url}`);
+          });
+        }
+      } catch (e) {
+        console.log(`   ✗ Fehler: ${e.message.split('\n')[0]}`);
+      }
+    }
+    await context.close();
+    await browser.close();
+    return;
+  }
 
   const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: false,
+    headless: flags.headless,
     viewport: { width: 1280, height: 900 },
     locale: 'de-CH',
   });
