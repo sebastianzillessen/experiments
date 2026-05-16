@@ -1,0 +1,14 @@
+{
+  "name": "coop-shopping",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "start": "node shop.js",
+    "shop": "node shop.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
