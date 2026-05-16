@@ -11,11 +11,12 @@ const CART_URL = 'https://www.coop.ch/de/cart';
 
 function parseArgs(argv) {
   const items = [];
-  const flags = { dryRun: false, headless: false, max: 5 };
+  const flags = { dryRun: false, headless: false, max: 5, interactive: true };
   for (const raw of argv.slice(2)) {
     if (!raw) continue;
     if (raw === '--dry-run') { flags.dryRun = true; continue; }
     if (raw === '--headless') { flags.headless = true; continue; }
+    if (raw === '--no-interactive' || raw === '--yes') { flags.interactive = false; continue; }
     if (raw.startsWith('--max=')) { flags.max = Math.max(1, parseInt(raw.slice(6), 10) || 5); continue; }
     if (raw.startsWith('--')) continue;
     const [name, qtyStr] = raw.split(':');
@@ -50,7 +51,7 @@ async function extractProducts(page, max) {
   }, max);
 }
 
-async function dryRunQuery(page, query, max) {
+async function searchProducts(page, query, max) {
   await page.goto(SEARCH_URL(query), { waitUntil: 'domcontentloaded' });
   await acceptCookies(page);
   try { await page.waitForLoadState('networkidle', { timeout: 8000 }); } catch {}
@@ -58,12 +59,14 @@ async function dryRunQuery(page, query, max) {
   return extractProducts(page, max);
 }
 
-function waitForEnter(prompt) {
+function promptInput(prompt) {
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(prompt, () => { rl.close(); resolve(); });
+    rl.question(prompt, (ans) => { rl.close(); resolve(ans); });
   });
 }
+
+const waitForEnter = (msg) => promptInput(msg);
 
 async function acceptCookies(page) {
   const candidates = [
@@ -85,7 +88,6 @@ async function acceptCookies(page) {
 }
 
 async function isLoggedIn(page) {
-  // Heuristik: Logout-Link oder "Mein Konto" sichtbar.
   const markers = [
     'a[href*="logout" i]',
     'a:has-text("Abmelden")',
@@ -98,58 +100,72 @@ async function isLoggedIn(page) {
   return false;
 }
 
-async function addOneToCart(page, query) {
-  await page.goto(SEARCH_URL(query), { waitUntil: 'domcontentloaded' });
+function absoluteUrl(href) {
+  if (!href) return null;
+  if (href.startsWith('http')) return href;
+  if (href.startsWith('/')) return `https://www.coop.ch${href}`;
+  return `https://www.coop.ch/${href}`;
+}
+
+async function addToCartFromProductPage(page, productUrl, qty) {
+  await page.goto(absoluteUrl(productUrl), { waitUntil: 'domcontentloaded' });
   await acceptCookies(page);
 
-  // Erstes Produkt mit Add-to-Cart-Button finden.
   const addButton = page.locator([
     'button:has-text("In den Warenkorb")',
     'button[aria-label*="Warenkorb" i]',
     'button[data-testid*="add-to-cart" i]',
     'button:has(svg[aria-label*="Warenkorb" i])',
   ].join(', ')).first();
-
   await addButton.waitFor({ state: 'visible', timeout: 15000 });
 
-  const cartBadge = page.locator('[data-testid*="cart-count" i], [aria-label*="Warenkorb" i] >> text=/\\d+/').first();
-  const before = (await cartBadge.textContent().catch(() => null))?.trim() ?? null;
-
-  await addButton.click();
-
-  // Auf Bestätigung warten: entweder Badge ändert sich oder ein Toast erscheint.
-  await Promise.race([
-    page.waitForTimeout(1500),
-    page.locator('text=/hinzugefügt|added/i').first().waitFor({ timeout: 4000 }).catch(() => {}),
-    cartBadge.waitFor({ state: 'visible', timeout: 4000 }).catch(() => {}),
-  ]);
-  const after = (await cartBadge.textContent().catch(() => null))?.trim() ?? null;
-  return { before, after };
-}
-
-async function shopItem(page, { query, qty }) {
-  console.log(`\n→ "${query}" × ${qty}`);
   let added = 0;
   for (let i = 0; i < qty; i++) {
     try {
-      const r = await addOneToCart(page, query);
+      await addButton.click();
+      await Promise.race([
+        page.locator('text=/hinzugefügt|added/i').first().waitFor({ timeout: 3000 }).catch(() => {}),
+        page.waitForTimeout(700),
+      ]);
       added++;
-      console.log(`   ✓ ${i + 1}/${qty} hinzugefügt${r.after ? ` (Korb: ${r.after})` : ''}`);
     } catch (e) {
-      console.log(`   ✗ ${i + 1}/${qty} fehlgeschlagen: ${e.message.split('\n')[0]}`);
+      console.log(`     ✗ Klick ${i + 1} fehlgeschlagen: ${e.message.split('\n')[0]}`);
       break;
     }
   }
   return added;
 }
 
+function renderCandidates(candidates) {
+  candidates.forEach((p, i) => {
+    const price = p.price ? `CHF ${p.price}` : '   ?  ';
+    console.log(`   ${i + 1}. ${p.name.padEnd(60)} ${price.padStart(10)}`);
+  });
+}
+
+async function chooseProduct(candidates, interactive) {
+  renderCandidates(candidates);
+  if (!interactive) {
+    console.log(`   → automatisch: 1`);
+    return candidates[0];
+  }
+  const ans = (await promptInput(`   Auswahl 1-${candidates.length}, [s]kip, [ENTER]=1: `)).trim();
+  if (ans.toLowerCase() === 's' || ans.toLowerCase() === 'skip') return null;
+  if (ans === '') return candidates[0];
+  const n = parseInt(ans, 10);
+  if (Number.isFinite(n) && n >= 1 && n <= candidates.length) return candidates[n - 1];
+  console.log(`   (ungültige Eingabe "${ans}", nehme 1)`);
+  return candidates[0];
+}
+
 async function main() {
   const { items, flags } = parseArgs(process.argv);
   if (items.length === 0) {
     console.log('Usage:');
-    console.log('  npm start -- "Milch:2" "Brot" "Bananen:3"           (Warenkorb füllen, braucht Login)');
+    console.log('  npm start -- "Milch:2" "Brot" "Bananen:3"           (interaktive Auswahl, dann Warenkorb)');
+    console.log('  npm start -- --no-interactive "Milch:2" "Brot"      (immer erstes Suchergebnis, kein Prompt)');
     console.log('  npm start -- --dry-run "Milch" "Brot"               (nur listen, kein Login nötig)');
-    console.log('  Flags: --dry-run, --headless, --max=N');
+    console.log('  Flags: --dry-run, --no-interactive, --headless, --max=N');
     process.exit(1);
   }
 
@@ -158,14 +174,14 @@ async function main() {
 
   if (flags.dryRun) {
     const browser = await chromium.launch({ headless: flags.headless || true });
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'de-CH' });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'de-CH', ignoreHTTPSErrors: true });
     const page = await context.newPage();
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
     await acceptCookies(page);
     for (const item of items) {
       console.log(`\n→ "${item.query}"`);
       try {
-        const products = await dryRunQuery(page, item.query, flags.max);
+        const products = await searchProducts(page, item.query, flags.max);
         if (products.length === 0) {
           console.log('   (keine Produkte gefunden — Selektoren prüfen oder Bot-Block?)');
         } else {
@@ -187,6 +203,7 @@ async function main() {
     headless: flags.headless,
     viewport: { width: 1280, height: 900 },
     locale: 'de-CH',
+    ignoreHTTPSErrors: true,
   });
   const page = context.pages()[0] ?? await context.newPage();
 
@@ -201,21 +218,69 @@ async function main() {
     console.log('✓ Eingeloggt (persistente Session).');
   }
 
-  const summary = [];
+  console.log('\n──── Auswahl ────');
+  const picks = [];
   for (const item of items) {
-    const added = await shopItem(page, item);
-    summary.push({ ...item, added });
+    console.log(`\n→ "${item.query}" × ${item.qty}`);
+    let candidates = [];
+    try {
+      candidates = await searchProducts(page, item.query, flags.max);
+    } catch (e) {
+      console.log(`   ✗ Suche fehlgeschlagen: ${e.message.split('\n')[0]}`);
+      continue;
+    }
+    if (candidates.length === 0) {
+      console.log('   (keine Treffer)');
+      continue;
+    }
+    const chosen = await chooseProduct(candidates, flags.interactive);
+    if (!chosen) { console.log('   übersprungen.'); continue; }
+    picks.push({ ...item, productUrl: chosen.url, productName: chosen.name, price: chosen.price });
+  }
+
+  if (picks.length === 0) {
+    console.log('\nKeine Produkte ausgewählt. Beende.');
+    await context.close();
+    return;
+  }
+
+  console.log('\n──── Auswahl-Zusammenfassung ────');
+  for (const p of picks) {
+    const price = p.price ? `CHF ${p.price}` : '?';
+    console.log(`  • ${p.productName} × ${p.qty} (${price})`);
+  }
+  if (flags.interactive) {
+    const ok = (await promptInput('\nIn den Warenkorb legen? [ENTER]=ja, [n]=abbrechen: ')).trim().toLowerCase();
+    if (ok === 'n' || ok === 'no' || ok === 'nein') {
+      console.log('Abgebrochen.');
+      await context.close();
+      return;
+    }
+  }
+
+  console.log('\n──── In den Warenkorb ────');
+  const summary = [];
+  for (const p of picks) {
+    console.log(`\n→ ${p.productName} × ${p.qty}`);
+    let added = 0;
+    try {
+      added = await addToCartFromProductPage(page, p.productUrl, p.qty);
+    } catch (e) {
+      console.log(`   ✗ ${e.message.split('\n')[0]}`);
+    }
+    const ok = added === p.qty ? '✓' : added === 0 ? '✗' : '~';
+    console.log(`   ${ok} ${added}/${p.qty} hinzugefügt`);
+    summary.push({ ...p, added });
   }
 
   await page.goto(CART_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
 
-  console.log('\n──── Zusammenfassung ────');
+  console.log('\n──── Endergebnis ────');
   for (const s of summary) {
     const ok = s.added === s.qty ? '✓' : s.added === 0 ? '✗' : '~';
-    console.log(`  ${ok} ${s.query}: ${s.added}/${s.qty}`);
+    console.log(`  ${ok} ${s.productName}: ${s.added}/${s.qty}`);
   }
   console.log('\nWarenkorb ist offen. Prüfe die Produkte und schliesse manuell ab.');
-  console.log('Browser bleibt offen — schliesse ihn, wenn du fertig bist (oder Strg+C).');
 
   await waitForEnter('ENTER drücken, um den Browser zu schliessen… ');
   await context.close();
