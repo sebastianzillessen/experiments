@@ -79,6 +79,14 @@ function normalizePackingItem(raw: unknown): PackingItem {
 
 export class LocalStorageProvider implements DataProvider {
   private listeners = new Set<() => void>();
+  /**
+   * Wenn true, überspringt notify() das Setzen von lastChangedAt. Wird
+   * verwendet, wenn der SyncManager Remote-Snapshots anwendet — der
+   * lastChangedAt-Timestamp soll dann aus dem Snapshot kommen, nicht
+   * "jetzt" sein, sonst würde unser nächster Push den remote-state
+   * fälschlich als "lokal geändert" markieren.
+   */
+  private skipLastChangedOnNotify = false;
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -88,7 +96,56 @@ export class LocalStorageProvider implements DataProvider {
   }
 
   private notify(): void {
+    if (!this.skipLastChangedOnNotify) {
+      localStorage.setItem(K.lastChangedAt, JSON.stringify(nowIso()));
+    }
     for (const fn of this.listeners) fn();
+  }
+
+  // ---------- Sync-Metadaten ----------
+  getLastChangedAt(): string | null {
+    return read<string | null>(K.lastChangedAt, null);
+  }
+  getLastPushedAt(): string | null {
+    return read<string | null>(K.lastPushedAt, null);
+  }
+  setLastPushedAt(iso: string): void {
+    write(K.lastPushedAt, iso);
+  }
+  getLastPulledAt(): string | null {
+    return read<string | null>(K.lastPulledAt, null);
+  }
+  setLastPulledAt(iso: string): void {
+    write(K.lastPulledAt, iso);
+  }
+  getSyncCode(): string | null {
+    return read<string | null>(K.syncCode, null);
+  }
+  setSyncCode(code: string | null): void {
+    if (code === null) remove(K.syncCode);
+    else write(K.syncCode, code);
+    this.notify();
+  }
+
+  applyRemoteSnapshot(json: string): void {
+    this.skipLastChangedOnNotify = true;
+    try {
+      this.importSnapshot(json);
+      // lastChangedAt wird in importSnapshot nicht angefasst (wegen Flag).
+      // Wir lesen den Snapshot-Timestamp und setzen ihn explizit:
+      try {
+        const parsed = JSON.parse(json) as { data?: Record<string, string | null> };
+        const remoteChanged = parsed.data?.[K.lastChangedAt];
+        if (typeof remoteChanged === "string") {
+          localStorage.setItem(K.lastChangedAt, JSON.stringify(remoteChanged));
+        }
+      } catch {
+        // ignore
+      }
+      this.setLastPulledAt(nowIso());
+    } finally {
+      this.skipLastChangedOnNotify = false;
+    }
   }
 
   // ---------- Auth ----------
@@ -931,10 +988,14 @@ export class LocalStorageProvider implements DataProvider {
 
   exportSnapshot(): string {
     const data: Record<string, unknown> = {};
-    // Alle packliste:*-Keys einsammeln
+    // Per-Browser-Sync-Bookkeeping nicht mit-synchronisieren — sonst
+    // würde Browser B nach einem Pull plötzlich glauben, er hätte
+    // gepusht/gepullt was Browser A getan hat.
+    const skip = new Set<string>([K.lastPushedAt, K.lastPulledAt, K.syncCode]);
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+      if (skip.has(key)) continue;
       const raw = localStorage.getItem(key);
       if (raw == null) continue;
       try {
@@ -1013,16 +1074,21 @@ export class LocalStorageProvider implements DataProvider {
     if (!snap.data || typeof snap.data !== "object") {
       throw new Error("Snapshot hat keine Daten");
     }
-    // Erst alle vorhandenen packliste:*-Keys entfernen
+    // Per-Browser-Sync-Bookkeeping NICHT löschen — sonst verliert
+    // dieser Browser beim Pull seinen Sync-Code und Push/Pull-Timestamps.
+    const preserve = new Set<string>([K.lastPushedAt, K.lastPulledAt, K.syncCode]);
     const toRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(STORAGE_PREFIX)) toRemove.push(key);
+      if (key && key.startsWith(STORAGE_PREFIX) && !preserve.has(key)) {
+        toRemove.push(key);
+      }
     }
     for (const k of toRemove) localStorage.removeItem(k);
-    // Dann die importierten Keys schreiben
+    // Dann die importierten Keys schreiben (preserved auch nicht überschreiben)
     for (const [key, value] of Object.entries(snap.data)) {
-      if (!key.startsWith(STORAGE_PREFIX)) continue; // Defensive: keine fremden Keys importieren
+      if (!key.startsWith(STORAGE_PREFIX)) continue;
+      if (preserve.has(key)) continue;
       localStorage.setItem(key, JSON.stringify(value));
     }
     this.notify();

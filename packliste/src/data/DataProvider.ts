@@ -159,6 +159,28 @@ export interface DataProvider {
    */
   loadSharedSnapshot(code: string): Promise<void>;
 
+  // --- Sync-Metadaten + aktiver Sync-Code ---
+
+  /** ISO-Timestamp der letzten lokalen Mutation, oder null wenn keine. */
+  getLastChangedAt(): string | null;
+  /** ISO-Timestamp des letzten erfolgreichen Push, oder null. */
+  getLastPushedAt(): string | null;
+  setLastPushedAt(iso: string): void;
+  /** ISO-Timestamp des letzten erfolgreichen Pull, oder null. */
+  getLastPulledAt(): string | null;
+  setLastPulledAt(iso: string): void;
+
+  /** Aktiver Sync-Code (wenn null → Auto-Sync aus). */
+  getSyncCode(): string | null;
+  setSyncCode(code: string | null): void;
+
+  /**
+   * Variante von importSnapshot, die explizit als "vom Server kommend"
+   * markiert ist. Aktualisiert lastChangedAt aus dem Snapshot statt
+   * "jetzt" zu setzen. Wirft bei inkompatiblem Schema.
+   */
+  applyRemoteSnapshot(json: string): void;
+
   // Subscribe to any change — components re-render via this
   subscribe(listener: () => void): () => void;
 }

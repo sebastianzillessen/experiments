@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { styled } from "next-yak";
-import { Download, Upload, Cloud, CloudDownload, Copy, Check } from "lucide-react";
+import { Download, Upload, Cloud, CloudDownload, Copy, Check, Unlink } from "lucide-react";
 import { Card, CardTitle, Stack, Row, Muted, Note } from "../components/ui/Layout";
 import { Button } from "../components/ui/Button";
 import { Input, Field, FieldLabel } from "../components/ui/Input";
 import { useDataProvider } from "../data/DataProviderContext";
+import { useSync } from "../data/SyncContext";
 import { useToast } from "../components/ui/Toast";
 import { colors, radii } from "../theme.yak";
 
@@ -46,6 +47,7 @@ const CodeDisplay = styled.div`
 
 export function InfoTab() {
   const provider = useDataProvider();
+  const sync = useSync();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
@@ -61,6 +63,12 @@ export function InfoTab() {
       const code = await provider.shareSnapshotToRemote();
       setGeneratedCode(code);
       setCopied(false);
+      // Sync sofort aktivieren — dieser Browser ist die Quelle
+      provider.setSyncCode(code);
+      toast.show({
+        message: `Sync aktiv — Code ${code} kopieren und auf anderem Browser eintippen`,
+        duration: 8000,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.show({ message: `Upload fehlgeschlagen: ${msg}`, duration: 9000 });
@@ -93,8 +101,10 @@ export function InfoTab() {
     setImportLoading(true);
     try {
       await provider.loadSharedSnapshot(code);
+      // Sync aktivieren — wir sind jetzt mit dem Code verbunden
+      provider.setSyncCode(code);
       toast.show({
-        message: "Import erfolgreich — Seite wird neu geladen",
+        message: "Import erfolgreich — Sync aktiv, Seite wird neu geladen",
         duration: 3000,
       });
       setTimeout(() => window.location.reload(), 600);
@@ -251,76 +261,120 @@ export function InfoTab() {
       </Card>
 
       <Card>
-        <CardTitle>Per Code teilen</CardTitle>
+        <CardTitle>Live-Sync per Code</CardTitle>
         <Section>
           <p>
-            Schneller als der Datei-Weg: erzeuge auf Browser A einen Code,
-            tippe ihn auf Browser B ein. Daten landen verschlüsselt auf
-            Cloudflare KV und werden nach <strong>30 Tagen automatisch
-            gelöscht</strong>.
+            Daten landen auf Cloudflare KV und werden <strong>automatisch
+            zwischen Browsern synchronisiert</strong>: Push bei jeder
+            Änderung (1,5 s Debounce), Pull beim Tab-Wechsel + alle 30 s.
+            "Last-Write-Wins" bei gleichzeitigen Edits — verschwindet nach
+            30 Tagen Inaktivität.
           </p>
         </Section>
-        <Stack $gap={10}>
-          <Stack $gap={8}>
-            <Muted style={{ fontSize: 12, fontWeight: 600 }}>
-              Daten auf diesem Browser → Code erzeugen
-            </Muted>
-            <Button onClick={generateCode} disabled={shareLoading}>
-              <Cloud size={16} />
-              {shareLoading ? "Wird hochgeladen …" : "Code erzeugen"}
-            </Button>
-            {generatedCode && (
-              <Stack $gap={6}>
-                <CodeDisplay aria-label="Geteilter Code">{generatedCode}</CodeDisplay>
-                <Row $gap={8}>
-                  <Button
-                    $variant="secondary"
-                    $size="sm"
-                    onClick={copyCode}
-                    style={{ flex: 1 }}
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? "Kopiert" : "Kopieren"}
-                  </Button>
-                </Row>
-                <Muted style={{ fontSize: 12 }}>
-                  Gültig 30 Tage. Wer den Code kennt, kann deine Daten lesen —
-                  also bitte nur an dich selbst oder Familienmitglieder weitergeben.
-                </Muted>
-              </Stack>
-            )}
-          </Stack>
-
-          <hr style={{ border: "none", borderTop: `1px solid ${colors.line}`, margin: "4px 0" }} />
-
-          <Stack $gap={8}>
-            <Muted style={{ fontSize: 12, fontWeight: 600 }}>
-              Code eintippen → Daten holen
-            </Muted>
-            <Field>
-              <FieldLabel>6-stelliger Code</FieldLabel>
-              <Input
-                value={importCode}
-                onChange={(e) =>
-                  setImportCode(e.target.value.toUpperCase().slice(0, 6))
-                }
-                placeholder="ABC234"
-                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.15em" }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") importByCode();
+        {sync.code ? (
+          <Stack $gap={10}>
+            <Note>
+              ✓ Sync aktiv mit Code <strong>{sync.code}</strong>.
+              {sync.status === "error" && sync.error && (
+                <> Fehler: {sync.error}</>
+              )}
+            </Note>
+            <Row $gap={8}>
+              <Button
+                $variant="secondary"
+                $size="sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(sync.code!);
+                    toast.show({ message: "Code kopiert", duration: 2000 });
+                  } catch {
+                    toast.show({ message: "Kopieren fehlgeschlagen", duration: 3000 });
+                  }
                 }}
-              />
-            </Field>
-            <Button
-              $variant="secondary"
-              onClick={importByCode}
-              disabled={importLoading || importCode.length !== 6}
-            >
-              <CloudDownload size={16} />
-              {importLoading ? "Wird geladen …" : "Daten holen"}
-            </Button>
+              >
+                <Copy size={14} /> Code kopieren
+              </Button>
+              <Button
+                $variant="danger"
+                $size="sm"
+                onClick={() => {
+                  if (
+                    confirm(
+                      "Sync trennen? Daten bleiben lokal erhalten, werden aber nicht mehr abgeglichen.",
+                    )
+                  ) {
+                    provider.setSyncCode(null);
+                    toast.show({ message: "Sync getrennt", duration: 3000 });
+                  }
+                }}
+              >
+                <Unlink size={14} /> Trennen
+              </Button>
+            </Row>
           </Stack>
-        </Stack>
+        ) : (
+          <Stack $gap={10}>
+            <Stack $gap={8}>
+              <Muted style={{ fontSize: 12, fontWeight: 600 }}>
+                Auf diesem Browser starten → Code erzeugen
+              </Muted>
+              <Button onClick={generateCode} disabled={shareLoading}>
+                <Cloud size={16} />
+                {shareLoading ? "Wird hochgeladen …" : "Code erzeugen"}
+              </Button>
+              {generatedCode && (
+                <Stack $gap={6}>
+                  <CodeDisplay aria-label="Geteilter Code">{generatedCode}</CodeDisplay>
+                  <Row $gap={8}>
+                    <Button
+                      $variant="secondary"
+                      $size="sm"
+                      onClick={copyCode}
+                      style={{ flex: 1 }}
+                    >
+                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                      {copied ? "Kopiert" : "Kopieren"}
+                    </Button>
+                  </Row>
+                  <Muted style={{ fontSize: 12 }}>
+                    Wer den Code kennt, kann deine Daten lesen + ändern —
+                    also nur an Familienmitglieder weitergeben.
+                  </Muted>
+                </Stack>
+              )}
+            </Stack>
+
+            <hr style={{ border: "none", borderTop: `1px solid ${colors.line}`, margin: "4px 0" }} />
+
+            <Stack $gap={8}>
+              <Muted style={{ fontSize: 12, fontWeight: 600 }}>
+                Auf anderem Browser fortsetzen → Code eintippen
+              </Muted>
+              <Field>
+                <FieldLabel>6-stelliger Code</FieldLabel>
+                <Input
+                  value={importCode}
+                  onChange={(e) =>
+                    setImportCode(e.target.value.toUpperCase().slice(0, 6))
+                  }
+                  placeholder="ABC234"
+                  style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.15em" }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") importByCode();
+                  }}
+                />
+              </Field>
+              <Button
+                $variant="secondary"
+                onClick={importByCode}
+                disabled={importLoading || importCode.length !== 6}
+              >
+                <CloudDownload size={16} />
+                {importLoading ? "Wird geladen …" : "Daten holen + Sync starten"}
+              </Button>
+            </Stack>
+          </Stack>
+        )}
       </Card>
 
       <Card>

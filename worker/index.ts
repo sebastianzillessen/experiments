@@ -42,7 +42,7 @@ export default {
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -89,7 +89,7 @@ async function handleShare(request: Request, env: Env, url: URL): Promise<Respon
     );
   }
 
-  // POST /api/packliste/share
+  // POST /api/packliste/share — neuen Code anlegen
   if (request.method === "POST" && url.pathname === PREFIX) {
     const body = await request.text();
     if (body.length === 0) return jsonResponse({ error: "Leerer Body" }, 400);
@@ -113,6 +113,40 @@ async function handleShare(request: Request, env: Env, url: URL): Promise<Respon
     }
     await env.PACKLISTE_KV.put(code, body, { expirationTtl: TTL_SECONDS });
     return jsonResponse({ code, expiresInDays: 30 }, 201);
+  }
+
+  // PUT /api/packliste/share/:code — bestehenden Code aktualisieren
+  // (für die laufende Sync — bevor PUT erlauben wir nur Updates auf
+  // existierende Codes, damit man nicht beliebige Codes "besetzen" kann)
+  const putMatch = url.pathname.match(/^\/api\/packliste\/share\/([A-Z2-9]+)$/);
+  if (request.method === "PUT" && putMatch) {
+    const code = putMatch[1];
+    if (code.length !== CODE_LENGTH) {
+      return jsonResponse({ error: "Ungültiges Code-Format" }, 400);
+    }
+    const body = await request.text();
+    if (body.length === 0) return jsonResponse({ error: "Leerer Body" }, 400);
+    if (body.length > MAX_BYTES) {
+      return jsonResponse(
+        { error: `Snapshot zu groß (max ${MAX_BYTES} Bytes)` },
+        413,
+      );
+    }
+    try {
+      JSON.parse(body);
+    } catch {
+      return jsonResponse({ error: "Ungültiges JSON" }, 400);
+    }
+    const existing = await env.PACKLISTE_KV.get(code);
+    if (existing === null) {
+      return jsonResponse(
+        { error: "Code nicht gefunden — erst per POST anlegen" },
+        404,
+      );
+    }
+    // TTL bei jedem Update verlängern (sliding window)
+    await env.PACKLISTE_KV.put(code, body, { expirationTtl: TTL_SECONDS });
+    return jsonResponse({ ok: true }, 200);
   }
 
   // GET /api/packliste/share/:code
