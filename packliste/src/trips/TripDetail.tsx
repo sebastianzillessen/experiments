@@ -89,11 +89,8 @@ const CatHead = styled.div`
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
-  padding: 6px 4px;
-  position: sticky;
-  top: 0;
-  background: ${colors.bg};
-  z-index: 5;
+  padding: 8px 4px 4px;
+  background: transparent;
 `;
 
 const PersonDot = styled.span<{ $color: string }>`
