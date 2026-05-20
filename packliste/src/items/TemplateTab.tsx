@@ -6,6 +6,7 @@ import { Button, IconButton } from "../components/ui/Button";
 import { Input, Field, FieldLabel, FieldHint } from "../components/ui/Input";
 import { Chip, Chips } from "../components/ui/Chip";
 import { Checkbox } from "../components/ui/Checkbox";
+import { NumberStepper } from "../components/ui/NumberStepper";
 import { useCurrentFamily } from "../hooks/useFamily";
 import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
@@ -239,22 +240,12 @@ export function TemplateTab() {
           <Row $gap={8}>
             <Field style={{ flex: 1 }}>
               <FieldLabel>Grundmenge</FieldLabel>
-              <Input
-                type="number"
-                min={1}
-                value={baseQuantity}
-                onChange={(e) => setBaseQuantity(Math.max(1, Number(e.target.value) || 1))}
-              />
+              <NumberStepper value={baseQuantity} onChange={setBaseQuantity} min={1} ariaLabel="Grundmenge" />
             </Field>
             {frequency === "every_n" && (
               <Field style={{ flex: 1 }}>
                 <FieldLabel>Alle X Tage</FieldLabel>
-                <Input
-                  type="number"
-                  min={1}
-                  value={perDays}
-                  onChange={(e) => setPerDays(Math.max(1, Number(e.target.value) || 1))}
-                />
+                <NumberStepper value={perDays} onChange={setPerDays} min={1} max={365} ariaLabel="Wasch-Intervall in Tagen" />
               </Field>
             )}
           </Row>

@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button";
 import { Input, Field, FieldLabel } from "../components/ui/Input";
 import { Chip, Chips } from "../components/ui/Chip";
 import { Checkbox } from "../components/ui/Checkbox";
+import { NumberStepper } from "../components/ui/NumberStepper";
 import { useCurrentFamily } from "../hooks/useFamily";
 import { useConditions } from "../hooks/useConditions";
 import { usePackingItems } from "../hooks/usePackingItems";
@@ -217,7 +218,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
               </Row>
               <Field>
                 <FieldLabel>Anzahl Tage</FieldLabel>
-                <Input type="number" min={1} value={days} onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))} />
+                <NumberStepper value={days} onChange={setDays} min={1} max={365} ariaLabel="Anzahl Tage" />
               </Field>
 
               <div>
@@ -248,12 +249,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
               {hasWasher && (
                 <Field>
                   <FieldLabel>Waschintervall (Tage)</FieldLabel>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={washInterval}
-                    onChange={(e) => setWashInterval(Math.max(1, Number(e.target.value) || 1))}
-                  />
+                  <NumberStepper value={washInterval} onChange={setWashInterval} min={1} max={30} ariaLabel="Waschintervall in Tagen" />
                 </Field>
               )}
 
