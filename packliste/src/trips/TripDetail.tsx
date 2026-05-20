@@ -240,9 +240,7 @@ export function TripDetail() {
         )}
 
         <QuickAdd
-          tripId={trip.id}
-          familyId={trip.familyId}
-          durationDays={trip.durationDays}
+          trip={trip}
           targetPersonId={
             typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
               ? filterPerson

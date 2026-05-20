@@ -1,19 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { styled } from "next-yak";
-import { Plus } from "lucide-react";
+import { Plus, Lightbulb } from "lucide-react";
 import { Card, CardTitle, Stack, Row, Muted } from "../components/ui/Layout";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
 import { useDataProvider } from "../data/DataProviderContext";
-import type { QuantityUnit } from "../types";
-import { colors } from "../theme.yak";
+import { calculateQuantity, fuzzyMatchItem } from "../data/derive";
+import type { PackingItem, QuantityUnit, Trip } from "../types";
+import { colors, radii } from "../theme.yak";
 
 interface Props {
-  tripId: string;
-  familyId: string;
-  durationDays: number;
+  trip: Trip;
   /**
    * Target person for items added here. If undefined, items are added as
    * "gemeinsam" (shared / family-wide).
@@ -68,6 +67,23 @@ const HintBox = styled.div`
   }
 `;
 
+const MatchHint = styled.button`
+  background: ${colors.primarySoft};
+  border: 1px solid ${colors.primary};
+  border-radius: ${radii.sm};
+  padding: 8px 12px;
+  font-size: 12px;
+  color: ${colors.primaryInk};
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  &:hover { filter: brightness(0.97); }
+  & strong { font-weight: 700; }
+`;
+
 const PersonDot = styled.span<{ $color: string }>`
   width: 10px;
   height: 10px;
@@ -78,7 +94,8 @@ const PersonDot = styled.span<{ $color: string }>`
   vertical-align: middle;
 `;
 
-export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Props) {
+export function QuickAdd({ trip, targetPersonId }: Props) {
+  const { id: tripId, familyId, durationDays } = trip;
   const provider = useDataProvider();
   const persons = usePersons(familyId);
   const templates = usePackingItems(familyId);
@@ -88,49 +105,89 @@ export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Pro
   const targetPerson = targetPersonId ? persons.find((p) => p.id === targetPersonId) : undefined;
   const targetLabel = targetPerson ? targetPerson.name : "Gemeinsam";
 
-  function submit() {
-    const parsed = parseLine(text, durationDays);
-    if (!parsed) return;
+  // Exact-Match (case-insensitive) — wenn der User den Namen genau so
+  // tippt wie er in der Vorlage steht, übernehmen wir das Template
+  // implizit (kein neues Duplikat anlegen).
+  const exactMatch = useMemo(() => {
+    if (!preview) return null;
+    return (
+      templates.find((t) => t.name.toLowerCase() === preview.name.toLowerCase()) ?? null
+    );
+  }, [preview, templates]);
 
-    const pid = targetPersonId;
-    // Match template by name (case-insensitive); same person must be in personIds,
-    // or both must be shared (no specific person).
-    const matched = templates.find((t) => {
-      if (t.name.toLowerCase() !== parsed.name.toLowerCase()) return false;
-      if (!pid) return t.personIds.length === 0;
-      return t.personIds.includes(pid);
+  // Fuzzy-Match falls kein Exact — zeigen wir als anklickbaren Hint
+  const fuzzyMatch = useMemo(() => {
+    if (!preview || exactMatch) return null;
+    return fuzzyMatchItem(preview.name, templates);
+  }, [preview, exactMatch, templates]);
+
+  function addWithTemplate(tpl: PackingItem, parsed: Parsed | null) {
+    // Eigene-Mengen-Eingabe (User hat ", N" geschrieben) überschreibt
+    // die Template-Einstellungen; sonst übernimmt das Template seine
+    // baseQuantity / unit / perDays.
+    const userOverrodeQty = parsed?.qty != null;
+    const baseQty = userOverrodeQty ? parsed!.baseQty : tpl.baseQuantity;
+    const unit = userOverrodeQty ? parsed!.unit : tpl.unit;
+    const perDays = userOverrodeQty ? undefined : tpl.perDays;
+    const totalQty = calculateQuantity(
+      { baseQuantity: baseQty, unit, washable: tpl.washable, perDays },
+      trip,
+    );
+    provider.addAdhocTripItem({
+      tripId,
+      familyId,
+      personId: targetPersonId,
+      name: tpl.name,
+      category: tpl.category,
+      baseQuantity: baseQty,
+      unit,
+      perDays,
+      washable: tpl.washable,
+      quantity: totalQty,
+      sortOrder: 9999,
     });
+    setText("");
+  }
 
-    // Add to template if not present (so future trips benefit)
-    if (!matched) {
-      provider.createPackingItem({
-        familyId,
-        personIds: pid ? [pid] : [],
-        name: parsed.name,
-        category: "",
-        baseQuantity: parsed.baseQty,
-        unit: parsed.unit,
-        washable: false,
-        conditions: [],
-        sortOrder: templates.length,
-      });
-    }
-
-    // Add to this trip
+  function addNewSonderbedarf(parsed: Parsed) {
+    const pid = targetPersonId;
+    // Neues Template anlegen: ohne Kategorie, ohne Bedingungen
+    // (= Sonderbedarf — nur dieser Trip)
+    provider.createPackingItem({
+      familyId,
+      personIds: pid ? [pid] : [],
+      name: parsed.name,
+      category: "",
+      baseQuantity: parsed.baseQty,
+      unit: parsed.unit,
+      washable: false,
+      conditions: [],
+      sortOrder: templates.length,
+    });
+    // … und für den aktuellen Trip
     provider.addAdhocTripItem({
       tripId,
       familyId,
       personId: pid,
       name: parsed.name,
-      category: matched?.category ?? "",
+      category: "",
       baseQuantity: parsed.baseQty,
       unit: parsed.unit,
-      washable: matched?.washable ?? false,
+      washable: false,
       quantity: parsed.totalQty,
       sortOrder: 9999,
     });
-
     setText("");
+  }
+
+  function submit() {
+    const parsed = parseLine(text, durationDays);
+    if (!parsed) return;
+    if (exactMatch) {
+      addWithTemplate(exactMatch, parsed);
+    } else {
+      addNewSonderbedarf(parsed);
+    }
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -139,14 +196,6 @@ export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Pro
       submit();
     }
   }
-
-  const isNewInTemplate =
-    preview &&
-    !templates.some((t) => {
-      if (t.name.toLowerCase() !== preview.name.toLowerCase()) return false;
-      if (!targetPersonId) return t.personIds.length === 0;
-      return t.personIds.includes(targetPersonId);
-    });
 
   return (
     <Card>
@@ -171,22 +220,41 @@ export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Pro
             <Plus size={16} />
           </Button>
         </Row>
+
+        {fuzzyMatch && preview && (
+          <MatchHint type="button" onClick={() => addWithTemplate(fuzzyMatch, preview)}>
+            <Lightbulb size={14} />
+            <span>
+              Aus Vorlage übernehmen: <strong>{fuzzyMatch.name}</strong>
+              {fuzzyMatch.category && (
+                <Muted style={{ marginLeft: 6 }}>· {fuzzyMatch.category}</Muted>
+              )}
+            </span>
+          </MatchHint>
+        )}
+
         {preview ? (
           <HintBox>
             <strong>{preview.name}</strong> ·{" "}
             {preview.unit === "per_day"
               ? `${preview.baseQty} pro Tag = ${preview.totalQty} Stück bei ${durationDays} Tagen`
               : `${preview.totalQty} Stück (pro Trip)`}
-            {isNewInTemplate && (
+            {exactMatch ? (
               <>
                 {" · "}
-                <em>landet auch in der Vorlage</em>
+                <em>aus Vorlage</em>
               </>
-            )}
+            ) : !fuzzyMatch ? (
+              <>
+                {" · "}
+                <em>neu — landet als Sonderbedarf in der Vorlage</em>
+              </>
+            ) : null}
           </HintBox>
         ) : (
           <Muted>
-            Enter zum Hinzufügen. Komma + Zahl für die Menge (z.B. "Socken, 7"). Items landen automatisch auch in der Vorlage.
+            Enter zum Hinzufügen. Komma + Zahl für die Menge (z.B. "Socken, 7").
+            Ähnliche Items aus der Vorlage werden vorgeschlagen.
           </Muted>
         )}
       </Stack>

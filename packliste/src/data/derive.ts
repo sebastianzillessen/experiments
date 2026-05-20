@@ -98,33 +98,57 @@ function normalize(s: string): string {
 }
 
 /**
- * Findet die ähnlichste Kategorie aus `candidates`, falls eine deutlich
- * näher als die andere liegt und eine Toleranzgrenze einhält.
- * Liefert null, wenn der Input exakt einem Kandidaten entspricht
- * (kein Vorschlag nötig) oder wenn keine Übereinstimmung gefunden wird.
+ * Findet den ähnlichsten Eintrag aus `candidates` für `input`. Liefert
+ * null wenn nichts ausreichend ähnlich ist oder bei Exact-Match
+ * (kein Vorschlag nötig — der User hat den Namen schon richtig getippt).
+ *
+ * Bonus-Logik:
+ * - Prefix-Überlappung (Plural/Singular wie "Kleidung"/"Kleider"): -2
+ * - Substring-Treffer ("Hose" in "Lange Hose"): -3
+ * Toleranz: ceil(maxLen/3), mindestens 2 Distanzpunkte.
  */
-export function fuzzyMatchCategory(input: string, candidates: string[]): string | null {
+function fuzzyMatchByKey<T>(
+  input: string,
+  items: T[],
+  getKey: (t: T) => string,
+): T | null {
   const target = normalize(input);
   if (!target) return null;
-  for (const c of candidates) {
-    if (normalize(c) === target) return null; // exact match
+  for (const it of items) {
+    if (normalize(getKey(it)) === target) return null; // Exact-Match, kein Vorschlag
   }
-  let best: { name: string; score: number } | null = null;
-  for (const c of candidates) {
-    const cnorm = normalize(c);
+  let best: { item: T; score: number } | null = null;
+  for (const it of items) {
+    const cnorm = normalize(getKey(it));
+    if (!cnorm) continue;
     let d = levenshtein(target, cnorm);
-    // Bonus für Prefix-Überlappung (Plural-Varianten "Kleidung" / "Kleider")
     if (cnorm.startsWith(target) || target.startsWith(cnorm)) {
       d = Math.max(0, d - 2);
+    } else if (cnorm.includes(target) || target.includes(cnorm)) {
+      d = Math.max(0, d - 3);
     }
-    if (!best || d < best.score) best = { name: c, score: d };
+    if (!best || d < best.score) best = { item: it, score: d };
   }
   if (!best) return null;
-  const maxLen = Math.max(target.length, normalize(best.name).length);
-  // Toleranz: ceil(maxLen / 3), mind. 2. So matched "Klidung"~"Kleidung"
-  // (d=1, t=3), "Kleider"~"Kleidung" (d=3 mit Prefix-Bonus → 1, t=3).
+  const maxLen = Math.max(target.length, normalize(getKey(best.item)).length);
   const threshold = Math.max(2, Math.ceil(maxLen / 3));
-  return best.score <= threshold ? best.name : null;
+  return best.score <= threshold ? best.item : null;
+}
+
+export function fuzzyMatchCategory(input: string, candidates: string[]): string | null {
+  return fuzzyMatchByKey(input, candidates, (c) => c);
+}
+
+/**
+ * Findet ein bestehendes Template-Item, das namentlich ähnlich genug zum
+ * Input ist. Nutzt fuzzyMatchByKey unter der Haube — gleiche Toleranz,
+ * gleiche Prefix/Substring-Boni.
+ */
+export function fuzzyMatchItem<T extends { name: string }>(
+  input: string,
+  items: T[],
+): T | null {
+  return fuzzyMatchByKey(input, items, (i) => i.name);
 }
 
 export function matchKey(
