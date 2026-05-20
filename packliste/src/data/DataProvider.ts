@@ -61,6 +61,8 @@ export interface DataProvider {
   deleteCategory(id: string): void;
   /** Reordert eine Kategorie um eine Position. */
   moveCategory(id: string, direction: "up" | "down"): void;
+  /** Bulk-Reorder für Kategorien. */
+  reorderCategories(familyId: string, orderedIds: string[]): void;
 
   // Conditions
   listConditions(familyId: string): Condition[];
@@ -73,6 +75,8 @@ export interface DataProvider {
   updatePackingItem(id: string, patch: Partial<Omit<PackingItem, "id" | "familyId">>): void;
   deletePackingItem(id: string): void;
   movePackingItem(id: string, direction: "up" | "down"): void;
+  /** Bulk-Reorder: setzt sortOrder anhand der gegebenen ID-Reihenfolge. */
+  reorderPackingItems(familyId: string, orderedIds: string[]): void;
 
   // Trips
   listTrips(familyId: string): Trip[];

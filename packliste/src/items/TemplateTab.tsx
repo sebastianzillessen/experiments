@@ -16,6 +16,7 @@ import { ItemForm, type ItemFormValues } from "./ItemForm";
 import { EditItemModal } from "./EditItemModal";
 import { EditCategoryModal } from "./EditCategoryModal";
 import { InitialsBadge } from "../components/InitialsBadge";
+import { SortableList } from "../components/SortableList";
 
 const ItemCard = styled.div`
   display: flex;
@@ -149,32 +150,22 @@ export function TemplateTab() {
               <Muted style={{ fontSize: 12 }}>
                 Neue Kategorien werden beim Anlegen eines Items automatisch ergänzt.
                 Hier kannst du Icon und Namen ändern oder die Kategorie löschen.
+                Reihenfolge per Drag-Handle.
               </Muted>
-              {familyCategories.map((c, idx) => (
-                <CategoryRow key={c.id}>
-                  <span style={{ fontSize: 20 }}>{c.icon || categoryIcon(c.name)}</span>
-                  <span style={{ flex: 1, fontWeight: 500 }}>{c.name}</span>
-                  <Row $gap={2}>
-                    <IconButton
-                      aria-label="Hoch"
-                      onClick={() => provider.moveCategory(c.id, "up")}
-                      disabled={idx === 0}
-                    >
-                      <ChevronUp size={14} />
-                    </IconButton>
-                    <IconButton
-                      aria-label="Runter"
-                      onClick={() => provider.moveCategory(c.id, "down")}
-                      disabled={idx === familyCategories.length - 1}
-                    >
-                      <ChevronDown size={14} />
-                    </IconButton>
+              <SortableList
+                items={familyCategories}
+                onReorder={(orderedIds) => provider.reorderCategories(family.id, orderedIds)}
+                renderItem={(c, handle) => (
+                  <CategoryRow>
+                    {handle}
+                    <span style={{ fontSize: 20 }}>{c.icon || categoryIcon(c.name)}</span>
+                    <span style={{ flex: 1, fontWeight: 500 }}>{c.name}</span>
                     <IconButton aria-label="Bearbeiten" onClick={() => setEditingCategory(c)}>
                       <Pencil size={14} />
                     </IconButton>
-                  </Row>
-                </CategoryRow>
-              ))}
+                  </CategoryRow>
+                )}
+              />
             </Stack>
           )}
         </Card>
@@ -191,14 +182,35 @@ export function TemplateTab() {
               <span style={{ marginRight: 4 }}>{iconFor(cat)}</span>
               {cat} · {list.length} {list.length === 1 ? "Item" : "Items"}
             </SectionLabel>
-            <Stack $gap={6}>
-              {list.map((it, idx) => {
+            <SortableList
+              items={list}
+              onReorder={(orderedIds) => {
+                // Reorder nur innerhalb der Kategorie: die globalen
+                // sortOrder-Slots der Kategorie behalten, aber die Items
+                // darin nach neuer Reihenfolge setzen.
+                const idSet = new Set(orderedIds);
+                const positions: number[] = [];
+                items.forEach((it, idx) => {
+                  if (idSet.has(it.id)) positions.push(idx);
+                });
+                const newGlobal = [...items];
+                orderedIds.forEach((id, i) => {
+                  const it = items.find((x) => x.id === id);
+                  if (it) newGlobal[positions[i]] = it;
+                });
+                provider.reorderPackingItems(
+                  family!.id,
+                  newGlobal.map((it) => it.id),
+                );
+              }}
+              renderItem={(it, handle) => {
                 const assignedPersons = it.personIds
                   .map((pid) => persons.find((p) => p.id === pid))
                   .filter((p): p is NonNullable<typeof p> => Boolean(p));
                 const isShared = assignedPersons.length === 0;
                 return (
-                  <ItemCard key={it.id}>
+                  <ItemCard>
+                    {handle}
                     <BadgeColumn>
                       <Badge $tone={it.unit === "per_day" ? "accent" : "primary"}>
                         {it.unit === "per_trip"
@@ -235,22 +247,19 @@ export function TemplateTab() {
                       <IconButton aria-label="Bearbeiten" onClick={() => setEditingItem(it)}>
                         <Pencil size={14} />
                       </IconButton>
-                      <IconButton aria-label="Hoch" onClick={() => provider.movePackingItem(it.id, "up")} disabled={idx === 0}>
-                        <ChevronUp size={14} />
-                      </IconButton>
-                      <IconButton aria-label="Runter" onClick={() => provider.movePackingItem(it.id, "down")} disabled={idx === list.length - 1}>
-                        <ChevronDown size={14} />
-                      </IconButton>
-                      <IconButton aria-label="Löschen" onClick={() => {
-                        if (confirm(`"${it.name}" aus der Vorlage löschen?`)) provider.deletePackingItem(it.id);
-                      }}>
+                      <IconButton
+                        aria-label="Löschen"
+                        onClick={() => {
+                          if (confirm(`"${it.name}" aus der Vorlage löschen?`)) provider.deletePackingItem(it.id);
+                        }}
+                      >
                         <Trash2 size={14} />
                       </IconButton>
                     </Row>
                   </ItemCard>
                 );
-              })}
-            </Stack>
+              }}
+            />
           </div>
         ))
       )}

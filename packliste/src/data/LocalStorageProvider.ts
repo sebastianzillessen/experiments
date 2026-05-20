@@ -436,6 +436,17 @@ export class LocalStorageProvider implements DataProvider {
     }
   }
 
+  reorderPackingItems(familyId: string, orderedIds: string[]): void {
+    const list = read<PackingItem[]>(K.items(familyId), []).map(normalizePackingItem);
+    const order = new Map(orderedIds.map((id, i) => [id, i]));
+    for (const it of list) {
+      const o = order.get(it.id);
+      if (o !== undefined) it.sortOrder = o;
+    }
+    write(K.items(familyId), list);
+    this.notify();
+  }
+
   // ---------- Trips ----------
   listTrips(familyId: string): Trip[] {
     const all = read<Trip[]>(K.trips(familyId), []);
@@ -878,6 +889,17 @@ export class LocalStorageProvider implements DataProvider {
       this.notify();
       return;
     }
+  }
+
+  reorderCategories(familyId: string, orderedIds: string[]): void {
+    const list = read<Category[]>(K.categories(familyId), []);
+    const order = new Map(orderedIds.map((id, i) => [id, i]));
+    for (const c of list) {
+      const o = order.get(c.id);
+      if (o !== undefined) c.sortOrder = o;
+    }
+    write(K.categories(familyId), list);
+    this.notify();
   }
 
   // ---------- Sync ----------
