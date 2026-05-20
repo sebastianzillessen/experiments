@@ -156,6 +156,28 @@ const ProgressFrac = styled.span`
   font-variant-numeric: tabular-nums;
 `;
 
+const SortToggle = styled.div`
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid ${colors.line};
+  border-radius: ${radii.sm};
+  overflow: hidden;
+  background: ${colors.surface};
+  margin-bottom: -4px;
+`;
+
+const SortBtn = styled.button<{ $active: boolean }>`
+  padding: 6px 10px;
+  border: none;
+  background: ${({ $active }) => ($active ? colors.primarySoft : "transparent")};
+  color: ${({ $active }) => ($active ? colors.primaryInk : colors.ink2)};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover { background: ${({ $active }) => ($active ? colors.primarySoft : colors.surface2)}; }
+  & + & { border-left: 1px solid ${colors.line}; }
+`;
+
 function formatDateRange(t: ReturnType<typeof useTrip>) {
   if (!t) return "";
   if (t.startDate && t.endDate) {
@@ -178,6 +200,7 @@ export function TripDetail() {
   const familyCategories = useCategories(trip?.familyId);
   const user = useCurrentUser();
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
+  const [sortMode, setSortMode] = useState<"default" | "open-first">("open-first");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const toast = useToast();
 
@@ -238,19 +261,89 @@ export function TripDetail() {
     return { packed, total, ratio, done: total > 0 && packed >= total };
   }
 
-  const byCategory = new Map<string, TripItem[]>();
-  for (const it of visibleItems) {
-    const cat = it.category || "Sonstiges";
-    if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat)!.push(it);
+  function groupByCategory(list: TripItem[]): [string, TripItem[]][] {
+    const m = new Map<string, TripItem[]>();
+    for (const it of list) {
+      const cat = it.category || "Sonstiges";
+      if (!m.has(cat)) m.set(cat, []);
+      m.get(cat)!.push(it);
+    }
+    return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
   }
-  const sortedCats = Array.from(byCategory.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
+
+  // Standard-Modus: alle Items zusammen nach Kategorie gruppiert.
+  // Open-First-Modus: offene oben (nach Kategorie), abgehakte unten in
+  // einer eingeklappten "Erledigt"-Sektion (auch nach Kategorie).
+  const openItems = visibleItems.filter((i) => !i.isPacked);
+  const doneItems = visibleItems.filter((i) => i.isPacked);
+  const sortedCats = groupByCategory(visibleItems);
+  const sortedOpenCats = groupByCategory(openItems);
+  const sortedDoneCats = groupByCategory(doneItems);
 
 
   function memberName(userId?: string): string | undefined {
     if (!userId) return undefined;
     const members = provider.listMembers(trip!.familyId);
     return members.find((m) => m.userId === userId)?.fullName;
+  }
+
+  /** Rendert eine Liste von Kategorie-Gruppen mit ihren TripItems. */
+  function renderCategorySections(entries: [string, TripItem[]][]) {
+    return entries.map(([cat, list]) => {
+      const cTotal = list.reduce((s, i) => s + i.quantity, 0);
+      const cPacked = list.reduce((s, i) => s + i.packedQty, 0);
+      return (
+        <div key={cat}>
+          <CatHead>
+            <span>{cat} · {list.length} {list.length === 1 ? "Item" : "Items"}</span>
+            <span>{cPacked}/{cTotal}</span>
+          </CatHead>
+          <Stack $gap={6}>
+            {list.map((it) => {
+              const lastBy = memberName(it.lastPackedBy);
+              const p = persons.find((pp) => pp.id === it.personId);
+              return (
+                <SwipeRow key={it.id} onDelete={() => deleteWithUndo(it)}>
+                  <ItemRow $packed={it.isPacked}>
+                    <QtyStepper
+                      packed={it.packedQty}
+                      total={it.quantity}
+                      onChange={(n) => provider.setTripItemPacked(it.id, n)}
+                    />
+                    <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
+                      <Row $gap={6}>
+                        <CategoryChip
+                          icon={
+                            familyCategories.find(
+                              (c) => c.name.toLowerCase() === it.category.toLowerCase(),
+                            )?.icon || categoryIcon(it.category)
+                          }
+                          label={it.category || "Sonstiges"}
+                        />
+                        <ItemName $packed={it.isPacked}>{it.name}</ItemName>
+                      </Row>
+                      {lastBy && it.isPacked && (
+                        <Muted style={{ fontSize: 11 }}>abgehakt von {lastBy}</Muted>
+                      )}
+                    </Stack>
+                    {p && <InitialsBadge person={p} />}
+                    <DesktopOnly>
+                      <IconButton
+                        aria-label={`"${it.name}" von diesem Trip entfernen`}
+                        title="Von diesem Trip entfernen"
+                        onClick={() => deleteWithUndo(it)}
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </DesktopOnly>
+                  </ItemRow>
+                </SwipeRow>
+              );
+            })}
+          </Stack>
+        </div>
+      );
+    });
   }
 
   return (
@@ -384,57 +477,60 @@ export function TripDetail() {
           </Card>
         )}
 
-        {sortedCats.map(([cat, list]) => {
-          const cTotal = list.reduce((s, i) => s + i.quantity, 0);
-          const cPacked = list.reduce((s, i) => s + i.packedQty, 0);
-          return (
-            <div key={cat}>
-              <CatHead>
-                <span>{cat} · {list.length} {list.length === 1 ? "Item" : "Items"}</span>
-                <span>{cPacked}/{cTotal}</span>
-              </CatHead>
-              <Stack $gap={6}>
-                {list.map((it) => {
-                  const lastBy = memberName(it.lastPackedBy);
-                  const p = persons.find((pp) => pp.id === it.personId);
-                  return (
-                    <SwipeRow key={it.id} onDelete={() => deleteWithUndo(it)}>
-                      <ItemRow $packed={it.isPacked}>
-                        <QtyStepper packed={it.packedQty} total={it.quantity} onChange={(n) => provider.setTripItemPacked(it.id, n)} />
-                        <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
-                          <Row $gap={6}>
-                            <CategoryChip
-                              icon={
-                                familyCategories.find(
-                                  (c) => c.name.toLowerCase() === it.category.toLowerCase(),
-                                )?.icon || categoryIcon(it.category)
-                              }
-                              label={it.category || "Sonstiges"}
-                            />
-                            <ItemName $packed={it.isPacked}>{it.name}</ItemName>
-                          </Row>
-                          {lastBy && it.isPacked && (
-                            <Muted style={{ fontSize: 11 }}>abgehakt von {lastBy}</Muted>
-                          )}
-                        </Stack>
-                        {p && <InitialsBadge person={p} />}
-                        <DesktopOnly>
-                          <IconButton
-                            aria-label={`"${it.name}" von diesem Trip entfernen`}
-                            title="Von diesem Trip entfernen"
-                            onClick={() => deleteWithUndo(it)}
-                          >
-                            <Trash2 size={14} />
-                          </IconButton>
-                        </DesktopOnly>
-                      </ItemRow>
-                    </SwipeRow>
-                  );
-                })}
-              </Stack>
-            </div>
-          );
-        })}
+        <SortToggle>
+          <SortBtn type="button" $active={sortMode === "open-first"} onClick={() => setSortMode("open-first")}>
+            Offene zuerst
+          </SortBtn>
+          <SortBtn type="button" $active={sortMode === "default"} onClick={() => setSortMode("default")}>
+            Nach Kategorie
+          </SortBtn>
+        </SortToggle>
+
+        {sortMode === "default" && renderCategorySections(sortedCats)}
+
+        {sortMode === "open-first" && (
+          <>
+            {renderCategorySections(sortedOpenCats)}
+            {doneItems.length > 0 && (
+              <details
+                open
+                style={{
+                  background: colors.surface,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: radii.sm,
+                  padding: "4px 0",
+                }}
+              >
+                <summary
+                  style={{
+                    padding: "8px 14px",
+                    cursor: "pointer",
+                    color: colors.ink2,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    listStyle: "revert",
+                  }}
+                >
+                  ✓ Erledigt · {doneItems.length} {doneItems.length === 1 ? "Item" : "Items"}
+                </summary>
+                <div style={{ padding: "0 4px 6px" }}>
+                  {renderCategorySections(sortedDoneCats)}
+                </div>
+              </details>
+            )}
+            {openItems.length === 0 && doneItems.length > 0 && (
+              <Card>
+                <Stack $gap={6} $align="center">
+                  <div style={{ fontSize: 28 }}>🎉</div>
+                  <strong>Alles gepackt!</strong>
+                  <Muted style={{ textAlign: "center" }}>
+                    Bleibt nur noch, die Reise zu genießen.
+                  </Muted>
+                </Stack>
+              </Card>
+            )}
+          </>
+        )}
 
         <Divider />
         <Button $variant="secondary" $block onClick={() => {
