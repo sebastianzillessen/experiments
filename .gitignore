@@ -7,3 +7,9 @@ dist/
 packliste/.swc/
 *.tsbuildinfo
 .claude/
+
+# Playwright
+packliste/test-results/
+packliste/playwright-report/
+packliste/blob-report/
+packliste/playwright/.cache/
