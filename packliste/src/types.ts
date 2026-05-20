@@ -39,7 +39,12 @@ export interface Condition {
 export interface PackingItem {
   id: string;
   familyId: string;
-  personId?: string;
+  /**
+   * Liste der Personen, denen das Item zugewiesen ist. Leeres Array =
+   * gemeinsam/familien-weit. Beim Trip-Anlegen wird das Item für jede
+   * eingetragene Person zu einer eigenen TripItem-Row expandiert (1:N).
+   */
+  personIds: string[];
   name: string;
   category: string;
   baseQuantity: number;

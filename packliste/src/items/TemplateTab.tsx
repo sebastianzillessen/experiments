@@ -129,23 +129,19 @@ export function TemplateTab() {
     const trimmedCategory = category.trim();
     const fuzzy = trimmedCategory ? fuzzyMatchCategory(trimmedCategory, categories) : null;
     const finalCategory = fuzzy ?? trimmedCategory;
-    // No persons selected → 1 shared item.
-    // N persons selected → N items, one per person.
-    const targets: (string | undefined)[] =
-      selectedPersonIds.length === 0 ? [undefined] : selectedPersonIds;
-    targets.forEach((pid, idx) => {
-      provider.createPackingItem({
-        familyId: family!.id,
-        personId: pid,
-        name: name.trim(),
-        category: finalCategory,
-        baseQuantity: Math.max(1, baseQuantity),
-        unit: resolvedUnit,
-        perDays: resolvedPerDays,
-        washable,
-        conditions: [...activeConds],
-        sortOrder: items.length + idx,
-      });
+    // Ein einzelnes Template-Item mit N Personen (1:N). Beim Trip-Anlegen
+    // wird daraus pro Person eine TripItem-Row expandiert.
+    provider.createPackingItem({
+      familyId: family!.id,
+      personIds: [...selectedPersonIds],
+      name: name.trim(),
+      category: finalCategory,
+      baseQuantity: Math.max(1, baseQuantity),
+      unit: resolvedUnit,
+      perDays: resolvedPerDays,
+      washable,
+      conditions: [...activeConds],
+      sortOrder: items.length,
     });
     setName("");
     setBaseQuantity(1);
@@ -336,7 +332,10 @@ export function TemplateTab() {
             <SectionLabel>{cat} · {list.length} {list.length === 1 ? "Item" : "Items"}</SectionLabel>
             <Stack $gap={6}>
               {list.map((it, idx) => {
-                const person = persons.find((p) => p.id === it.personId);
+                const assignedPersons = it.personIds
+                  .map((pid) => persons.find((p) => p.id === pid))
+                  .filter((p): p is NonNullable<typeof p> => Boolean(p));
+                const isShared = assignedPersons.length === 0;
                 return (
                   <ItemCard key={it.id}>
                     <Badge $tone={it.unit === "per_day" ? "accent" : "primary"}>
@@ -353,7 +352,20 @@ export function TemplateTab() {
                         <Muted>×{it.baseQuantity}</Muted>
                       </Row>
                       <ConditionsLine>
-                        {person ? <span><PersonDot $color={person.color ?? colors.ink3} /> {person.name}</span> : <span>Gemeinsam</span>}
+                        {isShared ? (
+                          <span>Gemeinsam</span>
+                        ) : assignedPersons.length === persons.length ? (
+                          <span>Alle Personen</span>
+                        ) : (
+                          <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                            {assignedPersons.map((p) => (
+                              <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                <PersonDot $color={p.color ?? colors.ink3} />
+                                {p.name}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                         {it.conditions.length > 0 && (
                           <span>· {it.conditions.map((c) => `${conditionEmoji(c)} ${conditionLabel(c, conditions)}`).join(", ")}</span>
                         )}

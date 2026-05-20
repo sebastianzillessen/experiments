@@ -93,17 +93,19 @@ export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Pro
     if (!parsed) return;
 
     const pid = targetPersonId;
-    const matched = templates.find(
-      (t) =>
-        t.name.toLowerCase() === parsed.name.toLowerCase() &&
-        (t.personId ?? "") === (pid ?? ""),
-    );
+    // Match template by name (case-insensitive); same person must be in personIds,
+    // or both must be shared (no specific person).
+    const matched = templates.find((t) => {
+      if (t.name.toLowerCase() !== parsed.name.toLowerCase()) return false;
+      if (!pid) return t.personIds.length === 0;
+      return t.personIds.includes(pid);
+    });
 
     // Add to template if not present (so future trips benefit)
     if (!matched) {
       provider.createPackingItem({
         familyId,
-        personId: pid,
+        personIds: pid ? [pid] : [],
         name: parsed.name,
         category: "",
         baseQuantity: parsed.baseQty,
@@ -140,11 +142,11 @@ export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Pro
 
   const isNewInTemplate =
     preview &&
-    !templates.some(
-      (t) =>
-        t.name.toLowerCase() === preview.name.toLowerCase() &&
-        (t.personId ?? "") === (targetPersonId ?? ""),
-    );
+    !templates.some((t) => {
+      if (t.name.toLowerCase() !== preview.name.toLowerCase()) return false;
+      if (!targetPersonId) return t.personIds.length === 0;
+      return t.personIds.includes(targetPersonId);
+    });
 
   return (
     <Card>

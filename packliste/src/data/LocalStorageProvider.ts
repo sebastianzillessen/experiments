@@ -53,6 +53,18 @@ function sortByOrder<T extends { sortOrder: number; name?: string }>(items: T[])
   });
 }
 
+/**
+ * Lazy-migration: alte PackingItems mit `personId?: string` zu neuem
+ * `personIds: string[]`-Schema konvertieren. Schreibt nicht zurück;
+ * Mutationen tun das beim nächsten Write von alleine.
+ */
+function normalizePackingItem(raw: unknown): PackingItem {
+  const { personId, personIds, ...rest } = raw as PackingItem & { personId?: string };
+  if (Array.isArray(personIds)) return { ...rest, personIds } as PackingItem;
+  const migrated = personId ? [personId] : [];
+  return { ...rest, personIds: migrated } as PackingItem;
+}
+
 export class LocalStorageProvider implements DataProvider {
   private listeners = new Set<() => void>();
 
@@ -168,7 +180,7 @@ export class LocalStorageProvider implements DataProvider {
     const items: PackingItem[] = seedItems.map((s, i) => ({
       id: uuid(),
       familyId: family.id,
-      personId: undefined,
+      personIds: [],
       ...s,
       sortOrder: i,
     }));
@@ -242,12 +254,12 @@ export class LocalStorageProvider implements DataProvider {
       if (idx < 0) continue;
       list.splice(idx, 1);
       write(K.persons(f.id), list);
-      // unset personId on packing_items + trip_items in this family
-      const items = read<PackingItem[]>(K.items(f.id), []);
+      // remove person from packing_items.personIds and trip_items.personId
+      const items = read<PackingItem[]>(K.items(f.id), []).map(normalizePackingItem);
       let changed = false;
       for (const it of items) {
-        if (it.personId === id) {
-          it.personId = undefined;
+        if (it.personIds.includes(id)) {
+          it.personIds = it.personIds.filter((pid) => pid !== id);
           changed = true;
         }
       }
@@ -298,7 +310,7 @@ export class LocalStorageProvider implements DataProvider {
     list.splice(idx, 1);
     write(K.conditions(familyId), list);
     // remove from items and trips referencing it
-    const items = read<PackingItem[]>(K.items(familyId), []);
+    const items = read<PackingItem[]>(K.items(familyId), []).map(normalizePackingItem);
     let changed = false;
     for (const it of items) {
       if (it.conditions.includes(key)) {
@@ -321,14 +333,19 @@ export class LocalStorageProvider implements DataProvider {
 
   // ---------- Packing items (templates) ----------
   listPackingItems(familyId: string): PackingItem[] {
-    return sortByOrder(read<PackingItem[]>(K.items(familyId), []));
+    return sortByOrder(read<PackingItem[]>(K.items(familyId), []).map(normalizePackingItem));
   }
 
   createPackingItem(item: Omit<PackingItem, "id">): string {
-    const list = read<PackingItem[]>(K.items(item.familyId), []);
+    const list = read<PackingItem[]>(K.items(item.familyId), []).map(normalizePackingItem);
     const sortOrder =
       item.sortOrder ?? list.reduce((m, i) => Math.max(m, i.sortOrder), -1) + 1;
-    const next: PackingItem = { ...item, id: uuid(), sortOrder };
+    const next: PackingItem = {
+      ...item,
+      id: uuid(),
+      sortOrder,
+      personIds: item.personIds ?? [],
+    };
     list.push(next);
     write(K.items(item.familyId), list);
     this.notify();
@@ -338,7 +355,7 @@ export class LocalStorageProvider implements DataProvider {
   updatePackingItem(id: string, patch: Partial<Omit<PackingItem, "id" | "familyId">>): void {
     const families = read<Family[]>(K.families, []);
     for (const f of families) {
-      const list = read<PackingItem[]>(K.items(f.id), []);
+      const list = read<PackingItem[]>(K.items(f.id), []).map(normalizePackingItem);
       const idx = list.findIndex((i) => i.id === id);
       if (idx < 0) continue;
       list[idx] = { ...list[idx], ...patch };
@@ -351,7 +368,7 @@ export class LocalStorageProvider implements DataProvider {
   deletePackingItem(id: string): void {
     const families = read<Family[]>(K.families, []);
     for (const f of families) {
-      const list = read<PackingItem[]>(K.items(f.id), []);
+      const list = read<PackingItem[]>(K.items(f.id), []).map(normalizePackingItem);
       const idx = list.findIndex((i) => i.id === id);
       if (idx < 0) continue;
       list.splice(idx, 1);
@@ -364,7 +381,7 @@ export class LocalStorageProvider implements DataProvider {
   movePackingItem(id: string, direction: "up" | "down"): void {
     const families = read<Family[]>(K.families, []);
     for (const f of families) {
-      const list = sortByOrder(read<PackingItem[]>(K.items(f.id), []));
+      const list = sortByOrder(read<PackingItem[]>(K.items(f.id), []).map(normalizePackingItem));
       const idx = list.findIndex((i) => i.id === id);
       if (idx < 0) continue;
       const swapWith = direction === "up" ? idx - 1 : idx + 1;
@@ -424,7 +441,7 @@ export class LocalStorageProvider implements DataProvider {
     write(K.trips(params.familyId), trips);
 
     // Seed trip items from templates
-    const templates = read<PackingItem[]>(K.items(params.familyId), []);
+    const templates = read<PackingItem[]>(K.items(params.familyId), []).map(normalizePackingItem);
     const seeds = generateTripItems(templates, trip);
     const items: TripItem[] = seeds.map((s) => ({
       ...s,
@@ -648,7 +665,7 @@ export class LocalStorageProvider implements DataProvider {
   mergeTemplatesIntoTrip(tripId: string): number {
     const trip = this.getTrip(tripId);
     if (!trip) return 0;
-    const templates = read<PackingItem[]>(K.items(trip.familyId), []);
+    const templates = read<PackingItem[]>(K.items(trip.familyId), []).map(normalizePackingItem);
     const existing = read<TripItem[]>(K.tripItems(tripId), []);
     const existingKeys = new Set(existing.map(matchKey));
     const seeds = generateTripItems(templates, trip).filter(
@@ -669,7 +686,7 @@ export class LocalStorageProvider implements DataProvider {
   rebuildTripItemsFromTemplates(tripId: string): void {
     const trip = this.getTrip(tripId);
     if (!trip) return;
-    const templates = read<PackingItem[]>(K.items(trip.familyId), []);
+    const templates = read<PackingItem[]>(K.items(trip.familyId), []).map(normalizePackingItem);
     const seeds = generateTripItems(templates, trip);
     const items: TripItem[] = seeds.map((s) => ({
       ...s,

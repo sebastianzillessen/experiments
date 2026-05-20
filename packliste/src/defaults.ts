@@ -11,7 +11,7 @@ export const DEFAULT_CONDITION_KEYS = [
   "flight",
 ] as const;
 
-type SeedItem = Omit<PackingItem, "id" | "familyId" | "personId" | "sortOrder">;
+type SeedItem = Omit<PackingItem, "id" | "familyId" | "personIds" | "sortOrder">;
 
 const beachItems: SeedItem[] = [
   { name: "Sonnencreme", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["sun", "bathing"] },

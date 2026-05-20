@@ -32,22 +32,33 @@ export function generateTripItems(
   trip: Trip,
   excludeKeys?: Set<string>,
 ): TripItemSeed[] {
-  return templates
-    .filter((item) => isItemRelevantForTrip(item, trip))
-    .filter((item) => !excludeKeys || !excludeKeys.has(matchKey(item)))
-    .map((item) => ({
-      tripId: trip.id,
-      familyId: trip.familyId,
-      personId: item.personId,
-      name: item.name,
-      category: item.category,
-      baseQuantity: item.baseQuantity,
-      unit: item.unit,
-      perDays: item.perDays,
-      washable: item.washable,
-      quantity: calculateQuantity(item, trip),
-      sortOrder: item.sortOrder,
-    }));
+  const seeds: TripItemSeed[] = [];
+  for (const item of templates) {
+    if (!isItemRelevantForTrip(item, trip)) continue;
+    // 1:N — eine TripItem-Row pro Person, oder eine "Gemeinsam"-Row
+    // wenn keine Person zugewiesen ist.
+    const targets: (string | undefined)[] =
+      item.personIds.length === 0 ? [undefined] : item.personIds;
+    const qty = calculateQuantity(item, trip);
+    for (const personId of targets) {
+      const seed: TripItemSeed = {
+        tripId: trip.id,
+        familyId: trip.familyId,
+        personId,
+        name: item.name,
+        category: item.category,
+        baseQuantity: item.baseQuantity,
+        unit: item.unit,
+        perDays: item.perDays,
+        washable: item.washable,
+        quantity: qty,
+        sortOrder: item.sortOrder,
+      };
+      if (excludeKeys && excludeKeys.has(matchKey(seed))) continue;
+      seeds.push(seed);
+    }
+  }
+  return seeds;
 }
 
 // ---- Fuzzy matching for category autocomplete ----
@@ -112,7 +123,7 @@ export function fuzzyMatchCategory(input: string, candidates: string[]): string 
 }
 
 export function matchKey(
-  item: Pick<PackingItem | TripItem, "name" | "category" | "personId">,
+  item: Pick<TripItem, "name" | "category" | "personId">,
 ): string {
   return `${item.name.trim().toLowerCase()}|${item.category.trim().toLowerCase()}|${item.personId ?? ""}`;
 }
