@@ -5,3 +5,4 @@ dist/
 *.log
 .vite/
 packliste/.swc/
+*.tsbuildinfo
