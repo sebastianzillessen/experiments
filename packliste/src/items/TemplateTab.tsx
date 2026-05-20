@@ -24,6 +24,18 @@ const ItemCard = styled.div`
   border-radius: ${radii.sm};
 `;
 
+/**
+ * Fixe Breite für die Häufigkeits-Badge-Spalte, damit alle Item-Namen
+ * in der Liste auf gleicher X-Position starten — egal ob "pro Tag",
+ * "pro Trip" oder "alle 10 Tage" davor steht.
+ */
+const BadgeColumn = styled.div`
+  width: 88px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+`;
+
 const NamePart = styled.div`
   flex: 1;
   min-width: 0;
@@ -120,13 +132,15 @@ export function TemplateTab() {
                 const isShared = assignedPersons.length === 0;
                 return (
                   <ItemCard key={it.id}>
-                    <Badge $tone={it.unit === "per_day" ? "accent" : "primary"}>
-                      {it.unit === "per_trip"
-                        ? "pro Trip"
-                        : (it.perDays ?? 1) === 1
-                        ? "pro Tag"
-                        : `alle ${it.perDays} Tage`}
-                    </Badge>
+                    <BadgeColumn>
+                      <Badge $tone={it.unit === "per_day" ? "accent" : "primary"}>
+                        {it.unit === "per_trip"
+                          ? "pro Trip"
+                          : (it.perDays ?? 1) === 1
+                          ? "pro Tag"
+                          : `alle ${it.perDays} Tage`}
+                      </Badge>
+                    </BadgeColumn>
                     <NamePart>
                       <Row $gap={6}>
                         <strong>{it.name}</strong>
@@ -149,7 +163,7 @@ export function TemplateTab() {
                           </span>
                         )}
                         {it.conditions.length > 0 && (
-                          <span>· {it.conditions.map((c) => `${conditionEmoji(c)} ${conditionLabel(c, conditions)}`).join(", ")}</span>
+                          <span>{it.conditions.map((c) => `${conditionEmoji(c)} ${conditionLabel(c, conditions)}`).join(", ")}</span>
                         )}
                       </ConditionsLine>
                     </NamePart>
