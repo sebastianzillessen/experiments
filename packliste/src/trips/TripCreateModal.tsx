@@ -103,7 +103,10 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
       startDate: d.start,
       endDate: d.end,
       days: 7,
-      conds: [] as string[],
+      // "default" ist vorausgewählt — Standard-Items kommen automatisch
+      // mit. Spezial-Conditions (Regen, Schwimmen, …) wählt der User
+      // gezielt zusätzlich.
+      conds: ["default"] as string[],
       washer: false,
       washInterval: 3,
     };

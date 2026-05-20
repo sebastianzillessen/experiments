@@ -368,7 +368,29 @@ export class LocalStorageProvider implements DataProvider {
 
   // ---------- Packing items (templates) ----------
   listPackingItems(familyId: string): PackingItem[] {
+    this.ensureDefaultConditionMigration(familyId);
     return sortByOrder(read<PackingItem[]>(K.items(familyId), []).map(normalizePackingItem));
+  }
+
+  /**
+   * Einmalige Migration: Bestandsitems mit `conditions: []` (vor dem
+   * Wechsel der Semantik "leer = immer einpacken") bekommen jetzt
+   * `conditions: ['default']`, damit sie weiterhin auf neuen Trips
+   * landen. Neu erstellte Items entscheiden frei — empty = Sonderbedarf.
+   */
+  private ensureDefaultConditionMigration(familyId: string): void {
+    const flagKey = K.migrated(familyId, "default-condition");
+    if (localStorage.getItem(flagKey) === "1") return;
+    const items = read<PackingItem[]>(K.items(familyId), []).map(normalizePackingItem);
+    let changed = false;
+    for (const it of items) {
+      if (!it.conditions || it.conditions.length === 0) {
+        it.conditions = ["default"];
+        changed = true;
+      }
+    }
+    if (changed) write(K.items(familyId), items);
+    localStorage.setItem(flagKey, "1");
   }
 
   createPackingItem(item: Omit<PackingItem, "id">): string {

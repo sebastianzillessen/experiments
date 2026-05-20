@@ -1,6 +1,7 @@
 import type { QuantityUnit, FamilyRole, PresetKey } from "./types";
 
 export const CONDITION_LABELS: Record<string, { label: string; emoji: string }> = {
+  default: { label: "Standard", emoji: "📋" },
   rain: { label: "Regen", emoji: "🌧" },
   sun: { label: "Sonne / Hitze", emoji: "☀️" },
   cold: { label: "Kälte", emoji: "🥶" },

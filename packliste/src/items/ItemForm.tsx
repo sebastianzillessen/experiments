@@ -90,7 +90,11 @@ export function ItemForm({
   const [perDays, setPerDays] = useState(initial?.perDays ?? 3);
   const [washable, setWashable] = useState(initial?.washable ?? false);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>(initial?.personIds ?? []);
-  const [activeConds, setActiveConds] = useState<string[]>(initial?.conditions ?? []);
+  // Neue Items bekommen "default" vorausgewählt (= Standard-Item). Beim
+  // Edit verwenden wir die gespeicherten Conditions ungeändert.
+  const [activeConds, setActiveConds] = useState<string[]>(
+    initial?.conditions ?? ["default"],
+  );
   const [newCondition, setNewCondition] = useState("");
   const [showCustomConditionForm, setShowCustomConditionForm] = useState(false);
 
@@ -260,7 +264,7 @@ export function ItemForm({
       </div>
       <Checkbox checked={washable} onChange={setWashable} label="🧺 Waschbar" hint="Wird auf Trips mit Waschmaschine reduziert" />
       <div>
-        <FieldLabel>Bedingungen (leer = immer)</FieldLabel>
+        <FieldLabel>Bedingungen</FieldLabel>
         <Chips style={{ marginTop: 6 }}>
           {conditions.map((c) => (
             <Chip
@@ -300,6 +304,11 @@ export function ItemForm({
             <Button $size="sm" $variant="ghost" onClick={() => { setShowCustomConditionForm(false); setNewCondition(""); }}>Abbrechen</Button>
           </Row>
         )}
+        <FieldHint style={{ display: "block", marginTop: 6 }}>
+          📋 Standard = bei jedem Standard-Trip dabei. Ohne Bedingung
+          (keine Auswahl) = Sonderbedarf, taucht nur auf, wenn manuell
+          hinzugefügt.
+        </FieldHint>
       </div>
       <Row $gap={8}>
         {onCancel && (

@@ -1,6 +1,7 @@
 import type { PackingItem, PresetKey } from "./types";
 
 export const DEFAULT_CONDITION_KEYS = [
+  "default",
   "rain",
   "sun",
   "cold",
@@ -21,14 +22,14 @@ const beachItems: SeedItem[] = [
   { name: "Badehose / Bikini", category: "Kleidung", baseQuantity: 1, unit: "per_trip", washable: true, conditions: ["bathing"] },
   { name: "Strandtuch", category: "Kleidung", baseQuantity: 1, unit: "per_trip", washable: true, conditions: ["bathing"] },
   { name: "Flip-Flops", category: "Schuhe", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["bathing", "sun"] },
-  { name: "T-Shirt", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Unterhose", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Socken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Zahnbürste", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Zahnpasta", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Ladegerät", category: "Technik", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Reisepass / ID", category: "Dokumente", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Buch", category: "Sonstiges", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
+  { name: "T-Shirt", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Unterhose", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Socken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Zahnbürste", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Zahnpasta", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Ladegerät", category: "Technik", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Reisepass / ID", category: "Dokumente", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Buch", category: "Sonstiges", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
 ];
 
 const skiItems: SeedItem[] = [
@@ -42,29 +43,29 @@ const skiItems: SeedItem[] = [
   { name: "Skisocken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["cold"] },
   { name: "Lippenpflege", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["cold", "sun"] },
   { name: "Pullover", category: "Kleidung", baseQuantity: 2, unit: "per_trip", washable: true, conditions: ["cold"] },
-  { name: "T-Shirt", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Unterhose", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Socken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Zahnbürste", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Zahnpasta", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Ladegerät", category: "Technik", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Reisepass / ID", category: "Dokumente", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
+  { name: "T-Shirt", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Unterhose", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Socken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Zahnbürste", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Zahnpasta", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Ladegerät", category: "Technik", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Reisepass / ID", category: "Dokumente", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
   { name: "Wanderschuhe", category: "Schuhe", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["hiking"] },
 ];
 
 const cityItems: SeedItem[] = [
   { name: "Hemd / Bluse", category: "Kleidung", baseQuantity: 1, unit: "per_trip", washable: true, conditions: ["formal"] },
   { name: "Sakko / Blazer", category: "Kleidung", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["formal"] },
-  { name: "Bequeme Schuhe", category: "Schuhe", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
+  { name: "Bequeme Schuhe", category: "Schuhe", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
   { name: "Regenjacke", category: "Kleidung", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["rain"] },
   { name: "Regenschirm", category: "Accessoires", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["rain"] },
   { name: "Reisepass / ID", category: "Dokumente", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["flight"] },
   { name: "Boarding-Pass / Ticket", category: "Dokumente", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["flight"] },
-  { name: "T-Shirt", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Unterhose", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Socken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: [] },
-  { name: "Zahnbürste", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
-  { name: "Ladegerät", category: "Technik", baseQuantity: 1, unit: "per_trip", washable: false, conditions: [] },
+  { name: "T-Shirt", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Unterhose", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Socken", category: "Kleidung", baseQuantity: 1, unit: "per_day", washable: true, conditions: ["default"] },
+  { name: "Zahnbürste", category: "Hygiene", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
+  { name: "Ladegerät", category: "Technik", baseQuantity: 1, unit: "per_trip", washable: false, conditions: ["default"] },
 ];
 
 export const TEMPLATE_PRESETS: Record<PresetKey, SeedItem[]> = {

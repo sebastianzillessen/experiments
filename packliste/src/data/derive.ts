@@ -1,7 +1,12 @@
 import type { PackingItem, Person, Trip, TripItem } from "../types";
 
 export function isItemRelevantForTrip(item: PackingItem, trip: Trip): boolean {
-  if (item.conditions.length === 0) return true;
+  // Items ohne Bedingungen sind "Sonderbedarf" — sie wurden manuell für
+  // einen Trip ergänzt (z.B. via QuickAdd) und sind nicht Teil der
+  // Standard-Vorlage. Sie tauchen NICHT auf neuen Trips auf.
+  // Standard-Items haben die "default"-Bedingung; sie erscheinen, wenn
+  // beim Trip-Anlegen "Standard" (default-Pre-Selected) gewählt ist.
+  if (item.conditions.length === 0) return false;
   return item.conditions.some((c) => trip.conditions.includes(c));
 }
 

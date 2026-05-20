@@ -11,4 +11,7 @@ export const K = {
   items: (familyId: string) => `${STORAGE_PREFIX}family:${familyId}:items`,
   trips: (familyId: string) => `${STORAGE_PREFIX}family:${familyId}:trips`,
   tripItems: (tripId: string) => `${STORAGE_PREFIX}trip:${tripId}:items`,
+  // Migrations-Flags pro Familie (one-shot)
+  migrated: (familyId: string, name: string) =>
+    `${STORAGE_PREFIX}family:${familyId}:migrated:${name}`,
 };
