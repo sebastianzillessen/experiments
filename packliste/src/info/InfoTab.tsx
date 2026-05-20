@@ -279,7 +279,7 @@ export function InfoTab() {
                 <> Fehler: {sync.error}</>
               )}
             </Note>
-            <Row $gap={8}>
+            <Row $gap={8} $wrap>
               <Button
                 $variant="secondary"
                 $size="sm"
@@ -293,6 +293,21 @@ export function InfoTab() {
                 }}
               >
                 <Copy size={14} /> Code kopieren
+              </Button>
+              <Button
+                $variant="secondary"
+                $size="sm"
+                onClick={async () => {
+                  const url = `${window.location.origin}${window.location.pathname}#/join/${sync.code}`;
+                  try {
+                    await navigator.clipboard.writeText(url);
+                    toast.show({ message: "Direkt-Link kopiert", duration: 2500 });
+                  } catch {
+                    toast.show({ message: "Kopieren fehlgeschlagen", duration: 3000 });
+                  }
+                }}
+              >
+                <Copy size={14} /> Direkt-Link
               </Button>
               <Button
                 $variant="danger"
@@ -333,12 +348,29 @@ export function InfoTab() {
                       style={{ flex: 1 }}
                     >
                       {copied ? <Check size={14} /> : <Copy size={14} />}
-                      {copied ? "Kopiert" : "Kopieren"}
+                      {copied ? "Kopiert" : "Code kopieren"}
+                    </Button>
+                    <Button
+                      $variant="secondary"
+                      $size="sm"
+                      onClick={async () => {
+                        const url = `${window.location.origin}${window.location.pathname}#/join/${generatedCode}`;
+                        try {
+                          await navigator.clipboard.writeText(url);
+                          toast.show({ message: "Direkt-Link kopiert", duration: 2500 });
+                        } catch {
+                          toast.show({ message: "Kopieren fehlgeschlagen", duration: 3000 });
+                        }
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      <Copy size={14} /> Direkt-Link
                     </Button>
                   </Row>
                   <Muted style={{ fontSize: 12 }}>
-                    Wer den Code kennt, kann deine Daten lesen + ändern —
-                    also nur an Familienmitglieder weitergeben.
+                    <strong>Direkt-Link</strong> öffnet die App auf dem anderen
+                    Browser direkt mit den Daten — ohne Tippen.
+                    Wer Code oder Link kennt, kann deine Daten lesen + ändern.
                   </Muted>
                 </Stack>
               )}
