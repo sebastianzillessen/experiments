@@ -96,7 +96,7 @@ export interface DataProvider {
   updateTripItem(
     id: string,
     patch: Partial<
-      Pick<TripItem, "name" | "category" | "quantity" | "personId" | "baseQuantity" | "unit">
+      Pick<TripItem, "name" | "category" | "quantity" | "personId" | "baseQuantity" | "unit" | "perDays">
     >,
   ): void;
   deleteTripItem(id: string): void;

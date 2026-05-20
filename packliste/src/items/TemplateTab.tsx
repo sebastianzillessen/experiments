@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { styled } from "next-yak";
-import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, X, Lightbulb } from "lucide-react";
 import { Card, CardTitle, Stack, Row, Muted, Badge, SectionLabel } from "../components/ui/Layout";
 import { Button, IconButton } from "../components/ui/Button";
-import { Input, Select, Field, FieldLabel, FieldHint } from "../components/ui/Input";
+import { Input, Field, FieldLabel, FieldHint } from "../components/ui/Input";
 import { Chip, Chips } from "../components/ui/Chip";
 import { Checkbox } from "../components/ui/Checkbox";
 import { useCurrentFamily } from "../hooks/useFamily";
@@ -11,6 +11,7 @@ import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
 import { useConditions } from "../hooks/useConditions";
 import { useDataProvider } from "../data/DataProviderContext";
+import { fuzzyMatchCategory } from "../data/derive";
 import type { PackingItem, QuantityUnit } from "../types";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
@@ -49,6 +50,22 @@ const ConditionsLine = styled.div`
   color: ${colors.ink3};
 `;
 
+const CategorySuggestion = styled.button`
+  margin-top: 6px;
+  background: ${colors.accentSoft};
+  border: 1px solid ${colors.accent};
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #6b3a1a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+  &:hover { filter: brightness(0.97); }
+`;
+
 export function TemplateTab() {
   const family = useCurrentFamily();
   const provider = useDataProvider();
@@ -56,10 +73,12 @@ export function TemplateTab() {
   const items = usePackingItems(family?.id);
   const conditions = useConditions(family?.id);
 
+  type Frequency = "per_trip" | "daily" | "every_n";
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [baseQuantity, setBaseQuantity] = useState(1);
-  const [unit, setUnit] = useState<QuantityUnit>("per_trip");
+  const [frequency, setFrequency] = useState<Frequency>("per_trip");
+  const [perDays, setPerDays] = useState(3);
   const [washable, setWashable] = useState(false);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [activeConds, setActiveConds] = useState<string[]>([]);
@@ -92,6 +111,24 @@ export function TemplateTab() {
 
   function addItem() {
     if (!name.trim()) return;
+    // Derive unit + perDays from the chosen frequency
+    let resolvedUnit: QuantityUnit;
+    let resolvedPerDays: number | undefined;
+    if (frequency === "per_trip") {
+      resolvedUnit = "per_trip";
+      resolvedPerDays = undefined;
+    } else if (frequency === "daily") {
+      resolvedUnit = "per_day";
+      resolvedPerDays = 1;
+    } else {
+      resolvedUnit = "per_day";
+      resolvedPerDays = Math.max(1, perDays);
+    }
+    // Resolve category against existing list (fuzzy auto-correct on submit
+    // if the user typed something almost-but-not-quite a known category)
+    const trimmedCategory = category.trim();
+    const fuzzy = trimmedCategory ? fuzzyMatchCategory(trimmedCategory, categories) : null;
+    const finalCategory = fuzzy ?? trimmedCategory;
     // No persons selected → 1 shared item.
     // N persons selected → N items, one per person.
     const targets: (string | undefined)[] =
@@ -101,9 +138,10 @@ export function TemplateTab() {
         familyId: family!.id,
         personId: pid,
         name: name.trim(),
-        category: category.trim(),
+        category: finalCategory,
         baseQuantity: Math.max(1, baseQuantity),
-        unit,
+        unit: resolvedUnit,
+        perDays: resolvedPerDays,
         washable,
         conditions: [...activeConds],
         sortOrder: items.length + idx,
@@ -130,7 +168,19 @@ export function TemplateTab() {
   }
   const catEntries = Array.from(byCat.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
 
-  const previewQty = unit === "per_day" ? `bei 5 Tagen = ${baseQuantity * 5} Stück` : `pro Trip = ${baseQuantity}`;
+  const categoryFuzzy = useMemo(
+    () => fuzzyMatchCategory(category, categories),
+    [category, categories],
+  );
+
+  const previewQty = (() => {
+    const sampleDays = 7;
+    if (frequency === "per_trip") return `Pro Trip = ${baseQuantity} Stück`;
+    if (frequency === "daily") return `Bei ${sampleDays}-Tage-Trip = ${baseQuantity * sampleDays} Stück (täglich)`;
+    const interval = Math.max(1, perDays);
+    const cycles = Math.ceil(sampleDays / interval);
+    return `Bei ${sampleDays}-Tage-Trip = ${baseQuantity * cycles} Stück (alle ${interval} Tage, aufgerundet)`;
+  })();
 
   return (
     <>
@@ -152,6 +202,11 @@ export function TemplateTab() {
             <datalist id="cat-list">
               {categories.map((c) => <option key={c} value={c} />)}
             </datalist>
+            {categoryFuzzy && (
+              <CategorySuggestion type="button" onClick={() => setCategory(categoryFuzzy)}>
+                <Lightbulb size={12} /> Meinst du <strong>{categoryFuzzy}</strong>? · Klick zum Übernehmen
+              </CategorySuggestion>
+            )}
           </Field>
           {persons.length > 0 && (
             <div>
@@ -195,15 +250,33 @@ export function TemplateTab() {
                 onChange={(e) => setBaseQuantity(Math.max(1, Number(e.target.value) || 1))}
               />
             </Field>
-            <Field style={{ flex: 1 }}>
-              <FieldLabel>Einheit</FieldLabel>
-              <Select value={unit} onChange={(e) => setUnit(e.target.value as QuantityUnit)}>
-                <option value="per_trip">pro Trip</option>
-                <option value="per_day">pro Tag</option>
-              </Select>
-            </Field>
+            {frequency === "every_n" && (
+              <Field style={{ flex: 1 }}>
+                <FieldLabel>Alle X Tage</FieldLabel>
+                <Input
+                  type="number"
+                  min={1}
+                  value={perDays}
+                  onChange={(e) => setPerDays(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </Field>
+            )}
           </Row>
-          <FieldHint>{previewQty}</FieldHint>
+          <div>
+            <FieldLabel>Häufigkeit</FieldLabel>
+            <Chips style={{ marginTop: 6 }}>
+              <Chip type="button" $active={frequency === "per_trip"} onClick={() => setFrequency("per_trip")}>
+                Pro Trip
+              </Chip>
+              <Chip type="button" $active={frequency === "daily"} onClick={() => setFrequency("daily")}>
+                Pro Tag
+              </Chip>
+              <Chip type="button" $active={frequency === "every_n"} onClick={() => setFrequency("every_n")}>
+                Alle X Tage
+              </Chip>
+            </Chips>
+            <FieldHint style={{ display: "block", marginTop: 6 }}>{previewQty}</FieldHint>
+          </div>
           <Checkbox checked={washable} onChange={setWashable} label="🧺 Waschbar" hint="Wird auf Trips mit Waschmaschine reduziert" />
           <div>
             <FieldLabel>Bedingungen (leer = immer)</FieldLabel>
@@ -267,7 +340,11 @@ export function TemplateTab() {
                 return (
                   <ItemCard key={it.id}>
                     <Badge $tone={it.unit === "per_day" ? "accent" : "primary"}>
-                      {it.unit === "per_day" ? "pro Tag" : "pro Trip"}
+                      {it.unit === "per_trip"
+                        ? "pro Trip"
+                        : (it.perDays ?? 1) === 1
+                        ? "pro Tag"
+                        : `alle ${it.perDays} Tage`}
                     </Badge>
                     <NamePart>
                       <Row $gap={6}>

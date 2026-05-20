@@ -44,6 +44,12 @@ export interface PackingItem {
   category: string;
   baseQuantity: number;
   unit: QuantityUnit;
+  /**
+   * Frequenz für per_day-Items: 1 = täglich, 3 = alle 3 Tage, etc.
+   * undefined wird wie 1 behandelt (backwards-compat).
+   * Wird ignoriert wenn unit = per_trip.
+   */
+  perDays?: number;
   washable: boolean;
   conditions: string[];
   sortOrder: number;
@@ -73,6 +79,7 @@ export interface TripItem {
   category: string;
   baseQuantity: number;
   unit: QuantityUnit;
+  perDays?: number;
   washable: boolean;
   quantity: number;
   packedQty: number;

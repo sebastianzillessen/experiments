@@ -475,7 +475,7 @@ export class LocalStorageProvider implements DataProvider {
       id: uuid(),
       tripId: newTrip.id,
       quantity: calculateQuantity(
-        { baseQuantity: s.baseQuantity, unit: s.unit, washable: s.washable },
+        { baseQuantity: s.baseQuantity, unit: s.unit, washable: s.washable, perDays: s.perDays },
         newTrip,
       ),
       packedQty: 0,
@@ -521,7 +521,7 @@ export class LocalStorageProvider implements DataProvider {
         const items = read<TripItem[]>(K.tripItems(id), []);
         const updated = items.map((it) => {
           const newQty = calculateQuantity(
-            { baseQuantity: it.baseQuantity, unit: it.unit, washable: it.washable },
+            { baseQuantity: it.baseQuantity, unit: it.unit, washable: it.washable, perDays: it.perDays },
             after,
           );
           const packedQty = Math.min(it.packedQty, newQty);
@@ -619,7 +619,7 @@ export class LocalStorageProvider implements DataProvider {
   updateTripItem(
     id: string,
     patch: Partial<
-      Pick<TripItem, "name" | "category" | "quantity" | "personId" | "baseQuantity" | "unit">
+      Pick<TripItem, "name" | "category" | "quantity" | "personId" | "baseQuantity" | "unit" | "perDays">
     >,
   ): void {
     const trip = this.findTripContaining(id);
