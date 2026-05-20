@@ -1,14 +1,15 @@
 import { styled } from "next-yak";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, CheckCheck } from "lucide-react";
 import { colors, radii } from "../theme.yak";
 
 const Wrap = styled.div`
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   border: 1px solid ${colors.line2};
   border-radius: ${radii.sm};
   overflow: hidden;
   background: ${colors.surface};
+  flex-shrink: 0;
 `;
 
 const StepBtn = styled.button`
@@ -24,8 +25,25 @@ const StepBtn = styled.button`
   &:disabled { color: ${colors.ink3}; cursor: not-allowed; }
 `;
 
+const AllBtn = styled.button`
+  height: 44px;
+  padding: 0 10px;
+  border: none;
+  border-left: 1px solid ${colors.line};
+  background: transparent;
+  color: ${colors.success};
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  &:hover { background: ${colors.successSoft}; }
+`;
+
 const Qty = styled.div<{ $full?: boolean }>`
-  min-width: 60px;
+  min-width: 56px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -47,17 +65,26 @@ export function QtyStepper({ packed, total, onChange }: Props) {
   const inc = () => onChange(Math.min(total, packed + 1));
   const setFull = () => onChange(total);
   const full = packed >= total;
+  // "Alle"-Button nur sinnvoll, wenn mehr als 1 zu packen ist und noch
+  // nicht alles eingepackt wurde. Spart das 4-mal-Tappen für 4 Boxershorts.
+  const showAll = total > 1 && !full;
   return (
     <Wrap>
-      <StepBtn aria-label="Weniger" onClick={dec} disabled={packed === 0}>
+      <StepBtn type="button" aria-label="Weniger" onClick={dec} disabled={packed === 0}>
         <Minus size={16} />
       </StepBtn>
-      <Qty $full={full} onClick={setFull} role="button" title="Alle">
+      <Qty $full={full}>
         {packed}/{total}
       </Qty>
-      <StepBtn aria-label="Mehr" onClick={inc} disabled={packed >= total}>
+      <StepBtn type="button" aria-label="Mehr" onClick={inc} disabled={packed >= total}>
         <Plus size={16} />
       </StepBtn>
+      {showAll && (
+        <AllBtn type="button" aria-label={`Alle ${total} einpacken`} onClick={setFull}>
+          <CheckCheck size={14} />
+          Alle
+        </AllBtn>
+      )}
     </Wrap>
   );
 }

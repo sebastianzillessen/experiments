@@ -20,6 +20,8 @@ import { useTripItems } from "../hooks/useTripItems";
 import { useToast } from "../components/ui/Toast";
 import { InitialsBadge } from "../components/InitialsBadge";
 import { SwipeRow, DesktopOnly } from "../components/SwipeRow";
+import { CategoryChip } from "../components/CategoryChip";
+import { categoryIcon } from "../labels";
 import type { TripItem } from "../types";
 import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
@@ -264,7 +266,10 @@ export function TripDetail() {
                       <ItemRow $packed={it.isPacked}>
                         <QtyStepper packed={it.packedQty} total={it.quantity} onChange={(n) => provider.setTripItemPacked(it.id, n)} />
                         <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
-                          <ItemName $packed={it.isPacked}>{it.name}</ItemName>
+                          <Row $gap={6}>
+                            <CategoryChip icon={categoryIcon(it.category)} label={it.category || "Sonstiges"} />
+                            <ItemName $packed={it.isPacked}>{it.name}</ItemName>
+                          </Row>
                           {lastBy && it.isPacked && (
                             <Muted style={{ fontSize: 11 }}>abgehakt von {lastBy}</Muted>
                           )}

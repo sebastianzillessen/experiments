@@ -47,3 +47,36 @@ export function conditionLabel(key: string, customs: { key: string; label: strin
 export function conditionEmoji(key: string): string {
   return CONDITION_LABELS[key]?.emoji ?? "🏷️";
 }
+
+/**
+ * Best-effort Mapping von Kategorie-Namen (deutsch, freitext) zu Emojis.
+ * Match ist case-insensitive und auf den "Kern" des Worts begrenzt (z.B.
+ * "Kleider" und "Kleidung" werden beide auf 👕 gemappt, weil sie beide
+ * "kleid" beginnen). Fallback ist ein generisches Tag-Icon.
+ */
+const CATEGORY_PATTERNS: Array<[RegExp, string]> = [
+  [/^kleid/, "👕"],
+  [/(hose|trousers)/, "👖"],
+  [/^schuh|^schuhe|sneaker|wander/, "👟"],
+  [/^hygien|toilet|pflege|kosmetik/, "🧴"],
+  [/^accessoir|brille|hut|m[uü]tze|schmuck/, "🕶️"],
+  [/^technik|elektro|kabel|ladeger|charger/, "🔌"],
+  [/^dokument|pass|ticket|reise(pass)?|ausweis/, "📄"],
+  [/^essen|verpfleg|snack|food/, "🍽️"],
+  [/^medi|apoth|pharma/, "💊"],
+  [/^spielzeug|toy|kind|baby/, "🧸"],
+  [/^haust|tier|hund|katz/, "🐾"],
+  [/^outdoor|camp|zelt/, "🏕️"],
+  [/^sport|fitness|bike|fahrrad/, "🚴"],
+  [/^buch|read/, "📚"],
+  [/^sonst|misc|other/, "📦"],
+];
+
+export function categoryIcon(category: string): string {
+  const norm = category.trim().toLowerCase();
+  if (!norm) return "📦";
+  for (const [pattern, emoji] of CATEGORY_PATTERNS) {
+    if (pattern.test(norm)) return emoji;
+  }
+  return "🏷️";
+}
