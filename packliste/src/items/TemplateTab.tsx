@@ -13,6 +13,7 @@ import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { ItemForm, type ItemFormValues } from "./ItemForm";
 import { EditItemModal } from "./EditItemModal";
+import { InitialsBadge } from "../components/InitialsBadge";
 
 const ItemCard = styled.div`
   display: flex;
@@ -42,14 +43,6 @@ const NamePart = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-`;
-
-const PersonDot = styled.span<{ $color: string }>`
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: ${({ $color }) => $color};
-  display: inline-block;
 `;
 
 const ConditionsLine = styled.div`
@@ -151,14 +144,11 @@ export function TemplateTab() {
                         {isShared ? (
                           <span>Gemeinsam</span>
                         ) : assignedPersons.length === persons.length ? (
-                          <span>Alle Personen</span>
+                          <span>Alle</span>
                         ) : (
                           <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
                             {assignedPersons.map((p) => (
-                              <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-                                <PersonDot $color={p.color ?? colors.ink3} />
-                                {p.name}
-                              </span>
+                              <InitialsBadge key={p.id} person={p} />
                             ))}
                           </span>
                         )}

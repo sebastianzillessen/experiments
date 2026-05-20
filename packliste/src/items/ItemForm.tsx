@@ -110,8 +110,18 @@ export function ItemForm({
   }
 
   function toggleAllPersons() {
-    if (selectedPersonIds.length === persons.length) setSelectedPersonIds([]);
-    else setSelectedPersonIds(persons.map((p) => p.id));
+    // "Alle Personen" zielt auf Menschen, nicht auf Haustiere — Haustiere
+    // müssen explizit ausgewählt werden. Toggle: wenn alle Nicht-Pets
+    // gewählt sind, dann deselektieren; sonst alle Nicht-Pets selektieren
+    // (vorhandene Pet-Auswahl bleibt erhalten).
+    const humanIds = persons.filter((p) => !p.isPet).map((p) => p.id);
+    const allHumansSelected =
+      humanIds.length > 0 && humanIds.every((id) => selectedPersonIds.includes(id));
+    if (allHumansSelected) {
+      setSelectedPersonIds((prev) => prev.filter((id) => !humanIds.includes(id)));
+    } else {
+      setSelectedPersonIds((prev) => Array.from(new Set([...prev, ...humanIds])));
+    }
   }
 
   function addCustomCondition() {
@@ -193,13 +203,17 @@ export function ItemForm({
         <div>
           <FieldLabel>Für wen? (Mehrfach-Auswahl)</FieldLabel>
           <Chips style={{ marginTop: 6 }}>
-            <Chip
-              type="button"
-              $active={selectedPersonIds.length === persons.length && persons.length > 0}
-              onClick={toggleAllPersons}
-            >
-              Alle Personen
-            </Chip>
+            {persons.some((p) => !p.isPet) && (
+              <Chip
+                type="button"
+                $active={persons
+                  .filter((p) => !p.isPet)
+                  .every((p) => selectedPersonIds.includes(p.id))}
+                onClick={toggleAllPersons}
+              >
+                Alle Personen
+              </Chip>
+            )}
             {persons.map((p) => (
               <Chip
                 key={p.id}
@@ -208,7 +222,7 @@ export function ItemForm({
                 onClick={() => togglePerson(p.id)}
               >
                 <PersonDot $color={p.color ?? colors.ink3} />
-                {p.name}
+                {p.name}{p.isPet && " 🐾"}
               </Chip>
             ))}
           </Chips>

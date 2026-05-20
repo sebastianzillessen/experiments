@@ -1,4 +1,4 @@
-import type { PackingItem, Trip, TripItem } from "../types";
+import type { PackingItem, Person, Trip, TripItem } from "../types";
 
 export function isItemRelevantForTrip(item: PackingItem, trip: Trip): boolean {
   if (item.conditions.length === 0) return true;
@@ -128,12 +128,27 @@ export function matchKey(
   return `${item.name.trim().toLowerCase()}|${item.category.trim().toLowerCase()}|${item.personId ?? ""}`;
 }
 
+/**
+ * 1 Buchstabe bei Einwort-Namen (Anna → A), 2 Buchstaben bei
+ * Mehrwort-Namen (Anna Maria → AM, Sebastian Z. → SZ). Familien
+ * brauchen selten mehr als 2 Initialen zur Unterscheidung.
+ */
 export function formatInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Bevorzugt explizit gesetzte Initialen, fällt sonst auf Auto-Berechnung
+ * aus dem Namen zurück. Damit funktionieren bestehende Persons ohne
+ * gespeichertes initials-Feld weiterhin.
+ */
+export function personInitials(p: Pick<Person, "name" | "initials">): string {
+  const explicit = p.initials?.trim();
+  if (explicit) return explicit.toUpperCase();
+  return formatInitials(p.name);
 }
 
 export function daysBetween(start?: string, end?: string): number | undefined {

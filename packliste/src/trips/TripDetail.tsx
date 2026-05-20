@@ -18,6 +18,7 @@ import { useDataProvider, useProviderRevision } from "../data/DataProviderContex
 import { useTrip } from "../hooks/useTrips";
 import { useTripItems } from "../hooks/useTripItems";
 import { useToast } from "../components/ui/Toast";
+import { InitialsBadge } from "../components/InitialsBadge";
 import type { TripItem } from "../types";
 import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
@@ -149,10 +150,6 @@ export function TripDetail() {
   }
   const sortedCats = Array.from(byCategory.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
 
-  function personColor(personId?: string): string {
-    if (!personId) return colors.ink3;
-    return persons.find((p) => p.id === personId)?.color ?? colors.ink3;
-  }
 
   function memberName(userId?: string): string | undefined {
     if (!userId) return undefined;
@@ -268,7 +265,10 @@ export function TripDetail() {
                           <Muted style={{ fontSize: 11 }}>abgehakt von {lastBy}</Muted>
                         )}
                       </Stack>
-                      <PersonDot $color={personColor(it.personId)} title={persons.find((p) => p.id === it.personId)?.name ?? "Gemeinsam"} />
+                      {(() => {
+                        const p = persons.find((pp) => pp.id === it.personId);
+                        return p ? <InitialsBadge person={p} /> : null;
+                      })()}
                       <IconButton
                         aria-label={`"${it.name}" von diesem Trip entfernen`}
                         title="Von diesem Trip entfernen"

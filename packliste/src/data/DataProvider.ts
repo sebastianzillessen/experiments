@@ -41,7 +41,14 @@ export interface DataProvider {
 
   // Persons
   listPersons(familyId: string): Person[];
-  createPerson(familyId: string, name: string, color?: string, linkedUserId?: string): string;
+  createPerson(
+    familyId: string,
+    name: string,
+    color?: string,
+    linkedUserId?: string,
+    initials?: string,
+    isPet?: boolean,
+  ): string;
   updatePerson(id: string, patch: Partial<Omit<Person, "id" | "familyId">>): void;
   deletePerson(id: string): void;
 

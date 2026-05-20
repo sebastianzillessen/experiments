@@ -54,6 +54,17 @@ function sortByOrder<T extends { sortOrder: number; name?: string }>(items: T[])
 }
 
 /**
+ * Lazy-migration: alte Persons ohne `initials` bekommen automatisch
+ * Initialen aus dem Namen. Persons mit explizit gesetzten Initialen
+ * bleiben unverändert.
+ */
+function normalizePerson(raw: unknown): Person {
+  const p = raw as Person;
+  if (p.initials?.trim()) return p;
+  return { ...p, initials: formatInitials(p.name) };
+}
+
+/**
  * Lazy-migration: alte PackingItems mit `personId?: string` zu neuem
  * `personIds: string[]`-Schema konvertieren. Schreibt nicht zurück;
  * Mutationen tun das beim nächsten Write von alleine.
@@ -169,6 +180,7 @@ export class LocalStorageProvider implements DataProvider {
       familyId: family.id,
       name: n,
       color: PERSON_COLORS[i % PERSON_COLORS.length],
+      initials: formatInitials(n),
       linkedUserId: i === 0 ? user.id : undefined,
       sortOrder: i,
     }));
@@ -211,19 +223,29 @@ export class LocalStorageProvider implements DataProvider {
 
   // ---------- Persons ----------
   listPersons(familyId: string): Person[] {
-    return sortByOrder(read<Person[]>(K.persons(familyId), []));
+    return sortByOrder(read<Person[]>(K.persons(familyId), []).map(normalizePerson));
   }
 
-  createPerson(familyId: string, name: string, color?: string, linkedUserId?: string): string {
+  createPerson(
+    familyId: string,
+    name: string,
+    color?: string,
+    linkedUserId?: string,
+    initials?: string,
+    isPet?: boolean,
+  ): string {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Name erforderlich");
-    const list = read<Person[]>(K.persons(familyId), []);
+    const list = read<Person[]>(K.persons(familyId), []).map(normalizePerson);
     const sortOrder = list.reduce((m, p) => Math.max(m, p.sortOrder), -1) + 1;
+    const cleanInitials = initials?.trim().toUpperCase().slice(0, 3);
     const person: Person = {
       id: uuid(),
       familyId,
       name: trimmed,
       color: color ?? PERSON_COLORS[list.length % PERSON_COLORS.length],
+      initials: cleanInitials || formatInitials(trimmed),
+      isPet: isPet ?? false,
       linkedUserId,
       sortOrder,
     };
@@ -236,10 +258,22 @@ export class LocalStorageProvider implements DataProvider {
   updatePerson(id: string, patch: Partial<Omit<Person, "id" | "familyId">>): void {
     const families = read<Family[]>(K.families, []);
     for (const f of families) {
-      const list = read<Person[]>(K.persons(f.id), []);
+      const list = read<Person[]>(K.persons(f.id), []).map(normalizePerson);
       const idx = list.findIndex((p) => p.id === id);
       if (idx < 0) continue;
-      list[idx] = { ...list[idx], ...patch };
+      // Wenn der Name geändert wird und keine expliziten Initialen in der
+      // Patch sind, Initialen leeren — beim nächsten Read regeneriert sie
+      // normalizePerson aus dem neuen Namen. Falls patch explicit Initialen
+      // setzt (auch ""), wird das respektiert.
+      const next: Person = { ...list[idx], ...patch };
+      if (patch.name !== undefined && patch.initials === undefined) {
+        next.initials = formatInitials(next.name);
+      }
+      // Initialen normalisieren: trim, upper, max 3 chars
+      if (next.initials !== undefined) {
+        next.initials = next.initials.trim().toUpperCase().slice(0, 3) || formatInitials(next.name);
+      }
+      list[idx] = next;
       write(K.persons(f.id), list);
       this.notify();
       return;
@@ -249,7 +283,7 @@ export class LocalStorageProvider implements DataProvider {
   deletePerson(id: string): void {
     const families = read<Family[]>(K.families, []);
     for (const f of families) {
-      const list = read<Person[]>(K.persons(f.id), []);
+      const list = read<Person[]>(K.persons(f.id), []).map(normalizePerson);
       const idx = list.findIndex((p) => p.id === id);
       if (idx < 0) continue;
       list.splice(idx, 1);

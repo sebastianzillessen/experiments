@@ -19,12 +19,14 @@ interface Props {
   name: string;
   color?: string;
   size?: number;
+  /** Explizit gesetzte Initialen, sonst aus dem Namen berechnet. */
+  initials?: string;
 }
 
-export function AvatarDot({ name, color, size = 28 }: Props) {
+export function AvatarDot({ name, color, size = 28, initials }: Props) {
   return (
     <Dot $color={color ?? "#8a92a3"} $size={size}>
-      {formatInitials(name)}
+      {initials?.trim() || formatInitials(name)}
     </Dot>
   );
 }

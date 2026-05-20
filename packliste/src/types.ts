@@ -26,6 +26,18 @@ export interface Person {
   familyId: string;
   name: string;
   color?: string;
+  /**
+   * 1–3 Buchstaben für Avatar-Badges. Beim Anlegen automatisch aus dem
+   * Namen berechnet (1 Buchstabe bei Einwort-Namen, 2 bei Mehrwort).
+   * Im Edit-Modus überschreibbar.
+   */
+  initials?: string;
+  /**
+   * Markiert das Familienmitglied als Haustier. Bei "Alle Personen"-
+   * Multi-Select werden Haustiere nicht automatisch mit-selektiert
+   * (manuell wählbar wie eine normale Person).
+   */
+  isPet?: boolean;
   linkedUserId?: string;
   sortOrder: number;
 }
