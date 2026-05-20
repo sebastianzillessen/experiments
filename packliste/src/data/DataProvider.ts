@@ -133,6 +133,19 @@ export interface DataProvider {
   // Sync placeholder
   getSyncStatus(): SyncStatus;
 
+  /**
+   * Serialisiert den kompletten lokalen Zustand als JSON. Dient zum
+   * manuellen Übertragen zwischen Browsern, solange es noch keinen
+   * echten Cloud-Sync gibt.
+   */
+  exportSnapshot(): string;
+
+  /**
+   * Lädt einen mit exportSnapshot() erzeugten Zustand. Überschreibt
+   * alle lokalen Packliste-Daten. Wirft bei inkompatiblem Schema.
+   */
+  importSnapshot(json: string): void;
+
   // Subscribe to any change — components re-render via this
   subscribe(listener: () => void): () => void;
 }

@@ -10,7 +10,7 @@ import type {
   TripItem,
   User,
 } from "../types";
-import { K } from "./keys";
+import { K, STORAGE_PREFIX } from "./keys";
 import {
   calculateQuantity,
   formatInitials,
@@ -927,6 +927,60 @@ export class LocalStorageProvider implements DataProvider {
   // ---------- Sync ----------
   getSyncStatus(): SyncStatus {
     return "local";
+  }
+
+  exportSnapshot(): string {
+    const data: Record<string, unknown> = {};
+    // Alle packliste:*-Keys einsammeln
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+      const raw = localStorage.getItem(key);
+      if (raw == null) continue;
+      try {
+        data[key] = JSON.parse(raw);
+      } catch {
+        data[key] = raw;
+      }
+    }
+    const snapshot = {
+      schema: "packliste-v1",
+      exportedAt: new Date().toISOString(),
+      data,
+    };
+    return JSON.stringify(snapshot, null, 2);
+  }
+
+  importSnapshot(json: string): void {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      throw new Error("Ungültige JSON-Datei");
+    }
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Ungültiges Snapshot-Format");
+    }
+    const snap = parsed as { schema?: string; data?: Record<string, unknown> };
+    if (snap.schema !== "packliste-v1") {
+      throw new Error(`Inkompatibles Schema: ${snap.schema ?? "unbekannt"}`);
+    }
+    if (!snap.data || typeof snap.data !== "object") {
+      throw new Error("Snapshot hat keine Daten");
+    }
+    // Erst alle vorhandenen packliste:*-Keys entfernen
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(STORAGE_PREFIX)) toRemove.push(key);
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
+    // Dann die importierten Keys schreiben
+    for (const [key, value] of Object.entries(snap.data)) {
+      if (!key.startsWith(STORAGE_PREFIX)) continue; // Defensive: keine fremden Keys importieren
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+    this.notify();
   }
 
   // ---------- Helpers ----------
