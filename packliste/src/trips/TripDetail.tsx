@@ -256,6 +256,13 @@ export function TripDetail() {
                         )}
                       </Stack>
                       <PersonDot $color={personColor(it.personId)} title={persons.find((p) => p.id === it.personId)?.name ?? "Gemeinsam"} />
+                      <IconButton
+                        aria-label={`"${it.name}" von diesem Trip entfernen`}
+                        title="Von diesem Trip entfernen"
+                        onClick={() => provider.deleteTripItem(it.id)}
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
                     </ItemRow>
                   );
                 })}
