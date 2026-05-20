@@ -40,6 +40,26 @@ const Page = styled.div`
   padding-bottom: 80px;
 `;
 
+/**
+ * Sticky-Block für Personen-Filter + Schnell-Hinzufügen. Bleibt beim
+ * Scrollen oben kleben, damit man jederzeit sieht für wen man abhakt
+ * und ohne Scroll-zurück Items hinzufügen kann.
+ */
+const StickyHeader = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: ${colors.bg};
+  padding: 8px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Subtiler Schatten unten — sichtbar wenn der Block über Items klebt */
+  box-shadow: 0 6px 8px -6px rgba(20, 30, 50, 0.18);
+  /* In den Page-Inhalt hinein, mit gleicher Hintergrundfarbe wie der Body
+     → kein sichtbarer Streifen an den Seitenrändern. */
+`;
+
 const ItemRow = styled.div<{ $packed: boolean }>`
   display: flex;
   align-items: center;
@@ -214,39 +234,41 @@ export function TripDetail() {
           </ProgressTrack>
         </div>
 
-        {persons.length > 0 && (
-          <ChipsScrollable>
-            <Chip type="button" $active={filterPerson === "all"} onClick={() => setFilterPerson("all")}>Alle</Chip>
-            {persons.map((p) => (
-              <Chip key={p.id} type="button" $active={filterPerson === p.id} onClick={() => setFilterPerson(p.id)}>
-                <PersonDot $color={p.color ?? colors.ink3} />
-                {p.name}{linkedPersonId === p.id && " (du)"}
-              </Chip>
-            ))}
-            <Chip type="button" $active={filterPerson === "none"} onClick={() => setFilterPerson("none")}>Gemeinsam</Chip>
-          </ChipsScrollable>
-        )}
+        <StickyHeader>
+          {persons.length > 0 && (
+            <ChipsScrollable>
+              <Chip type="button" $active={filterPerson === "all"} onClick={() => setFilterPerson("all")}>Alle</Chip>
+              {persons.map((p) => (
+                <Chip key={p.id} type="button" $active={filterPerson === p.id} onClick={() => setFilterPerson(p.id)}>
+                  <PersonDot $color={p.color ?? colors.ink3} />
+                  {p.name}{linkedPersonId === p.id && " (du)"}
+                </Chip>
+              ))}
+              <Chip type="button" $active={filterPerson === "none"} onClick={() => setFilterPerson("none")}>Gemeinsam</Chip>
+            </ChipsScrollable>
+          )}
+
+          <QuickAdd
+            trip={trip}
+            targetPersonId={
+              typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
+                ? filterPerson
+                : undefined
+            }
+          />
+        </StickyHeader>
 
         {items.length === 0 && (
           <Card>
             <Stack $gap={8} $align="center">
               <div style={{ fontSize: 32 }}>📋</div>
               <Muted style={{ textAlign: "center" }}>
-                Noch keine Items auf der Liste. Füge unten schnell welche hinzu —
+                Noch keine Items auf der Liste. Füge oben schnell welche hinzu —
                 sie landen automatisch in deiner Vorlage und sind beim nächsten Trip dabei.
               </Muted>
             </Stack>
           </Card>
         )}
-
-        <QuickAdd
-          trip={trip}
-          targetPersonId={
-            typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
-              ? filterPerson
-              : undefined
-          }
-        />
 
         {sortedCats.map(([cat, list]) => {
           const cTotal = list.reduce((s, i) => s + i.quantity, 0);
