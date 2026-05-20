@@ -227,10 +227,10 @@ export function TripDetail() {
           tripId={trip.id}
           familyId={trip.familyId}
           durationDays={trip.durationDays}
-          defaultPersonId={
+          targetPersonId={
             typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
               ? filterPerson
-              : linkedPersonId
+              : undefined
           }
         />
 

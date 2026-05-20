@@ -3,7 +3,7 @@ import { styled } from "next-yak";
 import { Plus } from "lucide-react";
 import { Card, CardTitle, Stack, Row, Muted } from "../components/ui/Layout";
 import { Button } from "../components/ui/Button";
-import { Input, Select } from "../components/ui/Input";
+import { Input } from "../components/ui/Input";
 import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
 import { useDataProvider } from "../data/DataProviderContext";
@@ -14,7 +14,11 @@ interface Props {
   tripId: string;
   familyId: string;
   durationDays: number;
-  defaultPersonId?: string;
+  /**
+   * Target person for items added here. If undefined, items are added as
+   * "gemeinsam" (shared / family-wide).
+   */
+  targetPersonId?: string;
 }
 
 interface Parsed {
@@ -64,22 +68,35 @@ const HintBox = styled.div`
   }
 `;
 
-export function QuickAdd({ tripId, familyId, durationDays, defaultPersonId }: Props) {
+const PersonDot = styled.span<{ $color: string }>`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+`;
+
+export function QuickAdd({ tripId, familyId, durationDays, targetPersonId }: Props) {
   const provider = useDataProvider();
   const persons = usePersons(familyId);
   const templates = usePackingItems(familyId);
   const [text, setText] = useState("");
-  const [personId, setPersonId] = useState<string>(defaultPersonId ?? "");
 
   const preview = parseLine(text, durationDays);
+  const targetPerson = targetPersonId ? persons.find((p) => p.id === targetPersonId) : undefined;
+  const targetLabel = targetPerson ? targetPerson.name : "Gemeinsam";
 
   function submit() {
     const parsed = parseLine(text, durationDays);
     if (!parsed) return;
 
-    const pid = personId || undefined;
+    const pid = targetPersonId;
     const matched = templates.find(
-      (t) => t.name.toLowerCase() === parsed.name.toLowerCase() && (t.personId ?? "") === (pid ?? ""),
+      (t) =>
+        t.name.toLowerCase() === parsed.name.toLowerCase() &&
+        (t.personId ?? "") === (pid ?? ""),
     );
 
     // Add to template if not present (so future trips benefit)
@@ -121,9 +138,23 @@ export function QuickAdd({ tripId, familyId, durationDays, defaultPersonId }: Pr
     }
   }
 
+  const isNewInTemplate =
+    preview &&
+    !templates.some(
+      (t) =>
+        t.name.toLowerCase() === preview.name.toLowerCase() &&
+        (t.personId ?? "") === (targetPersonId ?? ""),
+    );
+
   return (
     <Card>
-      <CardTitle>Schnell hinzufügen</CardTitle>
+      <CardTitle>
+        Schnell hinzufügen ·{" "}
+        <span style={{ color: targetPerson?.color ?? colors.ink3, fontWeight: 600 }}>
+          {targetPerson && <PersonDot $color={targetPerson.color ?? colors.ink3} />}
+          {targetLabel}
+        </span>
+      </CardTitle>
       <Stack $gap={8}>
         <Row $gap={8}>
           <Input
@@ -132,18 +163,8 @@ export function QuickAdd({ tripId, familyId, durationDays, defaultPersonId }: Pr
             onKeyDown={onKeyDown}
             placeholder="z.B. Sonnenhut · oder · Boxershorts, 5"
             aria-label="Item-Name, optional Komma + Menge"
-            style={{ flex: 2 }}
+            style={{ flex: 1 }}
           />
-          <Select
-            value={personId}
-            onChange={(e) => setPersonId(e.target.value)}
-            style={{ flex: 1, maxWidth: 140 }}
-          >
-            <option value="">Gemeinsam</option>
-            {persons.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </Select>
           <Button onClick={submit} disabled={!preview} aria-label="Hinzufügen">
             <Plus size={16} />
           </Button>
@@ -154,11 +175,7 @@ export function QuickAdd({ tripId, familyId, durationDays, defaultPersonId }: Pr
             {preview.unit === "per_day"
               ? `${preview.baseQty} pro Tag = ${preview.totalQty} Stück bei ${durationDays} Tagen`
               : `${preview.totalQty} Stück (pro Trip)`}
-            {!templates.some(
-              (t) =>
-                t.name.toLowerCase() === preview.name.toLowerCase() &&
-                (t.personId ?? "") === (personId || ""),
-            ) && (
+            {isNewInTemplate && (
               <>
                 {" · "}
                 <em>landet auch in der Vorlage</em>
@@ -167,7 +184,7 @@ export function QuickAdd({ tripId, familyId, durationDays, defaultPersonId }: Pr
           </HintBox>
         ) : (
           <Muted>
-            Komma + Zahl = Menge (z.B. "Socken, 7"). Ohne Zahl = 1 pro Trip. Items landen auch in der Vorlage und sind bei zukünftigen Trips verfügbar.
+            Enter zum Hinzufügen. Komma + Zahl für die Menge (z.B. "Socken, 7"). Items landen automatisch auch in der Vorlage.
           </Muted>
         )}
       </Stack>
