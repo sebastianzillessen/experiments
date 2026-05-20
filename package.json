@@ -1,0 +1,14 @@
+{
+  "name": "experiments",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packliste"
+  ],
+  "scripts": {
+    "build": "bash build.sh",
+    "dev": "npm -w packliste run dev",
+    "dev:packliste": "npm -w packliste run dev",
+    "build:packliste": "npm -w packliste run build"
+  }
+}
