@@ -4,6 +4,7 @@ import type {
   Member,
   Person,
   Condition,
+  Category,
   PackingItem,
   Trip,
   TripItem,
@@ -51,6 +52,15 @@ export interface DataProvider {
   ): string;
   updatePerson(id: string, patch: Partial<Omit<Person, "id" | "familyId">>): void;
   deletePerson(id: string): void;
+
+  // Categories
+  listCategories(familyId: string): Category[];
+  /** Erstellt oder findet eine Kategorie nach Name (case-insensitive). */
+  upsertCategory(familyId: string, name: string, icon?: string): Category;
+  updateCategory(id: string, patch: Partial<Pick<Category, "name" | "icon">>): void;
+  deleteCategory(id: string): void;
+  /** Reordert eine Kategorie um eine Position. */
+  moveCategory(id: string, direction: "up" | "down"): void;
 
   // Conditions
   listConditions(familyId: string): Condition[];

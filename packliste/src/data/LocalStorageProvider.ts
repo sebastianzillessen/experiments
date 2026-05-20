@@ -1,4 +1,5 @@
 import type {
+  Category,
   Condition,
   Family,
   Member,
@@ -18,7 +19,7 @@ import {
 } from "./derive";
 import type { CreateTripParams, DataProvider, SyncStatus } from "./DataProvider";
 import { DEFAULT_CONDITION_KEYS, TEMPLATE_PRESETS } from "../defaults";
-import { CONDITION_LABELS, PERSON_COLORS } from "../labels";
+import { CONDITION_LABELS, PERSON_COLORS, categoryIcon } from "../labels";
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -382,6 +383,7 @@ export class LocalStorageProvider implements DataProvider {
     };
     list.push(next);
     write(K.items(item.familyId), list);
+    if (next.category) this.upsertCategory(next.familyId, next.category);
     this.notify();
     return next.id;
   }
@@ -394,6 +396,9 @@ export class LocalStorageProvider implements DataProvider {
       if (idx < 0) continue;
       list[idx] = { ...list[idx], ...patch };
       write(K.items(f.id), list);
+      // Wenn eine neue Kategorie verwendet wird, automatisch in der
+      // Kategorie-Liste anlegen
+      if (patch.category) this.upsertCategory(f.id, patch.category);
       this.notify();
       return;
     }
@@ -740,6 +745,139 @@ export class LocalStorageProvider implements DataProvider {
     }));
     write(K.tripItems(tripId), items);
     this.notify();
+  }
+
+  // ---------- Categories ----------
+  listCategories(familyId: string): Category[] {
+    // Lazy-Sync: aus existierenden Items eventuell fehlende Kategorien
+    // ergänzen. Damit funktionieren auch Family-Daten, die vor dem
+    // Category-Refactor angelegt wurden.
+    const stored = read<Category[]>(K.categories(familyId), []);
+    const items = read<PackingItem[]>(K.items(familyId), []).map(normalizePackingItem);
+    const namesInItems = new Set(
+      items.map((i) => i.category?.trim()).filter((c): c is string => Boolean(c)),
+    );
+    const existingNames = new Set(stored.map((c) => c.name.toLowerCase()));
+    const additions: Category[] = [];
+    for (const name of namesInItems) {
+      if (!existingNames.has(name.toLowerCase())) {
+        additions.push({
+          id: uuid(),
+          familyId,
+          name,
+          icon: categoryIcon(name),
+          sortOrder: stored.length + additions.length,
+        });
+        existingNames.add(name.toLowerCase());
+      }
+    }
+    if (additions.length > 0) {
+      const next = [...stored, ...additions];
+      write(K.categories(familyId), next);
+      return [...next].sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    return [...stored].sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  upsertCategory(familyId: string, name: string, icon?: string): Category {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("Kategorie-Name erforderlich");
+    const list = read<Category[]>(K.categories(familyId), []);
+    const existing = list.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      // Falls icon explizit gesetzt wird, übernehmen
+      if (icon && existing.icon !== icon) {
+        existing.icon = icon;
+        write(K.categories(familyId), list);
+        this.notify();
+      }
+      return existing;
+    }
+    const next: Category = {
+      id: uuid(),
+      familyId,
+      name: trimmed,
+      icon: icon || categoryIcon(trimmed),
+      sortOrder: list.length,
+    };
+    list.push(next);
+    write(K.categories(familyId), list);
+    this.notify();
+    return next;
+  }
+
+  updateCategory(id: string, patch: Partial<Pick<Category, "name" | "icon">>): void {
+    const families = read<Family[]>(K.families, []);
+    for (const f of families) {
+      const list = read<Category[]>(K.categories(f.id), []);
+      const idx = list.findIndex((c) => c.id === id);
+      if (idx < 0) continue;
+      const before = list[idx];
+      const after: Category = { ...before, ...patch };
+      if (patch.name !== undefined) after.name = patch.name.trim();
+      list[idx] = after;
+      write(K.categories(f.id), list);
+      // Cascade: bei Rename die items auf die neue Bezeichnung migrieren,
+      // damit der Filter in der Vorlage weiterhin matched
+      if (patch.name !== undefined && before.name !== after.name) {
+        const items = read<PackingItem[]>(K.items(f.id), []).map(normalizePackingItem);
+        let changed = false;
+        for (const it of items) {
+          if (it.category === before.name) {
+            it.category = after.name;
+            changed = true;
+          }
+        }
+        if (changed) write(K.items(f.id), items);
+      }
+      this.notify();
+      return;
+    }
+  }
+
+  deleteCategory(id: string): void {
+    const families = read<Family[]>(K.families, []);
+    for (const f of families) {
+      const list = read<Category[]>(K.categories(f.id), []);
+      const idx = list.findIndex((c) => c.id === id);
+      if (idx < 0) continue;
+      const removed = list[idx];
+      list.splice(idx, 1);
+      write(K.categories(f.id), list);
+      // Items dieser Kategorie verlieren ihre Zuordnung (werden zu "Sonstiges")
+      const items = read<PackingItem[]>(K.items(f.id), []).map(normalizePackingItem);
+      let changed = false;
+      for (const it of items) {
+        if (it.category === removed.name) {
+          it.category = "";
+          changed = true;
+        }
+      }
+      if (changed) write(K.items(f.id), items);
+      this.notify();
+      return;
+    }
+  }
+
+  moveCategory(id: string, direction: "up" | "down"): void {
+    const families = read<Family[]>(K.families, []);
+    for (const f of families) {
+      const list = read<Category[]>(K.categories(f.id), []).sort(
+        (a, b) => a.sortOrder - b.sortOrder,
+      );
+      const idx = list.findIndex((c) => c.id === id);
+      if (idx < 0) continue;
+      const swapWith = direction === "up" ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= list.length) return;
+      const a = list[idx];
+      const b = list[swapWith];
+      const tmp = a.sortOrder;
+      a.sortOrder = b.sortOrder;
+      b.sortOrder = tmp;
+      write(K.categories(f.id), list);
+      this.notify();
+      return;
+    }
   }
 
   // ---------- Sync ----------

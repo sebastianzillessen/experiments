@@ -48,6 +48,16 @@ export interface Condition {
   isCustom: boolean;
 }
 
+export interface Category {
+  id: string;
+  familyId: string;
+  /** Anzeigename — wird auch als Match-Key für packing_items.category genutzt. */
+  name: string;
+  /** Emoji (1-2 Zeichen). Überschreibt das Auto-Mapping aus labels.ts. */
+  icon?: string;
+  sortOrder: number;
+}
+
 export interface PackingItem {
   id: string;
   familyId: string;

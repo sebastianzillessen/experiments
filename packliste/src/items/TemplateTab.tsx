@@ -7,12 +7,14 @@ import { useCurrentFamily } from "../hooks/useFamily";
 import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
 import { useConditions } from "../hooks/useConditions";
+import { useCategories } from "../hooks/useCategories";
 import { useDataProvider } from "../data/DataProviderContext";
-import type { PackingItem } from "../types";
-import { conditionEmoji, conditionLabel } from "../labels";
+import type { Category, PackingItem } from "../types";
+import { conditionEmoji, conditionLabel, categoryIcon } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { ItemForm, type ItemFormValues } from "./ItemForm";
 import { EditItemModal } from "./EditItemModal";
+import { EditCategoryModal } from "./EditCategoryModal";
 import { InitialsBadge } from "../components/InitialsBadge";
 
 const ItemCard = styled.div`
@@ -22,6 +24,15 @@ const ItemCard = styled.div`
   padding: 10px 12px;
   background: ${colors.surface};
   border: 1px solid ${colors.line};
+  border-radius: ${radii.sm};
+`;
+
+const CategoryRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: ${colors.surface2};
   border-radius: ${radii.sm};
 `;
 
@@ -59,13 +70,24 @@ export function TemplateTab() {
   const persons = usePersons(family?.id);
   const items = usePackingItems(family?.id);
   const conditions = useConditions(family?.id);
+  const familyCategories = useCategories(family?.id);
   const [editingItem, setEditingItem] = useState<PackingItem | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   // Force-remount key so the ItemForm clears its internal state after submit
   const [formKey, setFormKey] = useState(0);
 
   const categories = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.category).filter(Boolean))).sort();
   }, [items]);
+
+  /** Liefert ein Icon für eine Kategorie — bevorzugt das vom User gesetzte. */
+  function iconFor(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) return categoryIcon("");
+    const match = familyCategories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    return match?.icon || categoryIcon(trimmed);
+  }
 
   if (!family) return null;
 
@@ -109,6 +131,55 @@ export function TemplateTab() {
         />
       </Card>
 
+      {familyCategories.length > 0 && (
+        <Card>
+          <Row style={{ justifyContent: "space-between" }}>
+            <CardTitle style={{ margin: 0 }}>
+              Kategorien · {familyCategories.length}
+            </CardTitle>
+            <IconButton
+              aria-label={categoriesExpanded ? "Einklappen" : "Aufklappen"}
+              onClick={() => setCategoriesExpanded((v) => !v)}
+            >
+              {categoriesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </IconButton>
+          </Row>
+          {categoriesExpanded && (
+            <Stack $gap={6} style={{ marginTop: 10 }}>
+              <Muted style={{ fontSize: 12 }}>
+                Neue Kategorien werden beim Anlegen eines Items automatisch ergänzt.
+                Hier kannst du Icon und Namen ändern oder die Kategorie löschen.
+              </Muted>
+              {familyCategories.map((c, idx) => (
+                <CategoryRow key={c.id}>
+                  <span style={{ fontSize: 20 }}>{c.icon || categoryIcon(c.name)}</span>
+                  <span style={{ flex: 1, fontWeight: 500 }}>{c.name}</span>
+                  <Row $gap={2}>
+                    <IconButton
+                      aria-label="Hoch"
+                      onClick={() => provider.moveCategory(c.id, "up")}
+                      disabled={idx === 0}
+                    >
+                      <ChevronUp size={14} />
+                    </IconButton>
+                    <IconButton
+                      aria-label="Runter"
+                      onClick={() => provider.moveCategory(c.id, "down")}
+                      disabled={idx === familyCategories.length - 1}
+                    >
+                      <ChevronDown size={14} />
+                    </IconButton>
+                    <IconButton aria-label="Bearbeiten" onClick={() => setEditingCategory(c)}>
+                      <Pencil size={14} />
+                    </IconButton>
+                  </Row>
+                </CategoryRow>
+              ))}
+            </Stack>
+          )}
+        </Card>
+      )}
+
       {items.length === 0 ? (
         <Card>
           <Muted>Noch keine Items in der Vorlage. Lege oben das erste an.</Muted>
@@ -116,7 +187,10 @@ export function TemplateTab() {
       ) : (
         catEntries.map(([cat, list]) => (
           <div key={cat}>
-            <SectionLabel>{cat} · {list.length} {list.length === 1 ? "Item" : "Items"}</SectionLabel>
+            <SectionLabel>
+              <span style={{ marginRight: 4 }}>{iconFor(cat)}</span>
+              {cat} · {list.length} {list.length === 1 ? "Item" : "Items"}
+            </SectionLabel>
             <Stack $gap={6}>
               {list.map((it, idx) => {
                 const assignedPersons = it.personIds
@@ -181,6 +255,9 @@ export function TemplateTab() {
         ))
       )}
 
+      {editingCategory && (
+        <EditCategoryModal category={editingCategory} onClose={() => setEditingCategory(null)} />
+      )}
       {editingItem && (
         <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />
       )}

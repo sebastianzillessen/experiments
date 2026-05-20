@@ -22,6 +22,7 @@ import { InitialsBadge } from "../components/InitialsBadge";
 import { SwipeRow, DesktopOnly } from "../components/SwipeRow";
 import { CategoryChip } from "../components/CategoryChip";
 import { categoryIcon } from "../labels";
+import { useCategories } from "../hooks/useCategories";
 import type { TripItem } from "../types";
 import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
@@ -102,6 +103,7 @@ export function TripDetail() {
   const items = useTripItems(id);
   const persons = usePersons(trip?.familyId);
   const conditions = useConditions(trip?.familyId);
+  const familyCategories = useCategories(trip?.familyId);
   const user = useCurrentUser();
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
@@ -267,7 +269,14 @@ export function TripDetail() {
                         <QtyStepper packed={it.packedQty} total={it.quantity} onChange={(n) => provider.setTripItemPacked(it.id, n)} />
                         <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
                           <Row $gap={6}>
-                            <CategoryChip icon={categoryIcon(it.category)} label={it.category || "Sonstiges"} />
+                            <CategoryChip
+                              icon={
+                                familyCategories.find(
+                                  (c) => c.name.toLowerCase() === it.category.toLowerCase(),
+                                )?.icon || categoryIcon(it.category)
+                              }
+                              label={it.category || "Sonstiges"}
+                            />
                             <ItemName $packed={it.isPacked}>{it.name}</ItemName>
                           </Row>
                           {lastBy && it.isPacked && (
