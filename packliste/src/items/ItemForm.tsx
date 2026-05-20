@@ -231,13 +231,13 @@ export function ItemForm({
           )}
         </div>
       )}
-      <Row $gap={8}>
-        <Field style={{ flex: 1 }}>
+      <Row $gap={8} $wrap>
+        <Field style={{ flex: "1 1 140px", minWidth: 0 }}>
           <FieldLabel>Grundmenge</FieldLabel>
           <NumberStepper value={baseQuantity} onChange={setBaseQuantity} min={1} ariaLabel="Grundmenge" />
         </Field>
         {frequency === "every_n" && (
-          <Field style={{ flex: 1 }}>
+          <Field style={{ flex: "1 1 140px", minWidth: 0 }}>
             <FieldLabel>Alle X Tage</FieldLabel>
             <NumberStepper value={perDays} onChange={setPerDays} min={1} max={365} ariaLabel="Tages-Intervall" />
           </Field>

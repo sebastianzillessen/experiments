@@ -19,6 +19,7 @@ import { useTrip } from "../hooks/useTrips";
 import { useTripItems } from "../hooks/useTripItems";
 import { useToast } from "../components/ui/Toast";
 import { InitialsBadge } from "../components/InitialsBadge";
+import { SwipeRow, DesktopOnly } from "../components/SwipeRow";
 import type { TripItem } from "../types";
 import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
@@ -42,9 +43,10 @@ const ItemRow = styled.div<{ $packed: boolean }>`
   gap: 12px;
   padding: 10px;
   border-radius: ${radii.sm};
-  background: ${colors.surface};
+  /* Solider Hintergrund nötig, weil SwipeRow den Delete-Bg darunter
+     legt — bei Transparenz würde Rot durchschimmern. */
+  background: ${({ $packed }) => ($packed ? colors.surface2 : colors.surface)};
   border: 1px solid ${colors.line};
-  opacity: ${({ $packed }) => ($packed ? 0.65 : 1)};
 `;
 
 const ItemName = styled.div<{ $packed: boolean }>`
@@ -256,27 +258,29 @@ export function TripDetail() {
               <Stack $gap={6}>
                 {list.map((it) => {
                   const lastBy = memberName(it.lastPackedBy);
+                  const p = persons.find((pp) => pp.id === it.personId);
                   return (
-                    <ItemRow key={it.id} $packed={it.isPacked}>
-                      <QtyStepper packed={it.packedQty} total={it.quantity} onChange={(n) => provider.setTripItemPacked(it.id, n)} />
-                      <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
-                        <ItemName $packed={it.isPacked}>{it.name}</ItemName>
-                        {lastBy && it.isPacked && (
-                          <Muted style={{ fontSize: 11 }}>abgehakt von {lastBy}</Muted>
-                        )}
-                      </Stack>
-                      {(() => {
-                        const p = persons.find((pp) => pp.id === it.personId);
-                        return p ? <InitialsBadge person={p} /> : null;
-                      })()}
-                      <IconButton
-                        aria-label={`"${it.name}" von diesem Trip entfernen`}
-                        title="Von diesem Trip entfernen"
-                        onClick={() => deleteWithUndo(it)}
-                      >
-                        <Trash2 size={14} />
-                      </IconButton>
-                    </ItemRow>
+                    <SwipeRow key={it.id} onDelete={() => deleteWithUndo(it)}>
+                      <ItemRow $packed={it.isPacked}>
+                        <QtyStepper packed={it.packedQty} total={it.quantity} onChange={(n) => provider.setTripItemPacked(it.id, n)} />
+                        <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
+                          <ItemName $packed={it.isPacked}>{it.name}</ItemName>
+                          {lastBy && it.isPacked && (
+                            <Muted style={{ fontSize: 11 }}>abgehakt von {lastBy}</Muted>
+                          )}
+                        </Stack>
+                        {p && <InitialsBadge person={p} />}
+                        <DesktopOnly>
+                          <IconButton
+                            aria-label={`"${it.name}" von diesem Trip entfernen`}
+                            title="Von diesem Trip entfernen"
+                            onClick={() => deleteWithUndo(it)}
+                          >
+                            <Trash2 size={14} />
+                          </IconButton>
+                        </DesktopOnly>
+                      </ItemRow>
+                    </SwipeRow>
                   );
                 })}
               </Stack>

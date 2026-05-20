@@ -4,7 +4,7 @@ import { Minus, Plus } from "lucide-react";
 import { colors, radii } from "../../theme.yak";
 
 const Wrap = styled.div`
-  display: inline-flex;
+  display: flex;
   align-items: stretch;
   border: 1px solid ${colors.line2};
   border-radius: ${radii.sm};
@@ -12,6 +12,7 @@ const Wrap = styled.div`
   overflow: hidden;
   height: 44px;
   width: 100%;
+  min-width: 0;
   max-width: 200px;
 `;
 
@@ -29,7 +30,8 @@ const StepBtn = styled.button`
 `;
 
 const NumInput = styled.input`
-  flex: 1;
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   text-align: center;
   border: none;
