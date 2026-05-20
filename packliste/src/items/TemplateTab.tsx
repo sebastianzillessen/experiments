@@ -1,21 +1,18 @@
 import { useMemo, useState } from "react";
 import { styled } from "next-yak";
-import { Plus, Trash2, ChevronUp, ChevronDown, X, Lightbulb } from "lucide-react";
+import { Trash2, ChevronUp, ChevronDown, Pencil } from "lucide-react";
 import { Card, CardTitle, Stack, Row, Muted, Badge, SectionLabel } from "../components/ui/Layout";
-import { Button, IconButton } from "../components/ui/Button";
-import { Input, Field, FieldLabel, FieldHint } from "../components/ui/Input";
-import { Chip, Chips } from "../components/ui/Chip";
-import { Checkbox } from "../components/ui/Checkbox";
-import { NumberStepper } from "../components/ui/NumberStepper";
+import { IconButton } from "../components/ui/Button";
 import { useCurrentFamily } from "../hooks/useFamily";
 import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
 import { useConditions } from "../hooks/useConditions";
 import { useDataProvider } from "../data/DataProviderContext";
-import { fuzzyMatchCategory } from "../data/derive";
-import type { PackingItem, QuantityUnit } from "../types";
+import type { PackingItem } from "../types";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
+import { ItemForm, type ItemFormValues } from "./ItemForm";
+import { EditItemModal } from "./EditItemModal";
 
 const ItemCard = styled.div`
   display: flex;
@@ -51,40 +48,15 @@ const ConditionsLine = styled.div`
   color: ${colors.ink3};
 `;
 
-const CategorySuggestion = styled.button`
-  margin-top: 6px;
-  background: ${colors.accentSoft};
-  border: 1px solid ${colors.accent};
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #6b3a1a;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-align: left;
-  cursor: pointer;
-  &:hover { filter: brightness(0.97); }
-`;
-
 export function TemplateTab() {
   const family = useCurrentFamily();
   const provider = useDataProvider();
   const persons = usePersons(family?.id);
   const items = usePackingItems(family?.id);
   const conditions = useConditions(family?.id);
-
-  type Frequency = "per_trip" | "daily" | "every_n";
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [baseQuantity, setBaseQuantity] = useState(1);
-  const [frequency, setFrequency] = useState<Frequency>("per_trip");
-  const [perDays, setPerDays] = useState(3);
-  const [washable, setWashable] = useState(false);
-  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
-  const [activeConds, setActiveConds] = useState<string[]>([]);
-  const [newCondition, setNewCondition] = useState("");
-  const [showCustomConditionForm, setShowCustomConditionForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<PackingItem | null>(null);
+  // Force-remount key so the ItemForm clears its internal state after submit
+  const [formKey, setFormKey] = useState(0);
 
   const categories = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.category).filter(Boolean))).sort();
@@ -92,68 +64,20 @@ export function TemplateTab() {
 
   if (!family) return null;
 
-  function toggleCond(key: string) {
-    setActiveConds((prev) => (prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]));
-  }
-
-  function togglePerson(id: string) {
-    setSelectedPersonIds((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
-    );
-  }
-
-  function toggleAllPersons() {
-    if (selectedPersonIds.length === persons.length) {
-      setSelectedPersonIds([]);
-    } else {
-      setSelectedPersonIds(persons.map((p) => p.id));
-    }
-  }
-
-  function addItem() {
-    if (!name.trim()) return;
-    // Derive unit + perDays from the chosen frequency
-    let resolvedUnit: QuantityUnit;
-    let resolvedPerDays: number | undefined;
-    if (frequency === "per_trip") {
-      resolvedUnit = "per_trip";
-      resolvedPerDays = undefined;
-    } else if (frequency === "daily") {
-      resolvedUnit = "per_day";
-      resolvedPerDays = 1;
-    } else {
-      resolvedUnit = "per_day";
-      resolvedPerDays = Math.max(1, perDays);
-    }
-    // Resolve category against existing list (fuzzy auto-correct on submit
-    // if the user typed something almost-but-not-quite a known category)
-    const trimmedCategory = category.trim();
-    const fuzzy = trimmedCategory ? fuzzyMatchCategory(trimmedCategory, categories) : null;
-    const finalCategory = fuzzy ?? trimmedCategory;
-    // Ein einzelnes Template-Item mit N Personen (1:N). Beim Trip-Anlegen
-    // wird daraus pro Person eine TripItem-Row expandiert.
+  function createItem(values: ItemFormValues) {
     provider.createPackingItem({
       familyId: family!.id,
-      personIds: [...selectedPersonIds],
-      name: name.trim(),
-      category: finalCategory,
-      baseQuantity: Math.max(1, baseQuantity),
-      unit: resolvedUnit,
-      perDays: resolvedPerDays,
-      washable,
-      conditions: [...activeConds],
+      personIds: values.personIds,
+      name: values.name,
+      category: values.category,
+      baseQuantity: values.baseQuantity,
+      unit: values.unit,
+      perDays: values.perDays,
+      washable: values.washable,
+      conditions: values.conditions,
       sortOrder: items.length,
     });
-    setName("");
-    setBaseQuantity(1);
-    setActiveConds([]);
-  }
-
-  function addCustomCondition() {
-    if (!newCondition.trim()) return;
-    provider.createCustomCondition(family!.id, newCondition.trim());
-    setNewCondition("");
-    setShowCustomConditionForm(false);
+    setFormKey((k) => k + 1);
   }
 
   // group items by category
@@ -165,152 +89,19 @@ export function TemplateTab() {
   }
   const catEntries = Array.from(byCat.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
 
-  const categoryFuzzy = useMemo(
-    () => fuzzyMatchCategory(category, categories),
-    [category, categories],
-  );
-
-  const previewQty = (() => {
-    const sampleDays = 7;
-    if (frequency === "per_trip") return `Pro Trip = ${baseQuantity} Stück`;
-    if (frequency === "daily") return `Bei ${sampleDays}-Tage-Trip = ${baseQuantity * sampleDays} Stück (täglich)`;
-    const interval = Math.max(1, perDays);
-    const cycles = Math.ceil(sampleDays / interval);
-    return `Bei ${sampleDays}-Tage-Trip = ${baseQuantity * cycles} Stück (alle ${interval} Tage, aufgerundet)`;
-  })();
-
   return (
     <>
       <Card>
         <CardTitle>Neues Item</CardTitle>
-        <Stack $gap={10}>
-          <Field>
-            <FieldLabel>Name</FieldLabel>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Unterhose" />
-          </Field>
-          <Field>
-            <FieldLabel>Kategorie</FieldLabel>
-            <Input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="z.B. Kleidung"
-              list="cat-list"
-            />
-            <datalist id="cat-list">
-              {categories.map((c) => <option key={c} value={c} />)}
-            </datalist>
-            {categoryFuzzy && (
-              <CategorySuggestion type="button" onClick={() => setCategory(categoryFuzzy)}>
-                <Lightbulb size={12} /> Meinst du <strong>{categoryFuzzy}</strong>? · Klick zum Übernehmen
-              </CategorySuggestion>
-            )}
-          </Field>
-          {persons.length > 0 && (
-            <div>
-              <FieldLabel>Für wen? (Mehrfach-Auswahl)</FieldLabel>
-              <Chips style={{ marginTop: 6 }}>
-                <Chip
-                  type="button"
-                  $active={selectedPersonIds.length === persons.length && persons.length > 0}
-                  onClick={toggleAllPersons}
-                >
-                  Alle Personen
-                </Chip>
-                {persons.map((p) => (
-                  <Chip
-                    key={p.id}
-                    type="button"
-                    $active={selectedPersonIds.includes(p.id)}
-                    onClick={() => togglePerson(p.id)}
-                  >
-                    <PersonDot $color={p.color ?? colors.ink3} />
-                    {p.name}
-                  </Chip>
-                ))}
-              </Chips>
-              <FieldHint style={{ display: "block", marginTop: 6 }}>
-                {selectedPersonIds.length === 0
-                  ? "Niemand ausgewählt → 1 gemeinsames Item für die Familie."
-                  : selectedPersonIds.length === 1
-                  ? "1 Item für die gewählte Person."
-                  : `${selectedPersonIds.length} Items werden angelegt — eines pro Person.`}
-              </FieldHint>
-            </div>
-          )}
-          <Row $gap={8}>
-            <Field style={{ flex: 1 }}>
-              <FieldLabel>Grundmenge</FieldLabel>
-              <NumberStepper value={baseQuantity} onChange={setBaseQuantity} min={1} ariaLabel="Grundmenge" />
-            </Field>
-            {frequency === "every_n" && (
-              <Field style={{ flex: 1 }}>
-                <FieldLabel>Alle X Tage</FieldLabel>
-                <NumberStepper value={perDays} onChange={setPerDays} min={1} max={365} ariaLabel="Wasch-Intervall in Tagen" />
-              </Field>
-            )}
-          </Row>
-          <div>
-            <FieldLabel>Häufigkeit</FieldLabel>
-            <Chips style={{ marginTop: 6 }}>
-              <Chip type="button" $active={frequency === "per_trip"} onClick={() => setFrequency("per_trip")}>
-                Pro Trip
-              </Chip>
-              <Chip type="button" $active={frequency === "daily"} onClick={() => setFrequency("daily")}>
-                Pro Tag
-              </Chip>
-              <Chip type="button" $active={frequency === "every_n"} onClick={() => setFrequency("every_n")}>
-                Alle X Tage
-              </Chip>
-            </Chips>
-            <FieldHint style={{ display: "block", marginTop: 6 }}>{previewQty}</FieldHint>
-          </div>
-          <Checkbox checked={washable} onChange={setWashable} label="🧺 Waschbar" hint="Wird auf Trips mit Waschmaschine reduziert" />
-          <div>
-            <FieldLabel>Bedingungen (leer = immer)</FieldLabel>
-            <Chips style={{ marginTop: 6 }}>
-              {conditions.map((c) => (
-                <Chip
-                  key={c.key}
-                  type="button"
-                  $active={activeConds.includes(c.key)}
-                  onClick={() => toggleCond(c.key)}
-                >
-                  {conditionEmoji(c.key)} {c.label}
-                  {c.isCustom && (
-                    <X
-                      size={12}
-                      style={{ marginLeft: 2, cursor: "pointer" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Bedingung "${c.label}" löschen?`)) {
-                          provider.deleteCustomCondition(family!.id, c.key);
-                        }
-                      }}
-                    />
-                  )}
-                </Chip>
-              ))}
-              {!showCustomConditionForm && (
-                <Chip type="button" onClick={() => setShowCustomConditionForm(true)}>+ Eigene</Chip>
-              )}
-            </Chips>
-            {showCustomConditionForm && (
-              <Row $gap={6} style={{ marginTop: 8 }}>
-                <Input
-                  value={newCondition}
-                  onChange={(e) => setNewCondition(e.target.value)}
-                  placeholder="z.B. Mit Hund"
-                  onKeyDown={(e) => e.key === "Enter" && addCustomCondition()}
-                />
-                <Button $size="sm" onClick={addCustomCondition}>Hinzufügen</Button>
-                <Button $size="sm" $variant="ghost" onClick={() => { setShowCustomConditionForm(false); setNewCondition(""); }}>Abbrechen</Button>
-              </Row>
-            )}
-          </div>
-          <Button $block disabled={!name.trim()} onClick={addItem}>
-            <Plus size={16} /> Hinzufügen
-          </Button>
-        </Stack>
+        <ItemForm
+          key={formKey}
+          familyId={family.id}
+          persons={persons}
+          conditions={conditions}
+          categories={categories}
+          submitLabel="Hinzufügen"
+          onSubmit={createItem}
+        />
       </Card>
 
       {items.length === 0 ? (
@@ -363,6 +154,9 @@ export function TemplateTab() {
                       </ConditionsLine>
                     </NamePart>
                     <Row $gap={2}>
+                      <IconButton aria-label="Bearbeiten" onClick={() => setEditingItem(it)}>
+                        <Pencil size={14} />
+                      </IconButton>
                       <IconButton aria-label="Hoch" onClick={() => provider.movePackingItem(it.id, "up")} disabled={idx === 0}>
                         <ChevronUp size={14} />
                       </IconButton>
@@ -381,6 +175,10 @@ export function TemplateTab() {
             </Stack>
           </div>
         ))
+      )}
+
+      {editingItem && (
+        <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />
       )}
     </>
   );
