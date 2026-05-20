@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { SyncIndicator } from "./components/SyncIndicator";
+import { ToastProvider } from "./components/ui/Toast";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { useCurrentFamily } from "./hooks/useFamily";
 import { AuthGate } from "./auth/AuthGate";
@@ -19,18 +20,20 @@ export function App() {
   if (!family) return <CreateFamilyScreen />;
 
   return (
-    <HashRouter>
-      <Routes>
-        <Route path="/trip/:id" element={<TripDetail />} />
-        <Route element={<AppShell />}>
-          <Route index element={<TripsTab />} />
-          <Route path="/vorlage" element={<TemplateTab />} />
-          <Route path="/familie" element={<FamilyTab />} />
-          <Route path="/info" element={<InfoTab />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-      <SyncIndicator />
-    </HashRouter>
+    <ToastProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/trip/:id" element={<TripDetail />} />
+          <Route element={<AppShell />}>
+            <Route index element={<TripsTab />} />
+            <Route path="/vorlage" element={<TemplateTab />} />
+            <Route path="/familie" element={<FamilyTab />} />
+            <Route path="/info" element={<InfoTab />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+        <SyncIndicator />
+      </HashRouter>
+    </ToastProvider>
   );
 }

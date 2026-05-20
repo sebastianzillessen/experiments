@@ -17,6 +17,8 @@ import { Chip, ChipsScrollable } from "../components/ui/Chip";
 import { useDataProvider, useProviderRevision } from "../data/DataProviderContext";
 import { useTrip } from "../hooks/useTrips";
 import { useTripItems } from "../hooks/useTripItems";
+import { useToast } from "../components/ui/Toast";
+import type { TripItem } from "../types";
 import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -24,7 +26,6 @@ import { QtyStepper } from "./QtyStepper";
 import { QuickAdd } from "./QuickAdd";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
-import type { TripItem } from "../types";
 import { TripCreateModal } from "./TripCreateModal";
 
 const Page = styled.div`
@@ -99,12 +100,24 @@ export function TripDetail() {
   const user = useCurrentUser();
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const toast = useToast();
 
   // Default filter: link the current user's linked person + unassigned
   const linkedPersonId = useMemo(() => {
     if (!user) return undefined;
     return persons.find((p) => p.linkedUserId === user.id)?.id;
   }, [persons, user]);
+
+  function deleteWithUndo(item: TripItem) {
+    // Snapshot tief klonen (für Undo). Direkter Delete — kein Confirm-Dialog.
+    const snapshot: TripItem = { ...item };
+    provider.deleteTripItem(item.id);
+    toast.show({
+      message: `„${item.name}" entfernt`,
+      action: { label: "Rückgängig", onClick: () => provider.restoreTripItem(snapshot) },
+      duration: 6000,
+    });
+  }
 
   if (!trip) {
     return (
@@ -259,7 +272,7 @@ export function TripDetail() {
                       <IconButton
                         aria-label={`"${it.name}" von diesem Trip entfernen`}
                         title="Von diesem Trip entfernen"
-                        onClick={() => provider.deleteTripItem(it.id)}
+                        onClick={() => deleteWithUndo(it)}
                       >
                         <Trash2 size={14} />
                       </IconButton>

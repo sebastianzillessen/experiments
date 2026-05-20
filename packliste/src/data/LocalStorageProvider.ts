@@ -662,6 +662,16 @@ export class LocalStorageProvider implements DataProvider {
     this.notify();
   }
 
+  restoreTripItem(item: TripItem): void {
+    const items = read<TripItem[]>(K.tripItems(item.tripId), []);
+    // Falls die id schon existiert: ersetzen statt duplizieren
+    const idx = items.findIndex((i) => i.id === item.id);
+    if (idx >= 0) items[idx] = item;
+    else items.push(item);
+    write(K.tripItems(item.tripId), items);
+    this.notify();
+  }
+
   mergeTemplatesIntoTrip(tripId: string): number {
     const trip = this.getTrip(tripId);
     if (!trip) return 0;

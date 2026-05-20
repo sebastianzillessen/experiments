@@ -100,6 +100,12 @@ export interface DataProvider {
     >,
   ): void;
   deleteTripItem(id: string): void;
+  /**
+   * Setzt ein zuvor gelöschtes TripItem exakt wieder ein (inkl. id,
+   * packedQty, lastPackedBy). Idempotent — wenn die id bereits existiert,
+   * wird der bestehende Eintrag überschrieben. Für Undo-Funktionalität.
+   */
+  restoreTripItem(item: TripItem): void;
   mergeTemplatesIntoTrip(tripId: string): number;
   rebuildTripItemsFromTemplates(tripId: string): void;
 
