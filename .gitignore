@@ -6,3 +6,4 @@ dist/
 .vite/
 packliste/.swc/
 *.tsbuildinfo
+.claude/
