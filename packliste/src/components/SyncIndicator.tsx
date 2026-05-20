@@ -5,7 +5,8 @@ import { colors } from "../theme.yak";
 const Wrap = styled.div<{ $tone: "ok" | "syncing" | "error" }>`
   position: fixed;
   right: 14px;
-  bottom: 14px;
+  /* Default: oberhalb der mobilen Bottom-Nav + Safe-Area */
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   background: ${({ $tone }) =>
     $tone === "ok" ? colors.successSoft : $tone === "syncing" ? colors.primarySoft : colors.dangerSoft};
   color: ${({ $tone }) =>
@@ -18,6 +19,11 @@ const Wrap = styled.div<{ $tone: "ok" | "syncing" | "error" }>`
   align-items: center;
   gap: 6px;
   z-index: 50;
+  pointer-events: none;
+  @media (min-width: 601px) {
+    /* Auf Desktop: einfach unten rechts ohne Bottom-Nav-Reservierung */
+    bottom: 14px;
+  }
   &::before {
     content: "";
     width: 6px;
