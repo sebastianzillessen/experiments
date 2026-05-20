@@ -61,7 +61,7 @@ export function TemplateTab() {
   const [baseQuantity, setBaseQuantity] = useState(1);
   const [unit, setUnit] = useState<QuantityUnit>("per_trip");
   const [washable, setWashable] = useState(false);
-  const [personId, setPersonId] = useState<string>("");
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [activeConds, setActiveConds] = useState<string[]>([]);
   const [newCondition, setNewCondition] = useState("");
   const [showCustomConditionForm, setShowCustomConditionForm] = useState(false);
@@ -76,18 +76,38 @@ export function TemplateTab() {
     setActiveConds((prev) => (prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]));
   }
 
+  function togglePerson(id: string) {
+    setSelectedPersonIds((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+    );
+  }
+
+  function toggleAllPersons() {
+    if (selectedPersonIds.length === persons.length) {
+      setSelectedPersonIds([]);
+    } else {
+      setSelectedPersonIds(persons.map((p) => p.id));
+    }
+  }
+
   function addItem() {
     if (!name.trim()) return;
-    provider.createPackingItem({
-      familyId: family!.id,
-      personId: personId || undefined,
-      name: name.trim(),
-      category: category.trim(),
-      baseQuantity: Math.max(1, baseQuantity),
-      unit,
-      washable,
-      conditions: [...activeConds],
-      sortOrder: items.length,
+    // No persons selected → 1 shared item.
+    // N persons selected → N items, one per person.
+    const targets: (string | undefined)[] =
+      selectedPersonIds.length === 0 ? [undefined] : selectedPersonIds;
+    targets.forEach((pid, idx) => {
+      provider.createPackingItem({
+        familyId: family!.id,
+        personId: pid,
+        name: name.trim(),
+        category: category.trim(),
+        baseQuantity: Math.max(1, baseQuantity),
+        unit,
+        washable,
+        conditions: [...activeConds],
+        sortOrder: items.length + idx,
+      });
     });
     setName("");
     setBaseQuantity(1);
@@ -121,27 +141,50 @@ export function TemplateTab() {
             <FieldLabel>Name</FieldLabel>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Unterhose" />
           </Field>
-          <Row $gap={8}>
-            <Field style={{ flex: 1 }}>
-              <FieldLabel>Kategorie</FieldLabel>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="z.B. Kleidung"
-                list="cat-list"
-              />
-              <datalist id="cat-list">
-                {categories.map((c) => <option key={c} value={c} />)}
-              </datalist>
-            </Field>
-            <Field style={{ flex: 1 }}>
-              <FieldLabel>Person</FieldLabel>
-              <Select value={personId} onChange={(e) => setPersonId(e.target.value)}>
-                <option value="">— Gemeinsam —</option>
-                {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </Select>
-            </Field>
-          </Row>
+          <Field>
+            <FieldLabel>Kategorie</FieldLabel>
+            <Input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="z.B. Kleidung"
+              list="cat-list"
+            />
+            <datalist id="cat-list">
+              {categories.map((c) => <option key={c} value={c} />)}
+            </datalist>
+          </Field>
+          {persons.length > 0 && (
+            <div>
+              <FieldLabel>Für wen? (Mehrfach-Auswahl)</FieldLabel>
+              <Chips style={{ marginTop: 6 }}>
+                <Chip
+                  type="button"
+                  $active={selectedPersonIds.length === persons.length && persons.length > 0}
+                  onClick={toggleAllPersons}
+                >
+                  Alle Personen
+                </Chip>
+                {persons.map((p) => (
+                  <Chip
+                    key={p.id}
+                    type="button"
+                    $active={selectedPersonIds.includes(p.id)}
+                    onClick={() => togglePerson(p.id)}
+                  >
+                    <PersonDot $color={p.color ?? colors.ink3} />
+                    {p.name}
+                  </Chip>
+                ))}
+              </Chips>
+              <FieldHint style={{ display: "block", marginTop: 6 }}>
+                {selectedPersonIds.length === 0
+                  ? "Niemand ausgewählt → 1 gemeinsames Item für die Familie."
+                  : selectedPersonIds.length === 1
+                  ? "1 Item für die gewählte Person."
+                  : `${selectedPersonIds.length} Items werden angelegt — eines pro Person.`}
+              </FieldHint>
+            </div>
+          )}
           <Row $gap={8}>
             <Field style={{ flex: 1 }}>
               <FieldLabel>Grundmenge</FieldLabel>
