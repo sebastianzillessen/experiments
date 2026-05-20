@@ -146,6 +146,19 @@ export interface DataProvider {
    */
   importSnapshot(json: string): void;
 
+  /**
+   * Lädt den aktuellen Snapshot zum Cloudflare-Worker-KV hoch und liefert
+   * einen 6-stelligen Code, mit dem ein anderer Browser ihn abrufen kann.
+   * Wirft bei Server-Fehler.
+   */
+  shareSnapshotToRemote(): Promise<string>;
+
+  /**
+   * Holt einen vorher per shareSnapshotToRemote() abgelegten Snapshot
+   * über den 6-stelligen Code und importiert ihn lokal.
+   */
+  loadSharedSnapshot(code: string): Promise<void>;
+
   // Subscribe to any change — components re-render via this
   subscribe(listener: () => void): () => void;
 }

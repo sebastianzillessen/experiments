@@ -10,5 +10,8 @@
     "dev": "npm -w packliste run dev",
     "dev:packliste": "npm -w packliste run dev",
     "build:packliste": "npm -w packliste run build"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260520.1"
   }
 }

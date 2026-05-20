@@ -1,11 +1,12 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { styled } from "next-yak";
-import { Download, Upload } from "lucide-react";
-import { Card, CardTitle, Stack, Row, Note } from "../components/ui/Layout";
+import { Download, Upload, Cloud, CloudDownload, Copy, Check } from "lucide-react";
+import { Card, CardTitle, Stack, Row, Muted, Note } from "../components/ui/Layout";
 import { Button } from "../components/ui/Button";
+import { Input, Field, FieldLabel } from "../components/ui/Input";
 import { useDataProvider } from "../data/DataProviderContext";
 import { useToast } from "../components/ui/Toast";
-import { colors } from "../theme.yak";
+import { colors, radii } from "../theme.yak";
 
 const Section = styled.div`
   h4 {
@@ -29,10 +30,81 @@ const Section = styled.div`
   }
 `;
 
+const CodeDisplay = styled.div`
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  background: ${colors.primarySoft};
+  color: ${colors.primaryInk};
+  border: 2px dashed ${colors.primary};
+  border-radius: ${radii.sm};
+  padding: 14px 16px;
+  text-align: center;
+  user-select: all;
+`;
+
 export function InfoTab() {
   const provider = useDataProvider();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [importCode, setImportCode] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function generateCode() {
+    setShareLoading(true);
+    setGeneratedCode(null);
+    try {
+      const code = await provider.shareSnapshotToRemote();
+      setGeneratedCode(code);
+      setCopied(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.show({ message: `Upload fehlgeschlagen: ${msg}`, duration: 9000 });
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  async function copyCode() {
+    if (!generatedCode) return;
+    try {
+      await navigator.clipboard.writeText(generatedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.show({ message: "Kopieren fehlgeschlagen — bitte manuell auswählen", duration: 4000 });
+    }
+  }
+
+  async function importByCode() {
+    const code = importCode.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) return;
+    if (
+      !confirm(
+        "Beim Import werden alle aktuellen lokalen Daten überschrieben. Fortfahren?",
+      )
+    ) {
+      return;
+    }
+    setImportLoading(true);
+    try {
+      await provider.loadSharedSnapshot(code);
+      toast.show({
+        message: "Import erfolgreich — Seite wird neu geladen",
+        duration: 3000,
+      });
+      setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.show({ message: `Import fehlgeschlagen: ${msg}`, duration: 9000 });
+    } finally {
+      setImportLoading(false);
+    }
+  }
 
   function exportData() {
     const json = provider.exportSnapshot();
@@ -175,6 +247,79 @@ export function InfoTab() {
             Importieren <strong>überschreibt alle aktuellen Daten</strong>. Mach
             vorher einen Export, falls du dir nicht sicher bist.
           </Note>
+        </Stack>
+      </Card>
+
+      <Card>
+        <CardTitle>Per Code teilen</CardTitle>
+        <Section>
+          <p>
+            Schneller als der Datei-Weg: erzeuge auf Browser A einen Code,
+            tippe ihn auf Browser B ein. Daten landen verschlüsselt auf
+            Cloudflare KV und werden nach <strong>30 Tagen automatisch
+            gelöscht</strong>.
+          </p>
+        </Section>
+        <Stack $gap={10}>
+          <Stack $gap={8}>
+            <Muted style={{ fontSize: 12, fontWeight: 600 }}>
+              Daten auf diesem Browser → Code erzeugen
+            </Muted>
+            <Button onClick={generateCode} disabled={shareLoading}>
+              <Cloud size={16} />
+              {shareLoading ? "Wird hochgeladen …" : "Code erzeugen"}
+            </Button>
+            {generatedCode && (
+              <Stack $gap={6}>
+                <CodeDisplay aria-label="Geteilter Code">{generatedCode}</CodeDisplay>
+                <Row $gap={8}>
+                  <Button
+                    $variant="secondary"
+                    $size="sm"
+                    onClick={copyCode}
+                    style={{ flex: 1 }}
+                  >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? "Kopiert" : "Kopieren"}
+                  </Button>
+                </Row>
+                <Muted style={{ fontSize: 12 }}>
+                  Gültig 30 Tage. Wer den Code kennt, kann deine Daten lesen —
+                  also bitte nur an dich selbst oder Familienmitglieder weitergeben.
+                </Muted>
+              </Stack>
+            )}
+          </Stack>
+
+          <hr style={{ border: "none", borderTop: `1px solid ${colors.line}`, margin: "4px 0" }} />
+
+          <Stack $gap={8}>
+            <Muted style={{ fontSize: 12, fontWeight: 600 }}>
+              Code eintippen → Daten holen
+            </Muted>
+            <Field>
+              <FieldLabel>6-stelliger Code</FieldLabel>
+              <Input
+                value={importCode}
+                onChange={(e) =>
+                  setImportCode(e.target.value.toUpperCase().slice(0, 6))
+                }
+                placeholder="ABC234"
+                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.15em" }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") importByCode();
+                }}
+              />
+            </Field>
+            <Button
+              $variant="secondary"
+              onClick={importByCode}
+              disabled={importLoading || importCode.length !== 6}
+            >
+              <CloudDownload size={16} />
+              {importLoading ? "Wird geladen …" : "Daten holen"}
+            </Button>
+          </Stack>
         </Stack>
       </Card>
 

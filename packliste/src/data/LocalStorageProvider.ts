@@ -951,6 +951,51 @@ export class LocalStorageProvider implements DataProvider {
     return JSON.stringify(snapshot, null, 2);
   }
 
+  async shareSnapshotToRemote(): Promise<string> {
+    const json = this.exportSnapshot();
+    const res = await fetch("/api/packliste/share", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: json,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) msg = body.error;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
+    const data = (await res.json()) as { code: string };
+    if (!data.code) throw new Error("Kein Code vom Server erhalten");
+    return data.code;
+  }
+
+  async loadSharedSnapshot(code: string): Promise<void> {
+    const cleaned = code.trim().toUpperCase().replace(/\s+/g, "");
+    if (!/^[A-Z2-9]{6}$/.test(cleaned)) {
+      throw new Error("Code muss 6 Zeichen lang sein (A-Z, 2-9)");
+    }
+    const res = await fetch(`/api/packliste/share/${cleaned}`);
+    if (res.status === 404) {
+      throw new Error("Code nicht gefunden oder abgelaufen (30 Tage TTL)");
+    }
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) msg = body.error;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
+    const json = await res.text();
+    this.importSnapshot(json);
+  }
+
   importSnapshot(json: string): void {
     let parsed: unknown;
     try {

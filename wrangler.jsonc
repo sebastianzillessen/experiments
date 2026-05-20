@@ -1,11 +1,30 @@
 {
-  // Cloudflare Workers Static Assets config.
-  // The build step (./build.sh) writes the site to ./_site,
-  // which `wrangler versions upload` then publishes as static assets.
+  // Cloudflare Worker + Static Assets.
+  //
+  // - "main" verweist auf den Worker, der API-Routen unter
+  //   /api/packliste/share* selbst handhabt und alle anderen Requests
+  //   per ASSETS.fetch() durchreicht (statische Apps wie Lohn, Palermo,
+  //   Packliste).
+  // - "assets" verweist auf die von ./build.sh gebauten Dateien.
+  //
+  // KV-Setup (für das Packliste-Code-Sharing, einmalig):
+  //   npx wrangler kv:namespace create PACKLISTE_KV
+  //   → die zurückgegebene id in den auskommentierten Block unten setzen
+  //     und die Zeilen einkommentieren. Ohne Binding antwortet der
+  //     Worker auf den Share-Endpunkt mit 503 — die statischen Apps
+  //     laufen trotzdem normal.
   "name": "experiments",
   "compatibility_date": "2026-05-08",
+  "main": "./worker/index.ts",
   "assets": {
     "directory": "./_site",
+    "binding": "ASSETS",
     "not_found_handling": "404-page"
   }
+  // "kv_namespaces": [
+  //   {
+  //     "binding": "PACKLISTE_KV",
+  //     "id": "<HIER_KV_ID_EINTRAGEN>"
+  //   }
+  // ]
 }
