@@ -21,6 +21,7 @@ import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { QtyStepper } from "./QtyStepper";
+import { QuickAdd } from "./QuickAdd";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import type { TripItem } from "../types";
@@ -213,14 +214,25 @@ export function TripDetail() {
         {items.length === 0 && (
           <Card>
             <Stack $gap={8} $align="center">
-              <div style={{ fontSize: 32 }}>🤔</div>
-              <Muted>
-                Keine Items aus der Vorlage passen zu den Bedingungen.
-                Füge in der Vorlage Items hinzu oder ändere die Bedingungen.
+              <div style={{ fontSize: 32 }}>📋</div>
+              <Muted style={{ textAlign: "center" }}>
+                Noch keine Items auf der Liste. Füge unten schnell welche hinzu —
+                sie landen automatisch in deiner Vorlage und sind beim nächsten Trip dabei.
               </Muted>
             </Stack>
           </Card>
         )}
+
+        <QuickAdd
+          tripId={trip.id}
+          familyId={trip.familyId}
+          durationDays={trip.durationDays}
+          defaultPersonId={
+            typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
+              ? filterPerson
+              : linkedPersonId
+          }
+        />
 
         {sortedCats.map(([cat, list]) => {
           const cTotal = list.reduce((s, i) => s + i.quantity, 0);
