@@ -13,7 +13,7 @@ import {
   Divider,
 } from "../components/ui/Layout";
 import { Button, IconButton } from "../components/ui/Button";
-import { Chip, ChipsScrollable } from "../components/ui/Chip";
+import { ChipsScrollable } from "../components/ui/Chip";
 import { useDataProvider, useProviderRevision } from "../data/DataProviderContext";
 import { useTrip } from "../hooks/useTrips";
 import { useTripItems } from "../hooks/useTripItems";
@@ -104,6 +104,58 @@ const PersonDot = styled.span<{ $color: string }>`
   display: inline-block;
 `;
 
+/**
+ * Filter-Chip mit eingebauter Progress-Bar als Hintergrund. Zeigt den
+ * Pack-Fortschritt der gefilterten Items (Anteil packed_qty / quantity)
+ * als Linear-Fill von links. Person-Farbe wird als Fill-Farbe verwendet,
+ * leicht transparent damit der Text drüber lesbar bleibt.
+ */
+const FilterChip = styled.button<{
+  $active: boolean;
+  $progress: number;
+  $color?: string;
+  $done?: boolean;
+}>`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active }) => ($active ? colors.primary : colors.line2)};
+  background-color: ${({ $active }) =>
+    $active ? colors.primarySoft : colors.surface};
+  background-image: ${({ $progress, $color, $done }) => {
+    const pct = Math.min(100, Math.max(0, $progress * 100));
+    const fill = $done
+      ? `${colors.success}55`
+      : `${$color ?? colors.primary}44`;
+    return `linear-gradient(to right, ${fill} ${pct}%, transparent ${pct}%)`;
+  }};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  color: ${colors.ink};
+  white-space: nowrap;
+  scroll-snap-align: start;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background-color 100ms, border-color 100ms;
+  & > * {
+    position: relative;
+    z-index: 1;
+  }
+  &:hover {
+    border-color: ${colors.primary};
+  }
+`;
+
+const ProgressFrac = styled.span`
+  font-size: 11px;
+  color: ${colors.ink3};
+  font-variant-numeric: tabular-nums;
+`;
+
 function formatDateRange(t: ReturnType<typeof useTrip>) {
   if (!t) return "";
   if (t.startDate && t.endDate) {
@@ -167,6 +219,24 @@ export function TripDetail() {
   const packedQty = items.reduce((s, i) => s + i.packedQty, 0);
   const pct = totalQty === 0 ? 0 : Math.round((packedQty / totalQty) * 100);
   const allDone = totalQty > 0 && pct === 100;
+
+  /** Berechnet packed/total für einen Filter-Schlüssel ("all" / "none" / personId). */
+  function progressForFilter(key: string | "all" | "none"): {
+    packed: number;
+    total: number;
+    ratio: number;
+    done: boolean;
+  } {
+    const set = items.filter((it) => {
+      if (key === "all") return true;
+      if (key === "none") return !it.personId;
+      return it.personId === key;
+    });
+    const total = set.reduce((s, i) => s + i.quantity, 0);
+    const packed = set.reduce((s, i) => s + i.packedQty, 0);
+    const ratio = total === 0 ? 0 : packed / total;
+    return { packed, total, ratio, done: total > 0 && packed >= total };
+  }
 
   const byCategory = new Map<string, TripItem[]>();
   for (const it of visibleItems) {
@@ -237,14 +307,58 @@ export function TripDetail() {
         <StickyHeader>
           {persons.length > 0 && (
             <ChipsScrollable>
-              <Chip type="button" $active={filterPerson === "all"} onClick={() => setFilterPerson("all")}>Alle</Chip>
-              {persons.map((p) => (
-                <Chip key={p.id} type="button" $active={filterPerson === p.id} onClick={() => setFilterPerson(p.id)}>
-                  <PersonDot $color={p.color ?? colors.ink3} />
-                  {p.name}{linkedPersonId === p.id && " (du)"}
-                </Chip>
-              ))}
-              <Chip type="button" $active={filterPerson === "none"} onClick={() => setFilterPerson("none")}>Gemeinsam</Chip>
+              {(() => {
+                const p = progressForFilter("all");
+                return (
+                  <FilterChip
+                    type="button"
+                    $active={filterPerson === "all"}
+                    $progress={p.ratio}
+                    $done={p.done}
+                    onClick={() => setFilterPerson("all")}
+                  >
+                    <span>Alle</span>
+                    {p.total > 0 && <ProgressFrac>{p.packed}/{p.total}</ProgressFrac>}
+                  </FilterChip>
+                );
+              })()}
+              {persons.map((p) => {
+                const stats = progressForFilter(p.id);
+                return (
+                  <FilterChip
+                    key={p.id}
+                    type="button"
+                    $active={filterPerson === p.id}
+                    $progress={stats.ratio}
+                    $color={p.color}
+                    $done={stats.done}
+                    onClick={() => setFilterPerson(p.id)}
+                  >
+                    <PersonDot $color={p.color ?? colors.ink3} />
+                    <span>{p.name}{linkedPersonId === p.id && " (du)"}</span>
+                    {stats.total > 0 && (
+                      <ProgressFrac>{stats.packed}/{stats.total}</ProgressFrac>
+                    )}
+                  </FilterChip>
+                );
+              })}
+              {(() => {
+                const stats = progressForFilter("none");
+                return (
+                  <FilterChip
+                    type="button"
+                    $active={filterPerson === "none"}
+                    $progress={stats.ratio}
+                    $done={stats.done}
+                    onClick={() => setFilterPerson("none")}
+                  >
+                    <span>Gemeinsam</span>
+                    {stats.total > 0 && (
+                      <ProgressFrac>{stats.packed}/{stats.total}</ProgressFrac>
+                    )}
+                  </FilterChip>
+                );
+              })()}
             </ChipsScrollable>
           )}
 
