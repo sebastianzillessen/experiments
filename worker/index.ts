@@ -1,28 +1,43 @@
 /**
  * Cloudflare Worker for the experiments site.
  *
- * - Serves static assets from ./_site/ via the ASSETS binding (Pages-style).
- * - Routes API endpoints under /api/hoko/* directly.
- * - When the request Host header is `hoko.zillessen.dev`, the path is
- *   internally rewritten to `/hoko<path>` before falling through to ASSETS,
- *   so the guest mini-app served from _site/hoko/ appears at the
- *   subdomain root.
+ * Two API namespaces live on the same Worker:
+ *   /api/hoko/*               → HotelKontrolle guest-registration
+ *                                (POST /submit, GET /:code, KV: HOKO_KV,
+ *                                 90-day TTL, host-notification via Resend)
+ *   /api/packliste/share*     → Packliste cloud-sync
+ *                                (POST, PUT/:code, GET/:code, KV: PACKLISTE_KV,
+ *                                 30-day TTL with sliding window)
+ *
+ * Anything else falls through to the static-asset binding (`env.ASSETS`),
+ * which serves the per-app builds from ./_site/. When the request Host
+ * header is `hoko.zillessen.dev`, the path is internally rewritten to
+ * `/hoko<path>` so the guest mini-app served from _site/hoko/ appears
+ * at the subdomain root.
+ *
+ * `run_worker_first: true` in wrangler.jsonc ensures THIS file runs on
+ * every request — otherwise the assets binding short-circuits for paths
+ * that map to a file in _site/, and the hoko hostname rewrite would
+ * never get a chance to fire.
  *
  * One-time setup:
  *   npx wrangler kv namespace create HOKO_KV
- *   → put the returned id into wrangler.jsonc under kv_namespaces[0].id
+ *   npx wrangler kv namespace create PACKLISTE_KV
+ *     → paste the returned ids into wrangler.jsonc → kv_namespaces[]
  *
  *   npx wrangler secret put RESEND_API_KEY
  *   npx wrangler secret put HOST_NOTIFY_EMAIL
  *   npx wrangler secret put RESEND_FROM   # e.g. "HotelKontrolle <hoko@zillessen.dev>"
  *
- * Without HOKO_KV bound, /api/hoko/* responds 503. Static asset serving
- * keeps working regardless.
+ * Without HOKO_KV bound, /api/hoko/* responds 503.
+ * Without PACKLISTE_KV bound, /api/packliste/share* responds 503.
+ * Static asset serving keeps working regardless.
  */
 
 interface Env {
   ASSETS: Fetcher;
   HOKO_KV?: KVNamespace;
+  PACKLISTE_KV?: KVNamespace;
   RESEND_API_KEY?: string;
   HOST_NOTIFY_EMAIL?: string;
   RESEND_FROM?: string;
@@ -30,11 +45,7 @@ interface Env {
 
 const HOKO_HOST = "hoko.zillessen.dev";
 const HOKO_API_PREFIX = "/api/hoko";
-const MAX_BYTES = 50_000;
-const TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Crockford-style, no 0/O/1/I
-const CODE_LENGTH = 6;
-const CODE_REGEX = /^[A-Z0-9-]{4,64}$/; // tolerates airbnb-style reservation numbers and the 6-char auto code
+const PACKLISTE_PREFIX = "/api/packliste/share";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -44,9 +55,17 @@ export default {
       return handleHokoApi(request, env, ctx, url);
     }
 
+    if (url.pathname === PACKLISTE_PREFIX || url.pathname.startsWith(`${PACKLISTE_PREFIX}/`)) {
+      return handlePacklisteShare(request, env, url);
+    }
+
     return serveAssets(request, env, url);
   },
 };
+
+// ---------------------------------------------------------------------------
+// Static-asset serving + hoko.zillessen.dev hostname rewrite
+// ---------------------------------------------------------------------------
 
 function serveAssets(request: Request, env: Env, url: URL): Promise<Response> {
   const host = (request.headers.get("host") || url.hostname || "").toLowerCase();
@@ -59,28 +78,51 @@ function serveAssets(request: Request, env: Env, url: URL): Promise<Response> {
   return env.ASSETS.fetch(request);
 }
 
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
 
-function jsonResponse(data: unknown, status: number, extra: Record<string, string> = {}): Response {
+function jsonResponse(
+  data: unknown,
+  status: number,
+  extra: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json", ...corsHeaders(), ...extra },
+    headers: {
+      "content-type": "application/json",
+      ...corsHeaders(),
+      ...extra,
+    },
   });
 }
 
-function generateCode(): string {
-  const buf = new Uint8Array(CODE_LENGTH);
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Crockford-style, no 0/O/1/I
+
+function generateCode(length: number): string {
+  const buf = new Uint8Array(length);
   crypto.getRandomValues(buf);
   let s = "";
-  for (let i = 0; i < CODE_LENGTH; i++) s += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
+  for (let i = 0; i < length; i++) s += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
   return s;
 }
+
+// ===========================================================================
+// HotelKontrolle (hoko) — guest registration
+// ===========================================================================
+
+const HOKO_MAX_BYTES = 50_000;
+const HOKO_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
+const HOKO_CODE_LENGTH = 6;
+const HOKO_CODE_REGEX = /^[A-Z0-9-]{4,64}$/; // tolerates airbnb-style reservation numbers and the 6-char auto code
 
 interface GuestRow {
   firstname: string;
@@ -137,7 +179,7 @@ function parseSubmitBody(body: unknown): { ok: true; value: StoredStay } | { ok:
   }
 
   let code = sanitiseStr(b.code, 64).toUpperCase();
-  if (code && !CODE_REGEX.test(code)) {
+  if (code && !HOKO_CODE_REGEX.test(code)) {
     return { ok: false, error: "code format invalid" };
   }
 
@@ -171,8 +213,8 @@ async function handleHokoApi(
   if (request.method === "POST" && url.pathname === `${HOKO_API_PREFIX}/submit`) {
     const text = await request.text();
     if (text.length === 0) return jsonResponse({ error: "Empty body" }, 400);
-    if (text.length > MAX_BYTES) {
-      return jsonResponse({ error: `Body too large (max ${MAX_BYTES} bytes)` }, 413);
+    if (text.length > HOKO_MAX_BYTES) {
+      return jsonResponse({ error: `Body too large (max ${HOKO_MAX_BYTES} bytes)` }, 413);
     }
     let body: unknown;
     try {
@@ -185,17 +227,17 @@ async function handleHokoApi(
     const stay = parsed.value;
 
     if (!stay.code) {
-      let code = generateCode();
+      let code = generateCode(HOKO_CODE_LENGTH);
       for (let i = 0; i < 3; i++) {
         const existing = await env.HOKO_KV.get(`hoko:${code}`);
         if (existing === null) break;
-        code = generateCode();
+        code = generateCode(HOKO_CODE_LENGTH);
       }
       stay.code = code;
     }
 
     await env.HOKO_KV.put(`hoko:${stay.code}`, JSON.stringify(stay), {
-      expirationTtl: TTL_SECONDS,
+      expirationTtl: HOKO_TTL_SECONDS,
     });
 
     // Send notification — don't block the response on email success.
@@ -294,4 +336,112 @@ async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
     const errText = await resp.text().catch(() => "");
     throw new Error(`Resend ${resp.status}: ${errText}`);
   }
+}
+
+// ===========================================================================
+// Packliste — cloud-sync share endpoint
+// ===========================================================================
+
+const PACKLISTE_MAX_BYTES = 500_000;
+const PACKLISTE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 Tage
+const PACKLISTE_CODE_LENGTH = 6;
+
+async function handlePacklisteShare(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      headers: { ...corsHeaders(), "Access-Control-Max-Age": "86400" },
+    });
+  }
+
+  if (!env.PACKLISTE_KV) {
+    return jsonResponse(
+      {
+        error:
+          "KV-Namespace nicht eingerichtet. Befehl ausführen: `npx wrangler kv:namespace create PACKLISTE_KV` und die zurückgegebene ID in wrangler.jsonc setzen.",
+      },
+      503,
+    );
+  }
+
+  // POST /api/packliste/share — neuen Code anlegen
+  if (request.method === "POST" && url.pathname === PACKLISTE_PREFIX) {
+    const body = await request.text();
+    if (body.length === 0) return jsonResponse({ error: "Leerer Body" }, 400);
+    if (body.length > PACKLISTE_MAX_BYTES) {
+      return jsonResponse(
+        { error: `Snapshot zu groß (max ${PACKLISTE_MAX_BYTES} Bytes)` },
+        413,
+      );
+    }
+    try {
+      JSON.parse(body);
+    } catch {
+      return jsonResponse({ error: "Ungültiges JSON" }, 400);
+    }
+    // Bis zu 3 Versuche, falls (sehr unwahrscheinlich) Collision
+    let code = generateCode(PACKLISTE_CODE_LENGTH);
+    for (let i = 0; i < 3; i++) {
+      const existing = await env.PACKLISTE_KV.get(code);
+      if (existing === null) break;
+      code = generateCode(PACKLISTE_CODE_LENGTH);
+    }
+    await env.PACKLISTE_KV.put(code, body, { expirationTtl: PACKLISTE_TTL_SECONDS });
+    return jsonResponse({ code, expiresInDays: 30 }, 201);
+  }
+
+  // PUT /api/packliste/share/:code — bestehenden Code aktualisieren
+  // (für die laufende Sync — bevor PUT erlauben wir nur Updates auf
+  // existierende Codes, damit man nicht beliebige Codes "besetzen" kann)
+  const putMatch = url.pathname.match(/^\/api\/packliste\/share\/([A-Z2-9]+)$/);
+  if (request.method === "PUT" && putMatch) {
+    const code = putMatch[1];
+    if (code.length !== PACKLISTE_CODE_LENGTH) {
+      return jsonResponse({ error: "Ungültiges Code-Format" }, 400);
+    }
+    const body = await request.text();
+    if (body.length === 0) return jsonResponse({ error: "Leerer Body" }, 400);
+    if (body.length > PACKLISTE_MAX_BYTES) {
+      return jsonResponse(
+        { error: `Snapshot zu groß (max ${PACKLISTE_MAX_BYTES} Bytes)` },
+        413,
+      );
+    }
+    try {
+      JSON.parse(body);
+    } catch {
+      return jsonResponse({ error: "Ungültiges JSON" }, 400);
+    }
+    const existing = await env.PACKLISTE_KV.get(code);
+    if (existing === null) {
+      return jsonResponse(
+        { error: "Code nicht gefunden — erst per POST anlegen" },
+        404,
+      );
+    }
+    // TTL bei jedem Update verlängern (sliding window)
+    await env.PACKLISTE_KV.put(code, body, { expirationTtl: PACKLISTE_TTL_SECONDS });
+    return jsonResponse({ ok: true }, 200);
+  }
+
+  // GET /api/packliste/share/:code
+  const match = url.pathname.match(/^\/api\/packliste\/share\/([A-Z2-9]+)$/);
+  if (request.method === "GET" && match) {
+    const code = match[1];
+    if (code.length !== PACKLISTE_CODE_LENGTH) {
+      return jsonResponse({ error: "Ungültiges Code-Format" }, 400);
+    }
+    const value = await env.PACKLISTE_KV.get(code);
+    if (value === null) {
+      return jsonResponse(
+        { error: "Code nicht gefunden oder abgelaufen (30 Tage TTL)" },
+        404,
+      );
+    }
+    return new Response(value, {
+      status: 200,
+      headers: { "content-type": "application/json", ...corsHeaders() },
+    });
+  }
+
+  return jsonResponse({ error: "Method not allowed" }, 405);
 }

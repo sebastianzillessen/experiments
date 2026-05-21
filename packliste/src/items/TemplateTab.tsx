@@ -1,0 +1,275 @@
+import { useMemo, useState } from "react";
+import { styled } from "next-yak";
+import { Trash2, ChevronUp, ChevronDown, Pencil } from "lucide-react";
+import { Card, CardTitle, Stack, Row, Muted, Badge, SectionLabel } from "../components/ui/Layout";
+import { IconButton } from "../components/ui/Button";
+import { useCurrentFamily } from "../hooks/useFamily";
+import { usePersons } from "../hooks/usePersons";
+import { usePackingItems } from "../hooks/usePackingItems";
+import { useConditions } from "../hooks/useConditions";
+import { useCategories } from "../hooks/useCategories";
+import { useDataProvider } from "../data/DataProviderContext";
+import type { Category, PackingItem } from "../types";
+import { conditionEmoji, conditionLabel, categoryIcon } from "../labels";
+import { colors, radii } from "../theme.yak";
+import { ItemForm, type ItemFormValues } from "./ItemForm";
+import { EditItemModal } from "./EditItemModal";
+import { EditCategoryModal } from "./EditCategoryModal";
+import { InitialsBadge } from "../components/InitialsBadge";
+import { SortableList } from "../components/SortableList";
+
+const ItemCard = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: ${colors.surface};
+  border: 1px solid ${colors.line};
+  border-radius: ${radii.sm};
+`;
+
+const CategoryRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: ${colors.surface2};
+  border-radius: ${radii.sm};
+`;
+
+/**
+ * Fixe Breite für die Häufigkeits-Badge-Spalte, damit alle Item-Namen
+ * in der Liste auf gleicher X-Position starten — egal ob "pro Tag",
+ * "pro Trip" oder "alle 10 Tage" davor steht.
+ */
+const BadgeColumn = styled.div`
+  width: 88px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+`;
+
+const NamePart = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const ConditionsLine = styled.div`
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: ${colors.ink3};
+`;
+
+export function TemplateTab() {
+  const family = useCurrentFamily();
+  const provider = useDataProvider();
+  const persons = usePersons(family?.id);
+  const items = usePackingItems(family?.id);
+  const conditions = useConditions(family?.id);
+  const familyCategories = useCategories(family?.id);
+  const [editingItem, setEditingItem] = useState<PackingItem | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
+  // Force-remount key so the ItemForm clears its internal state after submit
+  const [formKey, setFormKey] = useState(0);
+
+  const categories = useMemo(() => {
+    return Array.from(new Set(items.map((i) => i.category).filter(Boolean))).sort();
+  }, [items]);
+
+  /** Liefert ein Icon für eine Kategorie — bevorzugt das vom User gesetzte. */
+  function iconFor(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) return categoryIcon("");
+    const match = familyCategories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    return match?.icon || categoryIcon(trimmed);
+  }
+
+  if (!family) return null;
+
+  function createItem(values: ItemFormValues) {
+    provider.createPackingItem({
+      familyId: family!.id,
+      personIds: values.personIds,
+      name: values.name,
+      category: values.category,
+      baseQuantity: values.baseQuantity,
+      unit: values.unit,
+      perDays: values.perDays,
+      washable: values.washable,
+      conditions: values.conditions,
+      sortOrder: items.length,
+    });
+    setFormKey((k) => k + 1);
+  }
+
+  // group items by category
+  const byCat = new Map<string, PackingItem[]>();
+  for (const it of items) {
+    const k = it.category || "Sonstiges";
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k)!.push(it);
+  }
+  const catEntries = Array.from(byCat.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
+
+  return (
+    <>
+      <Card>
+        <CardTitle>Neues Item</CardTitle>
+        <ItemForm
+          key={formKey}
+          familyId={family.id}
+          persons={persons}
+          conditions={conditions}
+          categories={categories}
+          submitLabel="Hinzufügen"
+          onSubmit={createItem}
+        />
+      </Card>
+
+      {familyCategories.length > 0 && (
+        <Card>
+          <Row style={{ justifyContent: "space-between" }}>
+            <CardTitle style={{ margin: 0 }}>
+              Kategorien · {familyCategories.length}
+            </CardTitle>
+            <IconButton
+              aria-label={categoriesExpanded ? "Einklappen" : "Aufklappen"}
+              onClick={() => setCategoriesExpanded((v) => !v)}
+            >
+              {categoriesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </IconButton>
+          </Row>
+          {categoriesExpanded && (
+            <Stack $gap={6} style={{ marginTop: 10 }}>
+              <Muted style={{ fontSize: 12 }}>
+                Neue Kategorien werden beim Anlegen eines Items automatisch ergänzt.
+                Hier kannst du Icon und Namen ändern oder die Kategorie löschen.
+                Reihenfolge per Drag-Handle.
+              </Muted>
+              <SortableList
+                items={familyCategories}
+                onReorder={(orderedIds) => provider.reorderCategories(family.id, orderedIds)}
+                renderItem={(c, handle) => (
+                  <CategoryRow>
+                    {handle}
+                    <span style={{ fontSize: 20 }}>{c.icon || categoryIcon(c.name)}</span>
+                    <span style={{ flex: 1, fontWeight: 500 }}>{c.name}</span>
+                    <IconButton aria-label="Bearbeiten" onClick={() => setEditingCategory(c)}>
+                      <Pencil size={14} />
+                    </IconButton>
+                  </CategoryRow>
+                )}
+              />
+            </Stack>
+          )}
+        </Card>
+      )}
+
+      {items.length === 0 ? (
+        <Card>
+          <Muted>Noch keine Items in der Vorlage. Lege oben das erste an.</Muted>
+        </Card>
+      ) : (
+        catEntries.map(([cat, list]) => (
+          <div key={cat}>
+            <SectionLabel>
+              <span style={{ marginRight: 4 }}>{iconFor(cat)}</span>
+              {cat} · {list.length} {list.length === 1 ? "Item" : "Items"}
+            </SectionLabel>
+            <SortableList
+              items={list}
+              onReorder={(orderedIds) => {
+                // Reorder nur innerhalb der Kategorie: die globalen
+                // sortOrder-Slots der Kategorie behalten, aber die Items
+                // darin nach neuer Reihenfolge setzen.
+                const idSet = new Set(orderedIds);
+                const positions: number[] = [];
+                items.forEach((it, idx) => {
+                  if (idSet.has(it.id)) positions.push(idx);
+                });
+                const newGlobal = [...items];
+                orderedIds.forEach((id, i) => {
+                  const it = items.find((x) => x.id === id);
+                  if (it) newGlobal[positions[i]] = it;
+                });
+                provider.reorderPackingItems(
+                  family!.id,
+                  newGlobal.map((it) => it.id),
+                );
+              }}
+              renderItem={(it, handle) => {
+                const assignedPersons = it.personIds
+                  .map((pid) => persons.find((p) => p.id === pid))
+                  .filter((p): p is NonNullable<typeof p> => Boolean(p));
+                const isShared = assignedPersons.length === 0;
+                return (
+                  <ItemCard>
+                    {handle}
+                    <BadgeColumn>
+                      <Badge $tone={it.unit === "per_day" ? "accent" : "primary"}>
+                        {it.unit === "per_trip"
+                          ? "pro Trip"
+                          : (it.perDays ?? 1) === 1
+                          ? "pro Tag"
+                          : `alle ${it.perDays} Tage`}
+                      </Badge>
+                    </BadgeColumn>
+                    <NamePart>
+                      <Row $gap={6}>
+                        <strong>{it.name}</strong>
+                        {it.washable && <span title="Waschbar">🧺</span>}
+                        <Muted>×{it.baseQuantity}</Muted>
+                      </Row>
+                      <ConditionsLine>
+                        {isShared ? (
+                          <span>Gemeinsam</span>
+                        ) : assignedPersons.length === persons.length ? (
+                          <span>Alle</span>
+                        ) : (
+                          <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                            {assignedPersons.map((p) => (
+                              <InitialsBadge key={p.id} person={p} />
+                            ))}
+                          </span>
+                        )}
+                        {it.conditions.length > 0 && (
+                          <span>{it.conditions.map((c) => `${conditionEmoji(c)} ${conditionLabel(c, conditions)}`).join(", ")}</span>
+                        )}
+                      </ConditionsLine>
+                    </NamePart>
+                    <Row $gap={2}>
+                      <IconButton aria-label="Bearbeiten" onClick={() => setEditingItem(it)}>
+                        <Pencil size={14} />
+                      </IconButton>
+                      <IconButton
+                        aria-label="Löschen"
+                        onClick={() => {
+                          if (confirm(`"${it.name}" aus der Vorlage löschen?`)) provider.deletePackingItem(it.id);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </Row>
+                  </ItemCard>
+                );
+              }}
+            />
+          </div>
+        ))
+      )}
+
+      {editingCategory && (
+        <EditCategoryModal category={editingCategory} onClose={() => setEditingCategory(null)} />
+      )}
+      {editingItem && (
+        <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />
+      )}
+    </>
+  );
+}

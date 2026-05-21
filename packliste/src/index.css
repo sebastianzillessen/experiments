@@ -1,0 +1,60 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+html {
+  /* Prevent horizontal scrolling on mobile when something overflows by accident */
+  overflow-x: hidden;
+  /* Respect the device safe areas (notch, home-indicator) */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f5f4ef;
+  color: #1a1f2c;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  /* Touch-friendly tap highlight */
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* iOS Safari zoomt automatisch, wenn ein Input mit font-size < 16px
+   fokussiert wird. Wir setzen ALLE Form-Controls auf min. 16px, damit
+   das nicht passiert. */
+input, select, textarea {
+  font-size: 16px;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: #2b5d8b;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+input, select, textarea {
+  outline: none;
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid #2b5d8b;
+  outline-offset: 2px;
+}
