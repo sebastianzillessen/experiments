@@ -262,6 +262,7 @@
     return {
       firstname: row.querySelector(".g-firstname").value.trim(),
       lastname: row.querySelector(".g-lastname").value.trim(),
+      birthdate: row.querySelector(".g-birthdate").value.trim(), // ISO YYYY-MM-DD from <input type="date">
       country: row.querySelector(".g-country").value.trim(),
       ausweisnummer: row.querySelector(".g-ausweis").value.trim(),
     };
@@ -276,6 +277,8 @@
       const tag = guests.length > 1 ? ` (guest ${i + 1})` : "";
       if (!g.firstname) return `Please enter the first name${tag}.`;
       if (!g.lastname) return `Please enter the last name${tag}.`;
+      if (!g.birthdate) return `Please enter the date of birth${tag}.`;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(g.birthdate)) return `Date of birth must be a valid date${tag}.`;
       if (!g.country) return `Please enter the nationality${tag}.`;
       if (!g.ausweisnummer) return `Please enter the passport / ID number${tag}.`;
       if (!isoForCountry(g.country)) {

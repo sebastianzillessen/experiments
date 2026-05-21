@@ -13,3 +13,11 @@ packliste/test-results/
 packliste/playwright-report/
 packliste/blob-report/
 packliste/playwright/.cache/
+
+# Secrets — never commit
+hoko-cli/.env
+hoko-cli/.env.local
+.wrangler/
+
+# Vendor binaries / proprietary docs from Unisys (SiDAP client, import template, manuals)
+hoko-cli/reference/

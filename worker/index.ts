@@ -127,6 +127,7 @@ const HOKO_CODE_REGEX = /^[A-Z0-9-]{4,64}$/; // tolerates airbnb-style reservati
 interface GuestRow {
   firstname: string;
   lastname: string;
+  birthdate: string; // ISO YYYY-MM-DD, required by HOKO eCH XML schema (Pflichtfeld)
   country: string;
   countryIso: string;
   ausweisnummer: string;
@@ -165,14 +166,19 @@ function parseSubmitBody(body: unknown): { ok: true; value: StoredStay } | { ok:
     if (isoRaw && !/^[A-Z]{2}$/.test(isoRaw)) {
       return { ok: false, error: "countryIso must be ISO 3166-1 alpha-2" };
     }
+    const birthdate = sanitiseStr(r.birthdate, 10);
+    if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) {
+      return { ok: false, error: "birthdate must be ISO YYYY-MM-DD" };
+    }
     const g: GuestRow = {
       firstname: sanitiseStr(r.firstname, 100),
       lastname: sanitiseStr(r.lastname, 100),
+      birthdate,
       country: sanitiseStr(r.country, 100),
       countryIso: isoRaw,
       ausweisnummer: sanitiseStr(r.ausweisnummer, 60),
     };
-    if (!g.firstname || !g.lastname || !g.country || !g.ausweisnummer) {
+    if (!g.firstname || !g.lastname || !g.birthdate || !g.country || !g.ausweisnummer) {
       return { ok: false, error: "guest row missing required fields" };
     }
     guests.push(g);
@@ -282,7 +288,8 @@ function buildNotificationText(stay: StoredStay): string {
   ];
   stay.guests.forEach((g, i) => {
     const iso = g.countryIso ? ` [${g.countryIso}]` : "";
-    lines.push(`  ${i + 1}. ${g.lastname}, ${g.firstname} — ${g.country}${iso} — ID: ${g.ausweisnummer}`);
+    const dob = g.birthdate ? ` · *${g.birthdate}` : "";
+    lines.push(`  ${i + 1}. ${g.lastname}, ${g.firstname}${dob} — ${g.country}${iso} — ID: ${g.ausweisnummer}`);
   });
   lines.push("", `To upload locally:  cd hoko-cli && npx tsx upload.ts ${stay.code}`);
   return lines.join("\n");
@@ -290,9 +297,10 @@ function buildNotificationText(stay: StoredStay): string {
 
 function buildNotificationHtml(stay: StoredStay): string {
   const rows = stay.guests
-    .map((g, i) => {
+    .map((g) => {
       const iso = g.countryIso ? ` [${escapeHtml(g.countryIso)}]` : "";
-      return `<li>${escapeHtml(g.lastname)}, ${escapeHtml(g.firstname)} — ${escapeHtml(g.country)}${iso} — ID: ${escapeHtml(g.ausweisnummer)}</li>`;
+      const dob = g.birthdate ? ` · <em>*${escapeHtml(g.birthdate)}</em>` : "";
+      return `<li>${escapeHtml(g.lastname)}, ${escapeHtml(g.firstname)}${dob} — ${escapeHtml(g.country)}${iso} — ID: ${escapeHtml(g.ausweisnummer)}</li>`;
     })
     .join("");
   return `<!doctype html><html><body style="font-family:system-ui,sans-serif;color:#1f2933;line-height:1.5">
