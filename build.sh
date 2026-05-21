@@ -9,10 +9,11 @@ set -euo pipefail
 #   Production branch:    main
 
 rm -rf _site
-mkdir -p _site/palermo _site/kinderbetreuung-lohn
+mkdir -p _site/palermo _site/kinderbetreuung-lohn _site/hoko
 
 cp -r palermo-travel-plan/. _site/palermo/
 cp -r kinderbetreuung-lohn/. _site/kinderbetreuung-lohn/
+cp -r hoko-guest/. _site/hoko/
 
 cat > _site/index.html <<'HTML'
 <!DOCTYPE html>
@@ -29,4 +30,4 @@ ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.
 </body></html>
 HTML
 
-echo "Built _site/ (palermo, kinderbetreuung-lohn, index)"
+echo "Built _site/ (palermo, kinderbetreuung-lohn, hoko, index)"
