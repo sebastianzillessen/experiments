@@ -25,12 +25,12 @@
         <h3>Stay</h3>
         <div class="grid-2">
           <div>
-            <label for="arrival">Arrival (DD.MM.YYYY)</label>
-            <input type="text" id="arrival" name="arrival" inputmode="numeric" placeholder="DD.MM.YYYY" required>
+            <label for="arrival">Arrival</label>
+            <input type="date" id="arrival" name="arrival" required>
           </div>
           <div>
-            <label for="departure">Departure (DD.MM.YYYY)</label>
-            <input type="text" id="departure" name="departure" inputmode="numeric" placeholder="DD.MM.YYYY" required>
+            <label for="departure">Departure</label>
+            <input type="date" id="departure" name="departure" required>
           </div>
         </div>
       </section>
@@ -56,8 +56,6 @@
   </div>
 </main>
 
-<datalist id="countries"></datalist>
-
 <template id="guest-row-template">
   <div class="guest-row card">
     <div class="row-head">
@@ -76,8 +74,19 @@
     </div>
     <div class="grid-2">
       <div>
-        <label>Nationality (country)</label>
-        <input type="text" class="g-country" list="countries" autocomplete="off" placeholder="e.g. Germany" required>
+        <label>Nationality</label>
+        <div class="country-combobox" data-combobox>
+          <input
+            type="text"
+            class="g-country combobox-input"
+            placeholder="Start typing…"
+            autocomplete="off"
+            autocapitalize="words"
+            spellcheck="false"
+            required>
+          <button type="button" class="combobox-toggle" tabindex="-1" aria-label="Toggle list">▾</button>
+          <ul class="combobox-list" role="listbox" hidden></ul>
+        </div>
       </div>
       <div>
         <label>Passport / ID number</label>
