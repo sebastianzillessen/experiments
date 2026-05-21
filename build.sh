@@ -10,10 +10,11 @@ set -euo pipefail
 #   NODE_VERSION:         22
 
 rm -rf _site
-mkdir -p _site/palermo _site/kinderbetreuung-lohn _site/packliste
+mkdir -p _site/palermo _site/kinderbetreuung-lohn _site/packliste _site/hoko
 
 cp -r palermo-travel-plan/. _site/palermo/
 cp -r kinderbetreuung-lohn/. _site/kinderbetreuung-lohn/
+cp -r hoko-guest/. _site/hoko/
 
 # Build the React app (npm ci is expected to have run at repo root already)
 npm -w packliste run build
@@ -35,4 +36,4 @@ ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.
 </body></html>
 HTML
 
-echo "Built _site/ (palermo, kinderbetreuung-lohn, packliste, index)"
+echo "Built _site/ (palermo, kinderbetreuung-lohn, packliste, hoko, index)"
