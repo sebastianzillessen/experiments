@@ -123,12 +123,14 @@ const HOKO_MAX_BYTES = 50_000;
 const HOKO_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
 const HOKO_CODE_LENGTH = 6;
 const HOKO_CODE_REGEX = /^[A-Z0-9-]{4,64}$/; // tolerates airbnb-style reservation numbers and the 6-char auto code
+const HOKO_DOC_TYPES = new Set(["Passport", "ID card", "Other"]);
 
 interface GuestRow {
   firstname: string;
   lastname: string;
   country: string;
   countryIso: string;
+  ausweisart: string;
   ausweisnummer: string;
 }
 
@@ -170,10 +172,14 @@ function parseSubmitBody(body: unknown): { ok: true; value: StoredStay } | { ok:
       lastname: sanitiseStr(r.lastname, 100),
       country: sanitiseStr(r.country, 100),
       countryIso: isoRaw,
+      ausweisart: sanitiseStr(r.ausweisart, 40),
       ausweisnummer: sanitiseStr(r.ausweisnummer, 60),
     };
-    if (!g.firstname || !g.lastname || !g.country || !g.ausweisnummer) {
+    if (!g.firstname || !g.lastname || !g.country || !g.ausweisart || !g.ausweisnummer) {
       return { ok: false, error: "guest row missing required fields" };
+    }
+    if (!HOKO_DOC_TYPES.has(g.ausweisart)) {
+      return { ok: false, error: "ausweisart invalid" };
     }
     guests.push(g);
   }
@@ -282,7 +288,7 @@ function buildNotificationText(stay: StoredStay): string {
   ];
   stay.guests.forEach((g, i) => {
     const iso = g.countryIso ? ` [${g.countryIso}]` : "";
-    lines.push(`  ${i + 1}. ${g.lastname}, ${g.firstname} — ${g.country}${iso} — ID: ${g.ausweisnummer}`);
+    lines.push(`  ${i + 1}. ${g.lastname}, ${g.firstname} — ${g.country}${iso} — ${g.ausweisart}: ${g.ausweisnummer}`);
   });
   lines.push("", `To upload locally:  cd hoko-cli && npx tsx upload.ts ${stay.code}`);
   return lines.join("\n");
@@ -292,7 +298,7 @@ function buildNotificationHtml(stay: StoredStay): string {
   const rows = stay.guests
     .map((g, i) => {
       const iso = g.countryIso ? ` [${escapeHtml(g.countryIso)}]` : "";
-      return `<li>${escapeHtml(g.lastname)}, ${escapeHtml(g.firstname)} — ${escapeHtml(g.country)}${iso} — ID: ${escapeHtml(g.ausweisnummer)}</li>`;
+      return `<li>${escapeHtml(g.lastname)}, ${escapeHtml(g.firstname)} — ${escapeHtml(g.country)}${iso} — ${escapeHtml(g.ausweisart)}: ${escapeHtml(g.ausweisnummer)}</li>`;
     })
     .join("");
   return `<!doctype html><html><body style="font-family:system-ui,sans-serif;color:#1f2933;line-height:1.5">
