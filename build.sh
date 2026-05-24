@@ -3,10 +3,11 @@ set -euo pipefail
 
 # Build script for Cloudflare Pages.
 # Cloudflare Pages settings:
-#   Build command:        bash build.sh
+#   Build command:        npm ci && npm run build
 #   Build output dir:     _site
 #   Root directory:       (leave empty)
 #   Production branch:    main
+#   NODE_VERSION:         22
 #
 # Optional env vars (set in Cloudflare Pages project settings):
 #   SUPABASE_URL                Supabase project URL
@@ -26,9 +27,10 @@ if [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]; then
 fi
 
 rm -rf _site
-mkdir -p _site/palermo _site/kinderbetreuung-lohn
+mkdir -p _site/palermo _site/kinderbetreuung-lohn _site/packliste _site/hoko
 
 cp -r palermo-travel-plan/. _site/palermo/
+cp -r hoko-guest/. _site/hoko/
 
 # Whitelist the deployed assets only — the subfolder also holds tests, package.json,
 # supabase/, node_modules/ etc. that must not ship to Cloudflare Pages.
@@ -45,6 +47,10 @@ window.__APP_CONFIG = {
 };
 EOF
 
+# Build the React app (npm ci is expected to have run at repo root already)
+npm -w packliste run build
+cp -r packliste/dist/. _site/packliste/
+
 cat > _site/index.html <<'HTML'
 <!DOCTYPE html>
 <html lang="de"><head><meta charset="UTF-8"><title>Experiments</title>
@@ -54,10 +60,11 @@ ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.
 </head><body>
 <h1>Experiments</h1>
 <ul>
+  <li><a href="packliste/">Packliste</a><div class="muted">Familien-Packliste mit Bedingungen und Waschmaschinen-Logik</div></li>
   <li><a href="palermo/">Palermo Urlaubshandbuch</a><div class="muted">Reisefuehrer Palermo (April 2026)</div></li>
   <li><a href="kinderbetreuung-lohn/">Lohnabrechnung Kinderbetreuung</a><div class="muted">Vereinfachte Abrechnung Kanton Zuerich</div></li>
 </ul>
 </body></html>
 HTML
 
-echo "Built _site/ (palermo, kinderbetreuung-lohn, index)"
+echo "Built _site/ (palermo, kinderbetreuung-lohn, packliste, hoko, index)"

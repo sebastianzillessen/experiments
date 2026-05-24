@@ -1,11 +1,47 @@
 {
-  // Cloudflare Workers Static Assets config.
-  // The build step (./build.sh) writes the site to ./_site,
-  // which `wrangler versions upload` then publishes as static assets.
+  // Cloudflare Worker + Static Assets.
+  //
+  // - "main" points at worker/index.ts which:
+  //   * handles API routes under /api/hoko/* (KV-backed guest registrations,
+  //     90-day TTL, Resend host notification)
+  //   * handles API routes under /api/packliste/share* (KV-backed snapshot
+  //     sharing for the Packliste app, 30-day sliding-window TTL)
+  //   * rewrites requests for hoko.zillessen.dev to serve _site/hoko/
+  //   * falls through to ASSETS for everything else
+  //     (palermo, kinderbetreuung-lohn, packliste)
+  // - "assets" points at the directory produced by ./build.sh
+  //
+  // One-time setup:
+  //   npx wrangler kv namespace create HOKO_KV
+  //   npx wrangler kv namespace create PACKLISTE_KV
+  //     → paste the returned ids into kv_namespaces[] below
+  //   npx wrangler secret put RESEND_API_KEY
+  //   npx wrangler secret put HOST_NOTIFY_EMAIL
+  //   npx wrangler secret put RESEND_FROM
+  //
+  // Custom domain hoko.zillessen.dev is configured in the Cloudflare
+  // dashboard (Workers & Pages → this worker → Custom Domains).
   "name": "experiments",
   "compatibility_date": "2026-05-08",
+  "main": "./worker/index.ts",
   "assets": {
     "directory": "./_site",
-    "not_found_handling": "404-page"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    // Required so the Worker runs on every request (not just /api/* paths).
+    // Without this, the assets binding short-circuits for paths that match
+    // a file in _site/, and the hostname rewrite for hoko.zillessen.dev
+    // would never get a chance to fire.
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "HOKO_KV",
+      "id": "17217ab75be449bb8dc35c2492559f72"
+    },
+    {
+      "binding": "PACKLISTE_KV",
+      "id": "82318e25cfbd44dc8a5582b05b174561"
+    }
+  ]
 }
