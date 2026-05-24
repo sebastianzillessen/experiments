@@ -36,7 +36,7 @@ export default async function globalSetup(): Promise<void> {
   const stack = getStackInfo();
 
   console.log('[global-setup] Building static site with local-stack config…');
-  run('bash build.sh', {
+  run('bash build.sh kinderbetreuung-lohn', {
     cwd: repoRoot,
     env: {
       SUPABASE_URL: stack.url,
