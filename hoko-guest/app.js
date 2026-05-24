@@ -263,6 +263,7 @@
       firstname: row.querySelector(".g-firstname").value.trim(),
       lastname: row.querySelector(".g-lastname").value.trim(),
       country: row.querySelector(".g-country").value.trim(),
+      ausweisart: row.querySelector(".g-ausweisart").value,
       ausweisnummer: row.querySelector(".g-ausweis").value.trim(),
     };
   }
@@ -277,7 +278,8 @@
       if (!g.firstname) return `Please enter the first name${tag}.`;
       if (!g.lastname) return `Please enter the last name${tag}.`;
       if (!g.country) return `Please enter the nationality${tag}.`;
-      if (!g.ausweisnummer) return `Please enter the passport / ID number${tag}.`;
+      if (!g.ausweisart) return `Please select the ID document type${tag}.`;
+      if (!g.ausweisnummer) return `Please enter the ID / passport number${tag}.`;
       if (!isoForCountry(g.country)) {
         return `"${g.country}" isn't a recognised country${tag}. Please pick one from the list.`;
       }

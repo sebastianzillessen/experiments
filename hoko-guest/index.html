@@ -88,8 +88,19 @@
           <ul class="combobox-list" role="listbox" hidden></ul>
         </div>
       </div>
+    </div>
+    <div class="grid-2">
       <div>
-        <label>Passport / ID number</label>
+        <label>ID document type</label>
+        <select class="g-ausweisart" required>
+          <option value="" disabled selected>Select…</option>
+          <option value="Passport">Passport</option>
+          <option value="ID card">ID card</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label>ID / passport number</label>
         <input type="text" class="g-ausweis" autocomplete="off" required>
       </div>
     </div>
