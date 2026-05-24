@@ -8,19 +8,69 @@ set -euo pipefail
 #   Root directory:       (leave empty)
 #   Production branch:    main
 #   NODE_VERSION:         22
+#
+# Usage:
+#   bash build.sh                      # build all experiments (production)
+#   bash build.sh kinderbetreuung-lohn # build a single experiment (used by the
+#                                        kinderbetreuung-lohn E2E global-setup so
+#                                        the test doesn't depend on the packliste
+#                                        React build)
+#
+# Optional env vars (set in Cloudflare Pages project settings):
+#   SUPABASE_URL                Supabase project URL
+#   SUPABASE_PUBLISHABLE_KEY    Supabase publishable (anon) key
+# If unset, falls back to the hardcoded production values below and emits a warning.
 
-rm -rf _site
-mkdir -p _site/palermo _site/kinderbetreuung-lohn _site/packliste _site/hoko
+TARGET="${1:-all}"
 
-cp -r palermo-travel-plan/. _site/palermo/
-cp -r kinderbetreuung-lohn/. _site/kinderbetreuung-lohn/
-cp -r hoko-guest/. _site/hoko/
+DEFAULT_SUPABASE_URL='https://tbknudbcgaarqixweizj.supabase.co'
+DEFAULT_SUPABASE_PUBLISHABLE_KEY='sb_publishable_YHSXK9ryn8RQQe__e3aB2Q_lQo13XaP'
 
-# Build the React app (npm ci is expected to have run at repo root already)
-npm -w packliste run build
-cp -r packliste/dist/. _site/packliste/
+if [ -z "${SUPABASE_URL:-}" ]; then
+  echo "WARN: SUPABASE_URL not set, falling back to hardcoded default. Set it in Cloudflare Pages env settings." >&2
+  SUPABASE_URL="$DEFAULT_SUPABASE_URL"
+fi
+if [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]; then
+  echo "WARN: SUPABASE_PUBLISHABLE_KEY not set, falling back to hardcoded default. Set it in Cloudflare Pages env settings." >&2
+  SUPABASE_PUBLISHABLE_KEY="$DEFAULT_SUPABASE_PUBLISHABLE_KEY"
+fi
 
-cat > _site/index.html <<'HTML'
+build_palermo() {
+  mkdir -p _site/palermo
+  cp -r palermo-travel-plan/. _site/palermo/
+}
+
+build_hoko() {
+  mkdir -p _site/hoko
+  cp -r hoko-guest/. _site/hoko/
+}
+
+build_kinderbetreuung() {
+  mkdir -p _site/kinderbetreuung-lohn
+  # Whitelist the deployed assets only — the subfolder also holds tests,
+  # package.json, supabase/, node_modules/ etc. that must not ship.
+  cp kinderbetreuung-lohn/index.html \
+     kinderbetreuung-lohn/app.js \
+     kinderbetreuung-lohn/styles.css \
+     _site/kinderbetreuung-lohn/
+  # Generate config.js with env-var values (JSON-escaped via Python).
+  cat > _site/kinderbetreuung-lohn/config.js <<EOF
+window.__APP_CONFIG = {
+  url: $(printf '%s' "$SUPABASE_URL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+  key: $(printf '%s' "$SUPABASE_PUBLISHABLE_KEY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+};
+EOF
+}
+
+build_packliste() {
+  mkdir -p _site/packliste
+  # Build the React app (npm ci is expected to have run at repo root already).
+  npm -w packliste run build
+  cp -r packliste/dist/. _site/packliste/
+}
+
+write_root_index() {
+  cat > _site/index.html <<'HTML'
 <!DOCTYPE html>
 <html lang="de"><head><meta charset="UTF-8"><title>Experiments</title>
 <style>body{font-family:system-ui,sans-serif;max-width:560px;margin:60px auto;padding:0 20px;color:#1f2933;line-height:1.6}
@@ -35,5 +85,27 @@ ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.
 </ul>
 </body></html>
 HTML
+}
 
-echo "Built _site/ (palermo, kinderbetreuung-lohn, packliste, hoko, index)"
+rm -rf _site
+mkdir -p _site
+
+case "$TARGET" in
+  kinderbetreuung-lohn) build_kinderbetreuung ;;
+  palermo)              build_palermo ;;
+  hoko)                 build_hoko ;;
+  packliste)            build_packliste ;;
+  all)
+    build_palermo
+    build_hoko
+    build_kinderbetreuung
+    build_packliste
+    write_root_index
+    ;;
+  *)
+    echo "Unknown build target: $TARGET (expected: all | kinderbetreuung-lohn | palermo | hoko | packliste)" >&2
+    exit 1
+    ;;
+esac
+
+echo "Built _site/ (target=$TARGET)"

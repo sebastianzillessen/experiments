@@ -11,8 +11,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'supabase/migrations/**'
-      - 'supabase/config.toml'
+      - 'kinderbetreuung-lohn/supabase/migrations/**'
+      - 'kinderbetreuung-lohn/supabase/config.toml'
       - '.github/workflows/supabase-migrate.yml'
   workflow_dispatch:
 
@@ -26,6 +26,9 @@ concurrency:
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kinderbetreuung-lohn
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}

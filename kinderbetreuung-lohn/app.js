@@ -2,8 +2,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 
-const SUPABASE_URL = 'https://tbknudbcgaarqixweizj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_YHSXK9ryn8RQQe__e3aB2Q_lQo13XaP';
+const SUPABASE_URL = window.__APP_CONFIG?.url;
+const SUPABASE_KEY = window.__APP_CONFIG?.key;
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  document.body.innerHTML = '<p style="font-family:system-ui;padding:24px">Konfiguration fehlt: <code>config.js</code> nicht geladen oder unvollst&auml;ndig.</p>';
+  throw new Error('Missing window.__APP_CONFIG');
+}
 const LIMIT_VEREINFACHT = 22680; // CHF/Jahr brutto pro Person 2026
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
