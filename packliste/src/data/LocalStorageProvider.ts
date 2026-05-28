@@ -562,6 +562,7 @@ export class LocalStorageProvider implements DataProvider {
       conditions: [...params.conditions],
       hasWasher: params.hasWasher,
       washIntervalDays: params.hasWasher ? params.washIntervalDays ?? 3 : undefined,
+      personIds: params.personIds ? [...params.personIds] : undefined,
       createdBy: user.id,
       createdAt: nowIso(),
     };
@@ -590,6 +591,7 @@ export class LocalStorageProvider implements DataProvider {
     newDurationDays: number,
     newStartDate?: string,
     newEndDate?: string,
+    personIds?: string[],
   ): string {
     const user = this.getCurrentUser();
     if (!user) throw new Error("Nicht angemeldet");
@@ -598,6 +600,9 @@ export class LocalStorageProvider implements DataProvider {
     const sourceItems = read<TripItem[]>(K.tripItems(sourceTripId), []);
 
     const days = Math.max(1, Math.round(newDurationDays));
+    // Mitreisende übernehmen: explizite Auswahl gewinnt, sonst die des
+    // Quell-Trips.
+    const tripPersons = personIds ?? source.personIds;
     const newTrip: Trip = {
       id: uuid(),
       familyId: source.familyId,
@@ -608,6 +613,7 @@ export class LocalStorageProvider implements DataProvider {
       conditions: [...source.conditions],
       hasWasher: source.hasWasher,
       washIntervalDays: source.washIntervalDays,
+      personIds: tripPersons ? [...tripPersons] : undefined,
       createdBy: user.id,
       createdAt: nowIso(),
     };
@@ -615,8 +621,17 @@ export class LocalStorageProvider implements DataProvider {
     trips.push(newTrip);
     write(K.trips(source.familyId), trips);
 
+    // Items der nicht-mitreisenden Personen verwerfen. Gemeinsame Items
+    // (kein personId) bleiben immer. tripPersons undefined = keine
+    // Einschränkung.
+    const keptItems = tripPersons
+      ? sourceItems.filter(
+          (s) => s.personId === undefined || tripPersons.includes(s.personId),
+        )
+      : sourceItems;
+
     // Rescale per_day items based on stored base_quantity + unit
-    const newItems: TripItem[] = sourceItems.map((s) => ({
+    const newItems: TripItem[] = keptItems.map((s) => ({
       ...s,
       id: uuid(),
       tripId: newTrip.id,

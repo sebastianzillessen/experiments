@@ -12,10 +12,11 @@ import { NumberStepper } from "../components/ui/NumberStepper";
 import { useCurrentFamily } from "../hooks/useFamily";
 import { useConditions } from "../hooks/useConditions";
 import { usePackingItems } from "../hooks/usePackingItems";
+import { usePersons } from "../hooks/usePersons";
 import { useDataProvider } from "../data/DataProviderContext";
 import type { Trip } from "../types";
 import { conditionEmoji } from "../labels";
-import { calculateQuantity, daysBetween, isItemRelevantForTrip } from "../data/derive";
+import { daysBetween, generateTripItems } from "../data/derive";
 import { colors, radii, shadows } from "../theme.yak";
 
 const Overlay = styled(Dialog.Overlay)`
@@ -61,6 +62,14 @@ const CloseBtn = styled.button`
   padding: 4px;
 `;
 
+const PersonDot = styled.span<{ $color: string }>`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  display: inline-block;
+`;
+
 interface Props {
   duplicateSource?: Trip | null;
   onClose: () => void;
@@ -82,6 +91,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
   const provider = useDataProvider();
   const conditions = useConditions(family?.id);
   const templates = usePackingItems(family?.id);
+  const persons = usePersons(family?.id);
   const navigate = useNavigate();
 
   const seed = duplicateSource ?? null;
@@ -112,6 +122,14 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
     };
   }, [seed]);
 
+  // Default: alle Familienmitglieder reisen mit. Beim Duplizieren die
+  // Auswahl des Quell-Trips übernehmen (fällt auf "alle" zurück, wenn der
+  // Quell-Trip noch keine gespeicherte Auswahl hat).
+  const initialPersonIds = useMemo(
+    () => (seed?.personIds ? [...seed.personIds] : persons.map((p) => p.id)),
+    [seed, persons],
+  );
+
   const [name, setName] = useState(initial.name);
   const [startDate, setStartDate] = useState(initial.startDate);
   const [endDate, setEndDate] = useState(initial.endDate);
@@ -119,6 +137,10 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
   const [activeConds, setActiveConds] = useState<string[]>(initial.conds);
   const [hasWasher, setHasWasher] = useState(initial.washer);
   const [washInterval, setWashInterval] = useState(initial.washInterval);
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>(initialPersonIds);
+
+  const allPersonsSelected =
+    persons.length > 0 && persons.every((p) => selectedPersonIds.includes(p.id));
 
   // When dates change, compute days
   useEffect(() => {
@@ -136,19 +158,29 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
     conditions: activeConds,
     hasWasher,
     washIntervalDays: hasWasher ? washInterval : undefined,
+    personIds: selectedPersonIds,
     createdBy: "",
     createdAt: "",
   };
 
-  const previewItems = templates.filter((i) => isItemRelevantForTrip(i, tripPreview));
+  // Über generateTripItems berechnen, damit die Vorschau die 1:N-
+  // Aufteilung pro Person und die Mitreisenden-Auswahl berücksichtigt.
+  const previewItems = generateTripItems(templates, tripPreview);
   const previewCount = previewItems.length;
-  const previewQty = previewItems.reduce(
-    (s, i) => s + calculateQuantity(i, tripPreview),
-    0,
-  );
+  const previewQty = previewItems.reduce((s, i) => s + i.quantity, 0);
 
   function toggle(key: string) {
     setActiveConds((prev) => (prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]));
+  }
+
+  function togglePerson(id: string) {
+    setSelectedPersonIds((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+    );
+  }
+
+  function toggleAllPersons() {
+    setSelectedPersonIds(allPersonsSelected ? [] : persons.map((p) => p.id));
   }
 
   function submit() {
@@ -161,6 +193,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
         days,
         startDate || undefined,
         endDate || undefined,
+        selectedPersonIds,
       );
       // Apply the new conditions / washer settings via updateTrip
       provider.updateTrip(newId, {
@@ -178,6 +211,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
         conditions: activeConds,
         hasWasher,
         washIntervalDays: hasWasher ? washInterval : undefined,
+        personIds: selectedPersonIds,
       });
     }
     onClose();
@@ -223,6 +257,36 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
                 <FieldLabel>Anzahl Tage</FieldLabel>
                 <NumberStepper value={days} onChange={setDays} min={1} max={365} ariaLabel="Anzahl Tage" />
               </Field>
+
+              {persons.length > 0 && (
+                <div>
+                  <FieldLabel>Wer reist mit?</FieldLabel>
+                  <Chips style={{ marginTop: 6 }}>
+                    <Chip
+                      type="button"
+                      $active={allPersonsSelected}
+                      onClick={toggleAllPersons}
+                    >
+                      Alle
+                    </Chip>
+                    {persons.map((p) => (
+                      <Chip
+                        key={p.id}
+                        type="button"
+                        $active={selectedPersonIds.includes(p.id)}
+                        onClick={() => togglePerson(p.id)}
+                      >
+                        <PersonDot $color={p.color ?? colors.ink3} />
+                        {p.name}{p.isPet && " 🐾"}
+                      </Chip>
+                    ))}
+                  </Chips>
+                  <Muted style={{ display: "block", marginTop: 6 }}>
+                    Nur Items der mitreisenden Personen kommen auf die Liste.
+                    Gemeinsame Items sind immer dabei.
+                  </Muted>
+                </div>
+              )}
 
               <div>
                 <FieldLabel>Bedingungen</FieldLabel>

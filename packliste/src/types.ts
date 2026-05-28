@@ -92,6 +92,15 @@ export interface Trip {
   conditions: string[];
   hasWasher: boolean;
   washIntervalDays?: number;
+  /**
+   * Personen aus der Familie, die auf diesem Trip mitreisen. Beim
+   * Trip-Anlegen erzeugt jeder Person-zugewiesene Vorlagen-Eintrag nur für
+   * diese Personen eine Zeile. undefined = keine Einschränkung (alle
+   * Personen) — so verhalten sich Bestands-Trips ohne dieses Feld wie
+   * bisher. Leeres Array = niemand ausgewählt, es entstehen nur
+   * gemeinsame Items.
+   */
+  personIds?: string[];
   archivedAt?: string;
   createdBy: string;
   createdAt: string;
