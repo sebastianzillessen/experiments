@@ -20,6 +20,8 @@ export interface CreateTripParams {
   conditions: string[];
   hasWasher: boolean;
   washIntervalDays?: number;
+  /** Mitreisende Personen. undefined = alle (keine Einschränkung). */
+  personIds?: string[];
 }
 
 export type SyncStatus = "local" | "syncing" | "error";
@@ -88,6 +90,7 @@ export interface DataProvider {
     newDurationDays: number,
     newStartDate?: string,
     newEndDate?: string,
+    personIds?: string[],
   ): string;
   updateTrip(
     id: string,

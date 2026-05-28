@@ -38,12 +38,21 @@ export function generateTripItems(
   excludeKeys?: Set<string>,
 ): TripItemSeed[] {
   const seeds: TripItemSeed[] = [];
+  // Welche Personen reisen mit? undefined = keine Einschränkung (alle).
+  const tripPersons = trip.personIds;
   for (const item of templates) {
     if (!isItemRelevantForTrip(item, trip)) continue;
-    // 1:N — eine TripItem-Row pro Person, oder eine "Gemeinsam"-Row
-    // wenn keine Person zugewiesen ist.
+    let assigned = item.personIds;
+    if (tripPersons) {
+      assigned = assigned.filter((pid) => tripPersons.includes(pid));
+      // Item war Personen zugewiesen, aber keine davon reist mit → das
+      // Item ganz weglassen (kein versehentliches "Gemeinsam"-Fallback).
+      if (item.personIds.length > 0 && assigned.length === 0) continue;
+    }
+    // 1:N — eine TripItem-Row pro mitreisender Person, oder eine
+    // "Gemeinsam"-Row wenn keine Person zugewiesen ist.
     const targets: (string | undefined)[] =
-      item.personIds.length === 0 ? [undefined] : item.personIds;
+      assigned.length === 0 ? [undefined] : assigned;
     const qty = calculateQuantity(item, trip);
     for (const personId of targets) {
       const seed: TripItemSeed = {

@@ -229,6 +229,13 @@ export function TripDetail() {
     );
   }
 
+  // Nur die mitreisenden Personen als Filter anzeigen. Bestands-Trips ohne
+  // gespeicherte Auswahl (personIds undefined) zeigen weiterhin alle
+  // Familienmitglieder.
+  const tripPersons = trip.personIds
+    ? persons.filter((p) => trip.personIds!.includes(p.id))
+    : persons;
+
   const visibleItems = items.filter((it) => {
     if (filterPerson === "all") return true;
     if (filterPerson === "none") return !it.personId;
@@ -395,7 +402,7 @@ export function TripDetail() {
         </div>
 
         <StickyHeader>
-          {persons.length > 0 && (
+          {tripPersons.length > 0 && (
             <ChipsScrollable>
               {(() => {
                 const p = progressForFilter("all");
@@ -412,7 +419,7 @@ export function TripDetail() {
                   </FilterChip>
                 );
               })()}
-              {persons.map((p) => {
+              {tripPersons.map((p) => {
                 const stats = progressForFilter(p.id);
                 return (
                   <FilterChip
