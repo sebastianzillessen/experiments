@@ -1,3 +1,15 @@
 _site/
 .DS_Store
 node_modules/
+dist/
+*.log
+.vite/
+packliste/.swc/
+*.tsbuildinfo
+.claude/
+
+# Playwright
+packliste/test-results/
+packliste/playwright-report/
+packliste/blob-report/
+packliste/playwright/.cache/

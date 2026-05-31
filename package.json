@@ -1,0 +1,20 @@
+{
+  "name": "experiments",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packliste",
+    "kinderbetreuung-lohn"
+  ],
+  "scripts": {
+    "build": "bash build.sh",
+    "dev": "npm -w packliste run dev",
+    "dev:packliste": "npm -w packliste run dev",
+    "build:packliste": "npm -w packliste run build",
+    "test:kinderbetreuung": "npm test -w kinderbetreuung-lohn",
+    "test:kinderbetreuung:ui": "npm run test:ui -w kinderbetreuung-lohn"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260520.1"
+  }
+}

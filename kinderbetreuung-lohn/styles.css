@@ -5,6 +5,7 @@
   --text: #1f2933; --muted: #6b7480; --soft: #f0f4f8;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+[hidden] { display: none !important; }
 html, body { background:var(--bg); color:var(--text); font-family:'Source Sans 3',-apple-system,BlinkMacSystemFont,sans-serif; line-height:1.5; font-size:15px; }
 
 /* NAV */
@@ -53,6 +54,10 @@ button.btn-small { padding:5px 10px; font-size:12px; }
 .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
 
 /* TABLES */
+/* Tables can still overflow on very narrow viewports as a last-resort fallback;
+   let their container scroll instead of pushing the page wider than the screen. */
+#entries-list, #monat-doc, #jahr-doc, #members-list, #invites-list,
+.card:has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width:100%; border-collapse:collapse; font-size:14px; }
 table th { background:var(--soft); color:var(--primary-dark); padding:9px 10px; text-align:left; font-weight:600; border-bottom:2px solid var(--border); font-size:12px; text-transform:uppercase; letter-spacing:0.03em; }
 table td { padding:8px 10px; border-bottom:1px solid var(--border); }
@@ -125,6 +130,28 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .role-badge.owner    { background:#d4edda; color:#155724; }
 .role-badge.admin    { background:#fff3cd; color:#856404; }
 .role-badge.employee { background:#d1ecf1; color:#0c5460; }
+
+/* MOBILE — shrink padding, font sizes and stack columns so the print-doc
+   and tables fit inside narrow viewports instead of forcing horizontal scroll. */
+@media (max-width: 600px) {
+  main { padding: 16px 8px 60px; }
+  .card { padding: 12px; }
+  nav { padding: 8px 10px; }
+  table th, table td { padding: 6px 6px; font-size: 12px; }
+  table .num { white-space: normal; }
+
+  .print-doc { padding: 14px 12px; max-width: 100%; font-size: 12px; }
+  .print-doc table { font-size: 11px; margin: 8px 0; }
+  .print-doc table th, .print-doc table td { padding: 4px 4px; }
+  .print-doc .doc-header { flex-direction: column; gap: 12px; }
+  .print-doc .doc-header .party { text-align: left !important; }
+  .print-doc .signatures { grid-template-columns: 1fr; gap: 18px; margin-top: 24px; }
+  .print-doc .summary-row.netto { font-size: 14px; padding: 6px 10px; }
+
+  /* iOS Safari renders empty/centered text inside <input type=date>;
+     keep alignment consistent with the other inputs. */
+  input[type="date"], input[type="month"] { text-align: left; }
+}
 
 /* PRINT */
 @media print {

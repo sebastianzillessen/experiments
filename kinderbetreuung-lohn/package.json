@@ -1,0 +1,20 @@
+{
+  "name": "kinderbetreuung-lohn",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "supabase:start": "supabase start",
+    "supabase:reset": "supabase db reset --local"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@supabase/supabase-js": "^2.105.4",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
+    "serve": "^14.2.4",
+    "typescript": "^5.6.0",
+    "ws": "^8.18.0"
+  }
+}

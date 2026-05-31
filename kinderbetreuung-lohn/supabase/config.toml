@@ -1,0 +1,19 @@
+# Supabase project configuration.
+# Used by the Supabase CLI for both the local stack (`supabase start`) and
+# `supabase link` / `supabase db push` against the remote project.
+# Auto-applied via .github/workflows/supabase-migrate.yml on pushes to main.
+
+project_id = "tbknudbcgaarqixweizj"
+
+# Local-stack only settings — neither rate-limits nor URLs below are pushed
+# to the remote project (production auth config lives in the Supabase Dashboard).
+[auth]
+site_url = "http://127.0.0.1:8080"
+additional_redirect_urls = ["http://127.0.0.1:8080/**"]
+
+[auth.rate_limit]
+# Relaxed so the Playwright suite can hammer auth in parallel without 429s.
+email_sent = 1000
+token_refresh = 1000
+token_verifications = 1000
+sign_in_sign_ups = 1000

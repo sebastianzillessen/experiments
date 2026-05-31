@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guest Registration — Zürich</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <h1>Guest Registration</h1>
+  <div class="sub">Zürich · Required by Swiss law for short-term rentals</div>
+</header>
+
+<main>
+  <div id="form-view">
+    <p class="intro">
+      Please fill in your details so your host can register your stay with the local police, as required for all hotels and short-term rentals in Switzerland. Your data is transmitted directly to your host and is not stored beyond that purpose.
+    </p>
+
+    <form id="hoko-form" novalidate>
+      <section class="card">
+        <h3>Stay</h3>
+        <div class="grid-2">
+          <div>
+            <label for="arrival">Arrival</label>
+            <input type="date" id="arrival" name="arrival" required>
+          </div>
+          <div>
+            <label for="departure">Departure</label>
+            <input type="date" id="departure" name="departure" required>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="row-head">
+          <h3>Guests</h3>
+          <button type="button" id="add-guest" class="btn btn-small btn-secondary">+ Add another guest</button>
+        </div>
+        <div id="guests"></div>
+      </section>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary btn-large">Submit</button>
+      <div id="error" class="error" hidden></div>
+    </form>
+  </div>
+
+  <div id="success-view" hidden>
+    <section class="card success-card">
+      <h2>✓ Thank you</h2>
+      <p>Your details have been submitted to your host. There is nothing else you need to do — enjoy your stay in Zürich.</p>
+    </section>
+  </div>
+</main>
+
+<template id="guest-row-template">
+  <div class="guest-row card">
+    <div class="row-head">
+      <h4 class="guest-label">Guest <span class="guest-num"></span></h4>
+      <button type="button" class="btn btn-tiny btn-ghost remove-guest" title="Remove this guest">Remove</button>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>First name</label>
+        <input type="text" class="g-firstname" autocomplete="given-name" required>
+      </div>
+      <div>
+        <label>Last name</label>
+        <input type="text" class="g-lastname" autocomplete="family-name" required>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>Nationality</label>
+        <div class="country-combobox" data-combobox>
+          <input
+            type="text"
+            class="g-country combobox-input"
+            placeholder="Start typing…"
+            autocomplete="off"
+            autocapitalize="words"
+            spellcheck="false"
+            required>
+          <button type="button" class="combobox-toggle" tabindex="-1" aria-label="Toggle list">▾</button>
+          <ul class="combobox-list" role="listbox" hidden></ul>
+        </div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>ID document type</label>
+        <select class="g-ausweisart" required>
+          <option value="" disabled selected>Select…</option>
+          <option value="Passport">Passport</option>
+          <option value="ID card">ID card</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label>ID / passport number</label>
+        <input type="text" class="g-ausweis" autocomplete="off" required>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="countries.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
