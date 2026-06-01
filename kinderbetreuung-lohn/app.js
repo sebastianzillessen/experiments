@@ -23,15 +23,16 @@ let membersCache = new Map();
 function defaultPaySettingsData() {
   return {
     hourlyRate: 30.00,
-    vacationPercent: 8.33,
+    vacationPercent: 8.33,   // Ferienentschädigung: 4 Wochen 8.33 %, 5 Wochen 10.63 %, 6 Wochen 13.04 %
+    holidayPercent: 3.59,    // Feiertagsentschädigung: 3.59 % entspricht 9 ZH-Feiertagen (NAV Hauswirtschaft)
     ahvIvEoEmployee: 5.30, ahvIvEoEmployer: 5.30,
     alvEmployee: 1.10,     alvEmployer: 1.10,
-    fakEmployer: 1.00,
+    fakEmployer: 1.025,
     withholdingTax: 5.00,
-    adminFeeEmployer: 0.40,
+    adminFeeEmployer: 5.00,  // Verwaltungskosten: % der AHV/IV/EO-Beiträge (AN + AG)
     uvgEnabled: true,
     uvgBuEmployer: 0.505,
-    uvgNbuEmployee: 1.47
+    uvgNbuEmployee: 1.432
   };
 }
 
@@ -45,6 +46,7 @@ function sanitizePaySettingsData(d) {
   return {
     hourlyRate:       asNumber(d.hourlyRate,       def.hourlyRate),
     vacationPercent:  asNumber(d.vacationPercent,  def.vacationPercent),
+    holidayPercent:   asNumber(d.holidayPercent,   def.holidayPercent),
     ahvIvEoEmployee:  asNumber(d.ahvIvEoEmployee,  def.ahvIvEoEmployee),
     ahvIvEoEmployer:  asNumber(d.ahvIvEoEmployer,  def.ahvIvEoEmployer),
     alvEmployee:      asNumber(d.alvEmployee,      def.alvEmployee),
@@ -187,7 +189,7 @@ function versionHasShifts(version) {
    recent shift's version in the period (which equals the only version if
    rates didn't change within the period). */
 function berechneAbrechnung(shifts, employee) {
-  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, bruttoTotal = 0;
+  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, feiertagszulage = 0, bruttoTotal = 0;
   const an = { ahvIvEo: 0, alv: 0, nbu: 0, quellenst: 0 };
   const ag = { ahvIvEo: 0, alv: 0, fak: 0, bu: 0, verw: 0 };
   let nbuApplicable = false;
@@ -198,16 +200,20 @@ function berechneAbrechnung(shifts, employee) {
     const hours = Number(x.hours) || 0;
     const xBrutto = hours * e.hourlyRate;
     const xFerien = xBrutto * e.vacationPercent / 100;
-    const xBruttoTotal = xBrutto + xFerien;
+    const xFeiertag = xBrutto * e.holidayPercent / 100;
+    const xBruttoTotal = xBrutto + xFerien + xFeiertag;
 
     stundenTotal += hours;
     bruttoStunden += xBrutto;
     ferienzulage += xFerien;
+    feiertagszulage += xFeiertag;
     bruttoTotal += xBruttoTotal;
 
     const xNbuApplicable = e.uvgEnabled && employee.weeklyHoursThreshold8h;
     if (xNbuApplicable) nbuApplicable = true;
     if (e.uvgEnabled) uvgAktivAny = true;
+
+    const xAhvIvEoTotal = xBruttoTotal * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
 
     an.ahvIvEo   += xBruttoTotal * e.ahvIvEoEmployee / 100;
     an.alv       += xBruttoTotal * e.alvEmployee / 100;
@@ -218,12 +224,14 @@ function berechneAbrechnung(shifts, employee) {
     ag.alv     += xBruttoTotal * e.alvEmployer / 100;
     ag.fak     += xBruttoTotal * e.fakEmployer / 100;
     ag.bu      += e.uvgEnabled ? xBruttoTotal * e.uvgBuEmployer / 100 : 0;
-    ag.verw    += xBruttoTotal * e.adminFeeEmployer / 100;
+    // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
+    ag.verw    += xAhvIvEoTotal * e.adminFeeEmployer / 100;
   }
 
   stundenTotal = round2(stundenTotal);
   bruttoStunden = round2(bruttoStunden);
   ferienzulage = round2(ferienzulage);
+  feiertagszulage = round2(feiertagszulage);
   bruttoTotal = round2(bruttoTotal);
   for (const k of Object.keys(an)) an[k] = round2(an[k]);
   for (const k of Object.keys(ag)) ag[k] = round2(ag[k]);
@@ -233,7 +241,7 @@ function berechneAbrechnung(shifts, employee) {
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal, bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
+  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
 }
 
 /* ---- SYNC STATUS ---- */
@@ -897,6 +905,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
     <h4>Bruttolohn</h4>
     <div class="summary-row"><span>Stundenlohn-Summe</span><span>CHF ${fmtChf(calc.bruttoStunden)}</span></div>
     <div class="summary-row"><span>+ Ferienzulage (${e.vacationPercent} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
+    <div class="summary-row"><span>+ Feiertagszulage (${e.holidayPercent} %)</span><span>CHF ${fmtChf(calc.feiertagszulage)}</span></div>
     <div class="summary-row total"><span>Bruttolohn</span><span>CHF ${fmtChf(calc.bruttoTotal)}</span></div>
 
     <h4>Abzüge Arbeitnehmer/in</h4>
@@ -913,7 +922,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
     <div class="summary-row"><span>ALV (${e.alvEmployer} %)</span><span>CHF ${fmtChf(calc.ag.alv)}</span></div>
     <div class="summary-row"><span>FAK (${e.fakEmployer} %)</span><span>CHF ${fmtChf(calc.ag.fak)}</span></div>
     ${buLine}
-    <div class="summary-row"><span>Verwaltungskosten (${e.adminFeeEmployer} %)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
+    <div class="summary-row"><span>Verwaltungskosten (${e.adminFeeEmployer} % der AHV/IV/EO-Beiträge)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
     <div class="summary-row total"><span>Total Arbeitgeberbeiträge</span><span>CHF ${fmtChf(calc.ag.total)}</span></div>
     <div class="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF ${fmtChf(calc.agKostenTotal)}</span></div>
 
@@ -1069,6 +1078,7 @@ const psFormError    = () => document.getElementById('pay-settings-form-error');
 const PS_NUMERIC_FIELDS = [
   ['ps-hourly-rate',       'hourlyRate',       0.01],
   ['ps-vacation-percent',  'vacationPercent',  0.01],
+  ['ps-holiday-percent',   'holidayPercent',   0.01],
   ['ps-ahv-employee',      'ahvIvEoEmployee',  0.01],
   ['ps-ahv-employer',      'ahvIvEoEmployer',  0.01],
   ['ps-alv-employee',      'alvEmployee',      0.01],
