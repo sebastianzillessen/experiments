@@ -129,6 +129,12 @@ function fmtChf(n) {
 
 function round2(n) { return Math.round(n*100)/100; }
 
+// Swiss Rappenrundung: payable amounts settle on the 5-Rappen grid. The SVA
+// calculator rounds the wage components, the Bruttolohn and the Nettolohn this
+// way, so we match it for those figures (contribution line items stay at
+// Rappen precision, exactly as on the SVA breakdown).
+function round5(n) { return Math.round(n*20)/20; }
+
 function fmtDate(iso) {
   if (!iso) return '';
   const [y,m,d] = iso.split('-');
@@ -182,62 +188,58 @@ function versionHasShifts(version) {
 }
 
 /* ---- BERECHNUNG ----
-   Each shift's calculation uses the pay_settings version that was active
-   on shift.date. So a future "Lohnerhöhung" via a new version cannot
+   Callers always pass the shifts of a single calendar month. Because
+   pay_settings versions are effective from the first of a month and a new
+   version cannot be inserted over months that already have shifts, exactly
+   one version applies to all shifts of a given month — so a single rate set
+   governs each Abrechnung. A future "Lohnerhöhung" via a new version cannot
    retroactively change past Lohnabrechnungen.
-   For label/percentage display in summaries we use the rates of the most
-   recent shift's version in the period (which equals the only version if
-   rates didn't change within the period). */
+
+   We mirror the SVA Zürich calculator: the gross is built from Rappen-rounded
+   components (Grundlohn, Ferien-, Feiertagszulage), each contribution is then
+   computed on that rounded Bruttolohn at Rappen precision, and the Nettolohn
+   (the actual payout) is rounded to the 5-Rappen grid. */
 function berechneAbrechnung(shifts, employee) {
-  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, feiertagszulage = 0, bruttoTotal = 0;
-  const an = { ahvIvEo: 0, alv: 0, nbu: 0, quellenst: 0 };
-  const ag = { ahvIvEo: 0, alv: 0, fak: 0, bu: 0, verw: 0 };
+  let stundenTotal = 0, bruttoStundenRaw = 0;
   let nbuApplicable = false;
   let uvgAktivAny = false;
+  // Active rate set for the month. Defaults cover the empty-shift case; the
+  // loop overwrites it with the (single) version that applies to these shifts.
+  let e = defaultPaySettingsData();
 
   for (const x of shifts) {
-    const e = activePaySettingsFor(x.date);
+    e = activePaySettingsFor(x.date);
     const hours = Number(x.hours) || 0;
-    const xBrutto = hours * e.hourlyRate;
-    const xFerien = xBrutto * e.vacationPercent / 100;
-    const xFeiertag = xBrutto * e.holidayPercent / 100;
-    const xBruttoTotal = xBrutto + xFerien + xFeiertag;
-
     stundenTotal += hours;
-    bruttoStunden += xBrutto;
-    ferienzulage += xFerien;
-    feiertagszulage += xFeiertag;
-    bruttoTotal += xBruttoTotal;
-
-    const xNbuApplicable = e.uvgEnabled && employee.weeklyHoursThreshold8h;
-    if (xNbuApplicable) nbuApplicable = true;
+    bruttoStundenRaw += hours * e.hourlyRate;
     if (e.uvgEnabled) uvgAktivAny = true;
-
-    const xAhvIvEoTotal = xBruttoTotal * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
-
-    an.ahvIvEo   += xBruttoTotal * e.ahvIvEoEmployee / 100;
-    an.alv       += xBruttoTotal * e.alvEmployee / 100;
-    an.nbu       += xNbuApplicable ? xBruttoTotal * e.uvgNbuEmployee / 100 : 0;
-    an.quellenst += xBruttoTotal * e.withholdingTax / 100;
-
-    ag.ahvIvEo += xBruttoTotal * e.ahvIvEoEmployer / 100;
-    ag.alv     += xBruttoTotal * e.alvEmployer / 100;
-    ag.fak     += xBruttoTotal * e.fakEmployer / 100;
-    ag.bu      += e.uvgEnabled ? xBruttoTotal * e.uvgBuEmployer / 100 : 0;
-    // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
-    ag.verw    += xAhvIvEoTotal * e.adminFeeEmployer / 100;
+    if (e.uvgEnabled && employee.weeklyHoursThreshold8h) nbuApplicable = true;
   }
 
   stundenTotal = round2(stundenTotal);
-  bruttoStunden = round2(bruttoStunden);
-  ferienzulage = round2(ferienzulage);
-  feiertagszulage = round2(feiertagszulage);
-  bruttoTotal = round2(bruttoTotal);
-  for (const k of Object.keys(an)) an[k] = round2(an[k]);
-  for (const k of Object.keys(ag)) ag[k] = round2(ag[k]);
+  const bruttoStunden   = round5(bruttoStundenRaw);
+  const ferienzulage    = round5(bruttoStundenRaw * e.vacationPercent / 100);
+  const feiertagszulage = round5(bruttoStundenRaw * e.holidayPercent / 100);
+  const bruttoTotal     = round5(bruttoStunden + ferienzulage + feiertagszulage);
 
+  const an = {
+    ahvIvEo:   round2(bruttoTotal * e.ahvIvEoEmployee / 100),
+    alv:       round2(bruttoTotal * e.alvEmployee / 100),
+    nbu:       nbuApplicable ? round2(bruttoTotal * e.uvgNbuEmployee / 100) : 0,
+    quellenst: round2(bruttoTotal * e.withholdingTax / 100)
+  };
   an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
-  const netto = round2(bruttoTotal - an.total);
+  const netto = round5(bruttoTotal - an.total);
+
+  // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
+  const ahvIvEoBeitraege = bruttoTotal * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
+  const ag = {
+    ahvIvEo: round2(bruttoTotal * e.ahvIvEoEmployer / 100),
+    alv:     round2(bruttoTotal * e.alvEmployer / 100),
+    fak:     round2(bruttoTotal * e.fakEmployer / 100),
+    bu:      uvgAktivAny ? round2(bruttoTotal * e.uvgBuEmployer / 100) : 0,
+    verw:    round2(ahvIvEoBeitraege * e.adminFeeEmployer / 100)
+  };
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
