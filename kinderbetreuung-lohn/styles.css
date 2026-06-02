@@ -99,6 +99,9 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .muted { color:var(--muted); }
 .tag { display:inline-block; background:var(--soft); color:var(--primary-dark); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
 
+/* BUILD VERSION FOOTER */
+.app-version { text-align:center; color:var(--muted); font-size:11px; padding:18px 16px 28px; opacity:0.8; }
+
 /* AUTH SCREEN */
 .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
 .auth-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:32px; max-width:420px; width:100%; box-shadow:0 4px 12px rgba(0,0,0,0.06); text-align:center; }

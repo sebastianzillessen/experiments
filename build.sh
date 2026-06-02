@@ -53,12 +53,20 @@ build_kinderbetreuung() {
      kinderbetreuung-lohn/app.js \
      kinderbetreuung-lohn/styles.css \
      _site/kinderbetreuung-lohn/
+  # Build version for the footer: short commit hash + UTC build time. Prefer
+  # git; fall back to the Cloudflare Workers CI commit env var, then "unknown".
+  local commit build_time
+  commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+  if [ -z "$commit" ]; then commit="${WORKERS_CI_COMMIT_SHA:-${CF_PAGES_COMMIT_SHA:-unknown}}"; commit="${commit:0:7}"; fi
+  build_time="$(date -u +'%Y-%m-%d %H:%M UTC')"
+
   # Generate config.js with env-var values (JSON-escaped via Python).
   cat > _site/kinderbetreuung-lohn/config.js <<EOF
 window.__APP_CONFIG = {
   url: $(printf '%s' "$SUPABASE_URL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
   key: $(printf '%s' "$SUPABASE_PUBLISHABLE_KEY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 };
+window.__APP_VERSION = { commit: $(printf '%s' "$commit" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'), builtAt: $(printf '%s' "$build_time" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))') };
 EOF
 }
 
