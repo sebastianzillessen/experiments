@@ -296,6 +296,17 @@ const inviteBanner = document.getElementById('invite-banner');
 const inviteText = document.getElementById('invite-text');
 const authError = document.getElementById('auth-error');
 const authInfo = document.getElementById('auth-info');
+const loginWarning = document.getElementById('login-warning');
+
+// Prominent banner on the login screen, e.g. for an expired/invalid magic link.
+function showLoginWarning(msg) {
+  if (!loginWarning) return;
+  loginWarning.textContent = msg;
+  loginWarning.hidden = false;
+}
+function clearLoginWarning() {
+  if (loginWarning) loginWarning.hidden = true;
+}
 const createHouseholdScreen = document.getElementById('create-household-screen');
 const createHouseholdNameInput = document.getElementById('create-household-name');
 const createHouseholdError = document.getElementById('create-household-error');
@@ -332,6 +343,7 @@ document.getElementById('magic-link-form').addEventListener('submit', async (ev)
   ev.preventDefault();
   authError.hidden = true;
   authInfo.hidden = true;
+  clearLoginWarning();
   const email = document.getElementById('login-email').value.trim().toLowerCase();
   if (!email || !email.includes('@')) {
     authError.textContent = 'Bitte gültige E-Mail-Adresse eingeben.';
@@ -421,19 +433,14 @@ async function bootstrap() {
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType });
     history.replaceState(null, '', location.pathname); // strip the token from the URL
     if (error) {
-      authError.textContent = 'Anmelde-Link ungültig oder abgelaufen. Bitte einen neuen Link anfordern.';
-      authError.hidden = false;
+      showLoginWarning('Dein Anmelde-Link war ungültig oder ist abgelaufen. Bitte fordere unten einen neuen Link an.');
       showLogin();
       return;
     }
   } else if (location.hash.includes('error')) {
     // A failed Supabase verify redirect leaves #error=...&error_description=... .
-    const hp = new URLSearchParams(location.hash.slice(1));
-    const desc = (hp.get('error_description') || '').replace(/\+/g, ' ');
     history.replaceState(null, '', location.pathname);
-    authError.textContent = 'Anmelde-Link ungültig oder abgelaufen. Bitte einen neuen Link anfordern.'
-      + (desc ? ' (' + desc + ')' : '');
-    authError.hidden = false;
+    showLoginWarning('Dein Anmelde-Link war ungültig oder ist abgelaufen. Bitte fordere unten einen neuen Link an.');
     showLogin();
     return;
   }
