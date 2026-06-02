@@ -217,6 +217,31 @@
     }
   }
 
+  function lockDateField(el, germanDate) {
+    const iso = germanToIso(germanDate);
+    if (!iso) return;
+    el.value = iso;
+    el.readOnly = true;
+    el.classList.add("readonly");
+  }
+
+  // When the host shares a URL with just `?code=` (an Airbnb reservation
+  // code), ask the worker to look up the stay dates from the Airbnb iCal
+  // feed. Silent best-effort — if it fails the guest just enters dates
+  // manually.
+  async function tryAirbnbPrefill() {
+    if (!urlCode || urlArrival || urlDeparture) return;
+    try {
+      const resp = await fetch(`/api/hoko/airbnb-lookup/${encodeURIComponent(urlCode)}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.ankunft) lockDateField($("#arrival"), data.ankunft);
+      if (data.abreise) lockDateField($("#departure"), data.abreise);
+    } catch {
+      /* silent — manual entry still works */
+    }
+  }
+
   function renderGuests() {
     const container = $("#guests");
     container.innerHTML = "";
@@ -338,6 +363,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     applyStayPrefill();
     renderGuests();
+    tryAirbnbPrefill();
     $("#add-guest").addEventListener("click", addGuestRow);
     $("#hoko-form").addEventListener("submit", handleSubmit);
   });

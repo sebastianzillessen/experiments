@@ -29,6 +29,7 @@
  *   npx wrangler secret put RESEND_API_KEY
  *   npx wrangler secret put HOST_NOTIFY_EMAIL
  *   npx wrangler secret put RESEND_FROM   # e.g. "HotelKontrolle <hoko@zillessen.dev>"
+ *   npx wrangler secret put AIRBNB_ICAL_URL  # optional — enables /api/hoko/airbnb-lookup/:code
  *
  * Without HOKO_KV bound, /api/hoko/* responds 503.
  * Without PACKLISTE_KV bound, /api/packliste/share* responds 503.
@@ -42,6 +43,7 @@ interface Env {
   RESEND_API_KEY?: string;
   HOST_NOTIFY_EMAIL?: string;
   RESEND_FROM?: string;
+  AIRBNB_ICAL_URL?: string;
 }
 
 const HOKO_HOST = "hoko.zillessen.dev";
@@ -271,6 +273,26 @@ async function handleHokoApi(
     return jsonResponse({ code: stay.code }, 201);
   }
 
+  // GET /api/hoko/airbnb-lookup/:code — return {ankunft, abreise} for a
+  // reservation code listed in the host's Airbnb iCal feed.
+  const airbnbMatch = url.pathname.match(/^\/api\/hoko\/airbnb-lookup\/([A-Z0-9-]{4,64})$/i);
+  if (request.method === "GET" && airbnbMatch) {
+    if (!env.AIRBNB_ICAL_URL) {
+      return jsonResponse({ error: "Airbnb lookup not configured" }, 503);
+    }
+    const code = airbnbMatch[1].toUpperCase();
+    let map: Record<string, AirbnbStay>;
+    try {
+      map = await getAirbnbLookup(env);
+    } catch (err) {
+      console.error("airbnb lookup failed", err);
+      return jsonResponse({ error: "Airbnb feed fetch failed" }, 502);
+    }
+    const hit = map[code];
+    if (!hit) return jsonResponse({ error: "code not found in Airbnb feed" }, 404);
+    return jsonResponse(hit, 200);
+  }
+
   // GET /api/hoko/:code
   const match = url.pathname.match(/^\/api\/hoko\/([A-Z0-9-]{4,64})$/i);
   if (request.method === "GET" && match) {
@@ -295,6 +317,69 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// ---------------------------------------------------------------------------
+// Airbnb iCal lookup — fetches the host's per-listing calendar export, parses
+// out `<code> -> {ankunft, abreise}` (both DD.MM.YYYY), and caches the result
+// in HOKO_KV for 15 min. Each VEVENT looks like:
+//
+//   DTSTART;VALUE=DATE:20260528
+//   DTEND;VALUE=DATE:20260601
+//   DESCRIPTION:Reservation URL: https://www.airbnb.com/hosting/reservations/de
+//    tails/HMWARWKJDE\nPhone Number (Last 4 Digits): 7633
+//
+// DTEND is the checkout day for Airbnb all-day events, so we map it directly
+// to abreise. iCal line folding (RFC 5545) inserts CRLF+SP inside long lines —
+// we unfold first so the code stays whole.
+// ---------------------------------------------------------------------------
+
+interface AirbnbStay {
+  ankunft: string;
+  abreise: string;
+}
+
+const AIRBNB_CACHE_KEY = "airbnb:ical:v1";
+const AIRBNB_CACHE_TTL = 60 * 15; // 15 min
+
+function parseAirbnbIcal(text: string): Record<string, AirbnbStay> {
+  const unfolded = text.replace(/\r?\n[ \t]/g, "");
+  const out: Record<string, AirbnbStay> = {};
+  const blocks = unfolded.split(/BEGIN:VEVENT/);
+  for (const block of blocks.slice(1)) {
+    const end = block.indexOf("END:VEVENT");
+    if (end === -1) continue;
+    const body = block.slice(0, end);
+    const start = body.match(/DTSTART(?:;[^:\r\n]*)?:(\d{8})/);
+    const stop = body.match(/DTEND(?:;[^:\r\n]*)?:(\d{8})/);
+    const codeMatch = body.match(/\/details\/(HM[A-Z0-9]+)/i);
+    if (!start || !stop || !codeMatch) continue;
+    out[codeMatch[1].toUpperCase()] = {
+      ankunft: yyyymmddToGerman(start[1]),
+      abreise: yyyymmddToGerman(stop[1]),
+    };
+  }
+  return out;
+}
+
+function yyyymmddToGerman(s: string): string {
+  return `${s.slice(6, 8)}.${s.slice(4, 6)}.${s.slice(0, 4)}`;
+}
+
+async function getAirbnbLookup(env: Env): Promise<Record<string, AirbnbStay>> {
+  if (env.HOKO_KV) {
+    const cached = await env.HOKO_KV.get(AIRBNB_CACHE_KEY, "json");
+    if (cached) return cached as Record<string, AirbnbStay>;
+  }
+  const resp = await fetch(env.AIRBNB_ICAL_URL!, { cf: { cacheTtl: 60 } });
+  if (!resp.ok) throw new Error(`Airbnb iCal HTTP ${resp.status}`);
+  const parsed = parseAirbnbIcal(await resp.text());
+  if (env.HOKO_KV) {
+    await env.HOKO_KV.put(AIRBNB_CACHE_KEY, JSON.stringify(parsed), {
+      expirationTtl: AIRBNB_CACHE_TTL,
+    });
+  }
+  return parsed;
 }
 
 function buildNotificationText(stay: StoredStay): string {
