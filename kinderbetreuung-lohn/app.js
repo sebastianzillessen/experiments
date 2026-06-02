@@ -148,6 +148,10 @@ function fmtDate(iso) {
   return `${d}.${m}.${y}`;
 }
 
+// Display labels for the membership roles (DB values stay owner/admin/employee).
+const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', employee: 'Mitarbeitende/r' };
+function roleLabel(role) { return ROLE_LABELS[role] || role; }
+
 function monthLabel(yyyymm) {
   const [y, m] = yyyymm.split('-').map(Number);
   const months = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
@@ -505,7 +509,7 @@ async function fetchPendingInvite() {
 
 function showInviteBanner(invite) {
   const householdName = (invite.households && invite.households.name) || 'einem Haushalt';
-  inviteText.textContent = `Du wurdest in „${householdName}“ als ${invite.role} eingeladen.`;
+  inviteText.textContent = `Du wurdest in „${householdName}“ als ${roleLabel(invite.role)} eingeladen.`;
   inviteBanner.hidden = false;
 
   document.getElementById('btn-accept-invite').onclick = async () => {
@@ -755,7 +759,7 @@ function applyRoleVisibility(role) {
     btn.hidden = !visible;
   });
   const userStripRole = document.getElementById('user-strip-role');
-  userStripRole.textContent = role;
+  userStripRole.textContent = roleLabel(role);
   userStripRole.className = 'role-badge ' + role;
   const activePanel = document.querySelector('section[role="tabpanel"].active');
   const activeId = activePanel ? activePanel.id : 'erfassung';
@@ -1452,7 +1456,7 @@ async function renderMitglieder() {
               <div class="meta">${escapeHtml(m.email)}${isSelf ? ' · du' : ''}</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <span class="role-badge ${m.role}">${m.role}</span>
+              <span class="role-badge ${m.role}">${escapeHtml(roleLabel(m.role))}</span>
               ${showRemove ? `<button class="btn btn-small btn-danger" data-remove="${m.user_id}">Entfernen</button>` : ''}
             </div>
           </div>`;
@@ -1495,7 +1499,7 @@ async function renderMitglieder() {
             <div class="meta">eingeladen am ${fmtDate(i.created_at.slice(0,10))}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
-            <span class="role-badge ${i.role}">${i.role}</span>
+            <span class="role-badge ${i.role}">${escapeHtml(roleLabel(i.role))}</span>
             <button class="btn btn-small btn-danger" data-revoke="${i.id}">Zurückziehen</button>
           </div>
         </div>`).join('');
