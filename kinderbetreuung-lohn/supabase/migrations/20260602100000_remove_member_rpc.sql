@@ -21,8 +21,11 @@ as $$
 declare
   v_deleted integer;
 begin
-  -- Only the household owner may remove members.
-  if public.role_in(p_household_id) <> 'owner' then
+  -- Only the household owner may remove members. IS DISTINCT FROM is NULL-safe:
+  -- role_in() returns NULL for a non-member (and auth.uid() is NULL without an
+  -- auth context), and `NULL <> 'owner'` would be NULL — which IF treats as
+  -- not-true and would let a non-member reach the security-definer DELETE.
+  if public.role_in(p_household_id) is distinct from 'owner' then
     raise exception 'Only the household owner can remove members'
       using errcode = '42501';
   end if;
@@ -33,7 +36,7 @@ begin
       using errcode = 'P0001';
   end if;
 
-  -- Never remove an owner row (there is exactly one, the creator).
+  -- Owner rows must not be removed via this path.
   delete from public.memberships
   where household_id = p_household_id
     and user_id = p_user_id
