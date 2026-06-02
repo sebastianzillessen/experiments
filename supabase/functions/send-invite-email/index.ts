@@ -27,7 +27,7 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Owner',
   admin: 'Admin',
-  employee: 'Mitarbeiter/in',
+  employee: 'Mitarbeitende/r',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
