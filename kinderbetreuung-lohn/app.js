@@ -1433,20 +1433,19 @@ async function renderMitglieder() {
           const userId = btn.dataset.remove;
           setSyncStatus('pending');
           try {
-            // .select() so the response body returns the deleted rows. Without
-            // it PostgREST returns 204 even when RLS filters every row, which
-            // hid an earlier bug where the click looked successful but the
-            // member stayed.
-            const { data, error } = await supabase
-              .from('memberships')
-              .delete()
-              .eq('household_id', currentHouseholdId)
-              .eq('user_id', userId)
-              .select('user_id');
+            // Privileged delete via security-definer RPC. A direct
+            // delete().select() can't confirm the removal: the memberships
+            // SELECT policy only exposes the caller's own row, so DELETE …
+            // RETURNING comes back empty for another member and looks like a
+            // failure. The RPC enforces owner-only and returns the row count.
+            const { data, error } = await supabase.rpc('remove_member', {
+              p_household_id: currentHouseholdId,
+              p_user_id: userId
+            });
             if (error) throw error;
-            if (!data || data.length === 0) {
+            if (!data) {
               throw new Error(
-                'Keine Zeile gelöscht. Vermutlich fehlen die nötigen Rechte (nur Owner darf Mitglieder entfernen) oder das Mitglied existiert nicht mehr.'
+                'Mitglied wurde nicht entfernt — evtl. bereits entfernt oder fehlende Rechte (nur Owner darf Mitglieder entfernen).'
               );
             }
             setSyncStatus('ok');
