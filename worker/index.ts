@@ -10,10 +10,11 @@
  *                                 30-day TTL with sliding window)
  *
  * Anything else falls through to the static-asset binding (`env.ASSETS`),
- * which serves the per-app builds from ./_site/. When the request Host
- * header is `hoko.zillessen.dev`, the path is internally rewritten to
- * `/hoko<path>` so the guest mini-app served from _site/hoko/ appears
- * at the subdomain root.
+ * which serves the per-app builds from ./_site/. Host-based rewrites let a
+ * single app appear at a subdomain root:
+ *   * `hoko.zillessen.dev`      → /hoko<path>               (_site/hoko/)
+ *   * `salaerli.zillessen.dev`  → /kinderbetreuung-lohn<path> (Salärli app)
+ * Other hosts (e.g. zillessen.dev) keep serving the experiments overview.
  *
  * `run_worker_first: true` in wrangler.jsonc ensures THIS file runs on
  * every request — otherwise the assets binding short-circuits for paths
@@ -47,6 +48,15 @@ const HOKO_HOST = "hoko.zillessen.dev";
 const HOKO_API_PREFIX = "/api/hoko";
 const PACKLISTE_PREFIX = "/api/packliste/share";
 
+// salaerli.zillessen.dev (and its umlaut/punycode form) serve the
+// kinderbetreuung-lohn ("Salärli") app from the subdomain root instead of
+// the experiments overview.
+const SALAERLI_HOSTS = new Set([
+  "salaerli.zillessen.dev",
+  "xn--salrli-dua.zillessen.dev", // salärli.zillessen.dev
+]);
+const SALAERLI_PREFIX = "/kinderbetreuung-lohn";
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -70,12 +80,21 @@ export default {
 function serveAssets(request: Request, env: Env, url: URL): Promise<Response> {
   const host = (request.headers.get("host") || url.hostname || "").toLowerCase();
   if (host === HOKO_HOST && !url.pathname.startsWith("/hoko")) {
-    const rewritten = new URL(request.url);
-    rewritten.pathname = `/hoko${url.pathname === "/" ? "/" : url.pathname}`;
-    const rewrittenRequest = new Request(rewritten.toString(), request);
-    return env.ASSETS.fetch(rewrittenRequest);
+    return fetchWithPrefix(request, env, url, "/hoko");
+  }
+  if (SALAERLI_HOSTS.has(host) && !url.pathname.startsWith(SALAERLI_PREFIX)) {
+    return fetchWithPrefix(request, env, url, SALAERLI_PREFIX);
   }
   return env.ASSETS.fetch(request);
+}
+
+// Serve a subdomain's app from a sub-path of _site/ by internally rewriting
+// the request path (so the app appears at the subdomain root). Relative asset
+// requests (e.g. /app.js) are rewritten the same way on the next request.
+function fetchWithPrefix(request: Request, env: Env, url: URL, prefix: string): Promise<Response> {
+  const rewritten = new URL(request.url);
+  rewritten.pathname = `${prefix}${url.pathname === "/" ? "/" : url.pathname}`;
+  return env.ASSETS.fetch(new Request(rewritten.toString(), request));
 }
 
 // ---------------------------------------------------------------------------
