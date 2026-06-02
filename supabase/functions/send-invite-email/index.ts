@@ -5,22 +5,23 @@
 // user if they don't exist yet), then sends a German invitation email via
 // Resend.
 //
-// Required env / Supabase secrets:
+// Only one secret is required:
 //   - RESEND_API_KEY       (required) Resend API key
-//   - INVITE_EMAIL_FROM    (recommended) sender, e.g.
-//                          'Salärli <noreply@zillessen.dev>'
-//   - APP_URL              (optional)  defaults to the production URL
+// The sender (INVITE_EMAIL_FROM) and the magic-link target (APP_URL) are now
+// code-defined constants below — edit them here and redeploy. They are
+// deliberately NOT read from env, so a stale Supabase secret can't override
+// them (which previously kept the old sender/redirect after a rebrand).
 //
-// The function expects a POST with JSON body { "invite_id": "<uuid>" }.
+// The expected POST body is JSON { "invite_id": "<uuid>" }.
 // Auth: standard Supabase JWT verification is enabled (default).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 
-const APP_URL = Deno.env.get('APP_URL') ?? 'https://salaerli.zillessen.dev/';
+// Magic-link target: must also be allowlisted under Supabase Auth → Redirect URLs.
+const APP_URL = 'https://salaerli.zillessen.dev/';
+// Sender: the address domain must stay verified in Resend (zillessen.dev).
+const INVITE_EMAIL_FROM = 'Salärli <noreply@zillessen.dev>';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const INVITE_EMAIL_FROM =
-  Deno.env.get('INVITE_EMAIL_FROM') ??
-  'Salärli <onboarding@resend.dev>';
 
 // German labels for the membership roles stored in the DB.
 const ROLE_LABELS: Record<string, string> = {
