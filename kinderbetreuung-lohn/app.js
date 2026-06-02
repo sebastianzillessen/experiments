@@ -929,6 +929,9 @@ function renderEntries() {
 const mInput = document.getElementById('m-monat');
 mInput.value = new Date().toISOString().slice(0,7);
 mInput.addEventListener('input', renderMonatTab);
+// Resolves once the (async) QR-bill for the current month has been injected,
+// so printing can wait for a stable DOM instead of mutating mid-print.
+let qrBillReady = Promise.resolve();
 
 function renderMonatTab() {
   const yyyymm = mInput.value;
@@ -938,7 +941,7 @@ function renderMonatTab() {
   target.innerHTML = renderLohnabrechnung(eintraege, yyyymm);
   // Fill the QR-bill slot (if any) asynchronously — the lib loads lazily.
   const calc = berechneAbrechnung(eintraege, state.employee);
-  injectQrBill(yyyymm, calc.netto);
+  qrBillReady = injectQrBill(yyyymm, calc.netto);
 }
 
 // Render a Swiss QR-bill (QR-Rechnung) into the monthly doc so the employer
@@ -975,8 +978,16 @@ async function injectQrBill(yyyymm, netto) {
       }
     };
     const bill = new SwissQRBill(data);
+    // Render as a static <img> (SVG data URL) rather than a live inline SVG.
+    // The injection is async; if the inline SVG lands in the DOM while the
+    // print preview is already open it mutates it mid-print and blanks the
+    // preview. An <img> is a single stable node and prints reliably.
+    const svgStr = new XMLSerializer().serializeToString(bill.element);
+    const img = document.createElement('img');
+    img.alt = 'QR-Einzahlungsschein';
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
     slot.innerHTML = '';
-    slot.appendChild(bill.element);
+    slot.appendChild(img);
   } catch (e) {
     console.warn('QR-bill generation failed', e);
     note('QR-Einzahlungsschein konnte nicht erzeugt werden (IBAN/Adresse prüfen).');
@@ -1088,7 +1099,12 @@ function renderLohnabrechnung(eintraege, yyyymm) {
   </div>`;
 }
 
-document.getElementById('btn-print-monat').addEventListener('click', () => printSection('monat'));
+document.getElementById('btn-print-monat').addEventListener('click', async () => {
+  // Wait for the QR-bill to finish injecting so the print preview isn't
+  // mutated (and blanked) mid-print.
+  try { await qrBillReady; } catch { /* note shown in slot */ }
+  printSection('monat');
+});
 
 /* ---- JAHRESÜBERSICHT ---- */
 const jInput = document.getElementById('j-jahr');
