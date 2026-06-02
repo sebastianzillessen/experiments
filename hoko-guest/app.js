@@ -8,8 +8,6 @@
 
   const params = new URLSearchParams(window.location.search);
   const urlCode = params.get("code")?.trim() || null;
-  const urlArrival = params.get("s")?.trim() || null;
-  const urlDeparture = params.get("e")?.trim() || null;
   const urlGuestCount = (() => {
     const raw = params.get("n");
     if (!raw) return 1;
@@ -19,7 +17,7 @@
 
   // -----------------------------------------------------------------------
   // Date helpers — `<input type="date">` uses ISO (YYYY-MM-DD) internally;
-  // the URL and the submit payload use the German DD.MM.YYYY format.
+  // the submit payload uses the German DD.MM.YYYY format.
   // -----------------------------------------------------------------------
 
   function germanToIso(s) {
@@ -202,21 +200,6 @@
   // Stay / guest rows
   // -----------------------------------------------------------------------
 
-  function applyStayPrefill() {
-    if (urlArrival) {
-      const el = $("#arrival");
-      el.value = germanToIso(urlArrival) || urlArrival; // fallback to raw so guest sees what was meant
-      el.readOnly = true;
-      el.classList.add("readonly");
-    }
-    if (urlDeparture) {
-      const el = $("#departure");
-      el.value = germanToIso(urlDeparture) || urlDeparture;
-      el.readOnly = true;
-      el.classList.add("readonly");
-    }
-  }
-
   function lockDateField(el, germanDate) {
     const iso = germanToIso(germanDate);
     if (!iso) return;
@@ -225,12 +208,11 @@
     el.classList.add("readonly");
   }
 
-  // When the host shares a URL with just `?code=` (an Airbnb reservation
-  // code), ask the worker to look up the stay dates from the Airbnb iCal
-  // feed. Silent best-effort — if it fails the guest just enters dates
-  // manually.
+  // When the host shares a URL with `?code=<Airbnb reservation code>`,
+  // ask the worker to look up the stay dates from the Airbnb iCal feed.
+  // Silent best-effort — if it fails the guest just enters dates manually.
   async function tryAirbnbPrefill() {
-    if (!urlCode || urlArrival || urlDeparture) return;
+    if (!urlCode) return;
     try {
       const resp = await fetch(`/api/hoko/airbnb-lookup/${encodeURIComponent(urlCode)}`);
       if (!resp.ok) return;
@@ -361,7 +343,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    applyStayPrefill();
     renderGuests();
     tryAirbnbPrefill();
     $("#add-guest").addEventListener("click", addGuestRow);
