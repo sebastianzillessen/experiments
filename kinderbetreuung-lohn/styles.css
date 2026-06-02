@@ -105,7 +105,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 /* QR-BILL (Swiss QR-Rechnung for the net wage payout) */
 .qr-bill-section { margin-top:24px; border-top:1px solid var(--border); padding-top:16px; }
 .qr-bill-section h4 { color:var(--primary-dark); }
-#qr-bill-slot svg { width:100%; height:auto; max-width:100%; display:block; }
+#qr-bill-slot svg, #qr-bill-slot img { width:100%; height:auto; max-width:100%; display:block; }
 
 /* AUTH SCREEN */
 .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
