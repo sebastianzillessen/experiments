@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lohnabrechnung Kinderbetreuung – Vereinfachte Abrechnung Kt. ZH</title>
+<title>Salärli – Lohnabrechnung für Angestellte im Privathaushalt (Kt. ZH)</title>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -12,7 +12,8 @@
 <!-- LOGIN OVERLAY -->
 <div id="login-screen" class="auth-screen" hidden>
   <div class="auth-card">
-    <h1>Lohnabrechnung Kinderbetreuung</h1>
+    <h1>Salärli</h1>
+    <p class="muted" style="margin-top:-6px;">Lohnabrechnung für Angestellte im Privathaushalt</p>
     <p>Trage deine E-Mail-Adresse ein. Du erhältst einen Anmelde-Link in deinem Posteingang.</p>
     <form id="magic-link-form" novalidate style="display:flex; flex-direction:column; gap:12px;">
       <input type="email" id="login-email" placeholder="dein.name@example.com" required autocomplete="email" style="text-align:center;">
@@ -47,8 +48,8 @@
 </div>
 
 <header>
-  <h1>Lohnabrechnung Kinderbetreuung</h1>
-  <div class="sub">Vereinfachte Abrechnung · Kanton Zürich · Stand 1.1.2026</div>
+  <h1>Salärli</h1>
+  <div class="sub">Lohnabrechnung für Angestellte im Privathaushalt · Vereinfachte Abrechnung Kanton Zürich · Stand 1.1.2026</div>
 </header>
 
 <div id="user-strip" class="user-strip no-print" hidden>
@@ -89,7 +90,7 @@
       </div>
       <div>
         <label for="e-notiz">Notiz (optional)</label>
-        <input type="text" id="e-notiz" placeholder="z.B. Kinderbetreuung 17–21h">
+        <input type="text" id="e-notiz" placeholder="z.B. Reinigung 14–17 Uhr">
       </div>
     </div>
     <div class="btn-row">
@@ -369,7 +370,7 @@
       <li>Bruttolohn pro Angestellte/r ≤ <strong>CHF 22'680/Jahr</strong> (= 2× max. AHV-Jahresrente).</li>
       <li>Total Lohnsumme aller Angestellten ≤ CHF 60'480/Jahr.</li>
       <li>Person ist nicht obligatorisch in der 2. Säule (BVG) versichert.</li>
-      <li>Kinderbetreuung gilt als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
+      <li>Tätigkeiten im Privathaushalt (Betreuung, Reinigung, Garten usw.) gelten als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
       <li>Anmeldung bei der Ausgleichskasse: SVA Zürich (Formular «Hausangestellte / Vereinfachte Abrechnung VAV oder VAVplus»).</li>
     </ul>
   </div>
@@ -420,6 +421,6 @@
 </div>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=20260601c"></script>
+<script type="module" src="app.js?v=20260601d"></script>
 </body>
 </html>

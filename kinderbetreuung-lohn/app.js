@@ -904,7 +904,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
     </div>
 
     <div class="doc-title">
-      <h1>Lohnabrechnung Kinderbetreuung</h1>
+      <h1>Lohnabrechnung Privathaushalt</h1>
       <div class="period">${escapeHtml(monthLabel(yyyymm))}</div>
     </div>
 
@@ -1283,7 +1283,7 @@ document.getElementById('btn-export').addEventListener('click', () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `kinderbetreuung-lohn-export-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `salaerli-export-${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
@@ -1493,10 +1493,10 @@ async function renderMitglieder() {
 function openInviteFallbackMail(email, role) {
   // Fallback when the edge function is unreachable / not configured. Opens
   // the user's mail client with a German message ready to send.
-  const subject = 'Einladung — Lohnabrechnung Kinderbetreuung';
+  const subject = 'Einladung — Salärli';
   const body =
     `Hallo,\n\n` +
-    `du wurdest als ${role} zu unserem Haushalt in „Lohnabrechnung Kinderbetreuung" eingeladen.\n\n` +
+    `du wurdest als ${role} zu unserem Haushalt in „Salärli" eingeladen.\n\n` +
     `Öffne dieses Tool und melde dich mit dieser E-Mail-Adresse (${email}) an, ` +
     `dann erscheint die Einladung automatisch:\n${location.origin}${location.pathname}\n\n` +
     `Danke!`;
