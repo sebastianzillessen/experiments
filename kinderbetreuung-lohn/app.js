@@ -83,6 +83,7 @@ function sanitizeState(raw) {
         .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
     : [];
   return {
+    householdName: asString(raw.householdName),
     employer: {
       name:           asString(er.name),
       address:        asString(er.address),
@@ -527,17 +528,20 @@ function showInviteBanner(invite) {
 
 /* ---- CLOUD LOAD ---- */
 async function loadFromCloud() {
-  const [profileRes, shiftsRes, settingsRes] = await Promise.all([
+  const [profileRes, shiftsRes, settingsRes, householdRes] = await Promise.all([
     supabase.from('household_profile').select('*').eq('household_id', currentHouseholdId).maybeSingle(),
     supabase.from('shifts').select('id, date, hours, note, entered_by').eq('household_id', currentHouseholdId).order('date'),
-    supabase.from('pay_settings').select('id, effective_month, data').eq('household_id', currentHouseholdId).order('effective_month')
+    supabase.from('pay_settings').select('id, effective_month, data').eq('household_id', currentHouseholdId).order('effective_month'),
+    supabase.from('households').select('name').eq('id', currentHouseholdId).maybeSingle()
   ]);
   if (profileRes.error) throw profileRes.error;
   if (shiftsRes.error) throw shiftsRes.error;
   if (settingsRes.error) throw settingsRes.error;
+  if (householdRes.error) throw householdRes.error;
 
   const profileRow = profileRes.data || {};
   state = sanitizeState({
+    householdName: householdRes.data?.name,
     employer: profileRow.employer,
     employee: profileRow.employee,
     paySettings: (settingsRes.data || []).map(r => ({
@@ -568,6 +572,31 @@ function persistHouseholdProfile() {
           employee: state.employee,
           updated_at: new Date().toISOString()
         });
+      if (error) throw error;
+      setSyncStatus('ok');
+    } catch (e) {
+      setSyncStatus('error', e);
+    }
+  }, 1000);
+}
+
+/* ---- CLOUD SAVE: household name (debounced) ---- */
+// The household name drives the invitation email and the invite banner, so it
+// lives on the households table (not household_profile). Only owner/admin may
+// update it (RLS "admins update household").
+let householdNameSaveTimer = null;
+function persistHouseholdName() {
+  if (currentRole !== 'owner' && currentRole !== 'admin') return;
+  setSyncStatus('pending');
+  clearTimeout(householdNameSaveTimer);
+  householdNameSaveTimer = setTimeout(async () => {
+    try {
+      const name = state.householdName.trim();
+      if (!name) { setSyncStatus('ok'); return; }
+      const { error } = await supabase
+        .from('households')
+        .update({ name })
+        .eq('id', currentHouseholdId);
       if (error) throw error;
       setSyncStatus('ok');
     } catch (e) {
@@ -735,7 +764,7 @@ function applyRoleVisibility(role) {
 }
 
 /* ---- BIND FORM FIELDS ---- */
-function bind(id, getter, setter, type) {
+function bind(id, getter, setter, type, persist = persistHouseholdProfile) {
   const el = document.getElementById(id);
   const apply = () => {
     const v = getter();
@@ -748,7 +777,7 @@ function bind(id, getter, setter, type) {
     let v = type === 'checkbox' ? el.checked : el.value;
     if (type === 'number') v = v === '' ? 0 : Number(v);
     setter(v);
-    persistHouseholdProfile();
+    persist();
   });
   return apply;
 }
@@ -756,6 +785,7 @@ function bind(id, getter, setter, type) {
 const refreshFns = [];
 
 function bindStammdaten() {
+  refreshFns.push(bind('hh-name', () => state.householdName, v => state.householdName = v, 'text', persistHouseholdName));
   refreshFns.push(bind('ag-name',          () => state.employer.name,          v => state.employer.name = v));
   refreshFns.push(bind('ag-adresse',       () => state.employer.address,       v => state.employer.address = v));
   refreshFns.push(bind('ag-abrechnungsnr', () => state.employer.billingNumber, v => state.employer.billingNumber = v));
