@@ -20,10 +20,16 @@ let currentRole = null; // 'owner' | 'admin' | 'employee'
 let membersCache = new Map();
 
 /* ---- DEFAULTS ---- */
+// Ferienentschädigung is an employee-level entitlement: 4, 5 or 6 weeks map to
+// a fixed Zuschlag on the gross hourly wage (Kanton Zürich / NAV Hauswirtschaft).
+const VACATION_WEEKS_PERCENT = { 4: 8.33, 5: 10.63, 6: 13.04 };
+function vacationPercentForWeeks(weeks) {
+  return VACATION_WEEKS_PERCENT[weeks] ?? VACATION_WEEKS_PERCENT[4];
+}
+
 function defaultPaySettingsData() {
   return {
     hourlyRate: 30.00,
-    vacationPercent: 8.33,   // Ferienentschädigung: 4 Wochen 8.33 %, 5 Wochen 10.63 %, 6 Wochen 13.04 %
     holidayPercent: 3.59,    // Feiertagsentschädigung: 3.59 % entspricht 9 ZH-Feiertagen (NAV Hauswirtschaft)
     ahvIvEoEmployee: 5.30, ahvIvEoEmployer: 5.30,
     alvEmployee: 1.10,     alvEmployer: 1.10,
@@ -45,7 +51,6 @@ function sanitizePaySettingsData(d) {
   const def = defaultPaySettingsData();
   return {
     hourlyRate:       asNumber(d.hourlyRate,       def.hourlyRate),
-    vacationPercent:  asNumber(d.vacationPercent,  def.vacationPercent),
     holidayPercent:   asNumber(d.holidayPercent,   def.holidayPercent),
     ahvIvEoEmployee:  asNumber(d.ahvIvEoEmployee,  def.ahvIvEoEmployee),
     ahvIvEoEmployer:  asNumber(d.ahvIvEoEmployer,  def.ahvIvEoEmployer),
@@ -89,7 +94,8 @@ function sanitizeState(raw) {
       birthDate:      asString(ee.birthDate),
       ahvNumber:      asString(ee.ahvNumber),
       iban:           asString(ee.iban),
-      weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h
+      weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
+      vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4
     },
     paySettings,
     shifts: Array.isArray(raw.shifts)
@@ -216,9 +222,13 @@ function berechneAbrechnung(shifts, employee) {
     if (e.uvgEnabled && employee.weeklyHoursThreshold8h) nbuApplicable = true;
   }
 
+  // Ferienzulage is driven by the employee's Ferienanspruch (4/5/6 weeks),
+  // not by the versioned pay_settings.
+  const vacationPercent = vacationPercentForWeeks(employee.vacationWeeks);
+
   stundenTotal = round2(stundenTotal);
   const bruttoStunden   = round5(bruttoStundenRaw);
-  const ferienzulage    = round5(bruttoStundenRaw * e.vacationPercent / 100);
+  const ferienzulage    = round5(bruttoStundenRaw * vacationPercent / 100);
   const feiertagszulage = round5(bruttoStundenRaw * e.holidayPercent / 100);
   const bruttoTotal     = round5(bruttoStunden + ferienzulage + feiertagszulage);
 
@@ -756,6 +766,7 @@ function bindStammdaten() {
   refreshFns.push(bind('an-ahvnr',        () => state.employee.ahvNumber, v => state.employee.ahvNumber = v));
   refreshFns.push(bind('an-iban',         () => state.employee.iban,      v => state.employee.iban = v));
   refreshFns.push(bind('an-8h',           () => state.employee.weeklyHoursThreshold8h, v => state.employee.weeklyHoursThreshold8h = v, 'checkbox'));
+  refreshFns.push(bind('an-ferienwochen', () => state.employee.vacationWeeks, v => state.employee.vacationWeeks = v, 'number'));
 }
 
 /* ---- ERFASSUNG ---- */
@@ -906,7 +917,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
 
     <h4>Bruttolohn</h4>
     <div class="summary-row"><span>Stundenlohn-Summe</span><span>CHF ${fmtChf(calc.bruttoStunden)}</span></div>
-    <div class="summary-row"><span>+ Ferienzulage (${e.vacationPercent} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
+    <div class="summary-row"><span>+ Ferienzulage (${ee.vacationWeeks} Wochen, ${vacationPercentForWeeks(ee.vacationWeeks)} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
     <div class="summary-row"><span>+ Feiertagszulage (${e.holidayPercent} %)</span><span>CHF ${fmtChf(calc.feiertagszulage)}</span></div>
     <div class="summary-row total"><span>Bruttolohn</span><span>CHF ${fmtChf(calc.bruttoTotal)}</span></div>
 
@@ -1079,7 +1090,6 @@ const psFormError    = () => document.getElementById('pay-settings-form-error');
 
 const PS_NUMERIC_FIELDS = [
   ['ps-hourly-rate',       'hourlyRate',       0.01],
-  ['ps-vacation-percent',  'vacationPercent',  0.01],
   ['ps-holiday-percent',   'holidayPercent',   0.01],
   ['ps-ahv-employee',      'ahvIvEoEmployee',  0.01],
   ['ps-ahv-employer',      'ahvIvEoEmployer',  0.01],
@@ -1102,7 +1112,7 @@ function renderPaySettingsTab() {
     const rows = state.paySettings.map(v => {
       const locked = versionHasShifts(v);
       const monthYm = v.effectiveMonth.slice(0, 7);
-      const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Ferien ${v.data.vacationPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
+      const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Feiertage ${v.data.holidayPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
       const lockHint = locked
         ? '<span class="muted" title="Einsätze in dieser Periode vorhanden">🔒 gesperrt</span>'
         : '';

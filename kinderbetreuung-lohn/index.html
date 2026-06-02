@@ -189,6 +189,14 @@
         <label for="an-iban">IBAN für Lohnzahlung</label>
         <input type="text" id="an-iban" placeholder="CH00 0000 0000 0000 0000 0">
       </div>
+      <div>
+        <label for="an-ferienwochen">Ferienanspruch</label>
+        <select id="an-ferienwochen">
+          <option value="4">4 Wochen (Ferienzulage 8.33 %)</option>
+          <option value="5">5 Wochen (Ferienzulage 10.63 %)</option>
+          <option value="6">6 Wochen (Ferienzulage 13.04 %)</option>
+        </select>
+      </div>
     </div>
     <div class="checkbox-row">
       <input type="checkbox" id="an-8h">
@@ -226,20 +234,17 @@
 
     <div class="card">
       <h3>Lohn</h3>
-      <div class="grid-3">
+      <div class="grid-2">
         <div>
           <label for="ps-hourly-rate">Stundenlohn (CHF, brutto, exkl. Zulagen)</label>
           <input type="number" id="ps-hourly-rate" step="0.01" min="0">
-        </div>
-        <div>
-          <label for="ps-vacation-percent">Ferienzulage (% auf Bruttostunden: 4 Wo. 8.33 %, 5 Wo. 10.63 %, 6 Wo. 13.04 %)</label>
-          <input type="number" id="ps-vacation-percent" step="0.01" min="0">
         </div>
         <div>
           <label for="ps-holiday-percent">Feiertagszulage (% auf Bruttostunden, ZH üblich 3.59 %)</label>
           <input type="number" id="ps-holiday-percent" step="0.01" min="0">
         </div>
       </div>
+      <p class="muted" style="font-size:12px; margin-top:8px;">Der Ferienanspruch (4/5/6 Wochen) wird pro Arbeitnehmer/in in den Stammdaten gewählt.</p>
     </div>
 
     <div class="card">
@@ -415,6 +420,6 @@
 </div>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=20260601b"></script>
+<script type="module" src="app.js?v=20260601c"></script>
 </body>
 </html>

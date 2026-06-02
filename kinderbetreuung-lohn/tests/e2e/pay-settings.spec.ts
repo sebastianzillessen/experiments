@@ -49,7 +49,7 @@ test.describe('Pay settings versions', () => {
         household_id: householdId,
         effective_month: firstOfMonth(month),
         data: {
-          hourlyRate: 30, vacationPercent: 8.33, holidayPercent: 3.59,
+          hourlyRate: 30, holidayPercent: 3.59,
           ahvIvEoEmployee: 5.3, ahvIvEoEmployer: 5.3,
           alvEmployee: 1.1, alvEmployer: 1.1,
           fakEmployer: 1.025, withholdingTax: 5,

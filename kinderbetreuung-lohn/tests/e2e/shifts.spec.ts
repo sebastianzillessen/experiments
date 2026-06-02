@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures';
 import { adminClient } from '../helpers/supabase';
 
 const DEFAULT_PS_DATA = {
-  hourlyRate: 30, vacationPercent: 8.33, holidayPercent: 3.59,
+  hourlyRate: 30, holidayPercent: 3.59,
   ahvIvEoEmployee: 5.3, ahvIvEoEmployer: 5.3,
   alvEmployee: 1.1, alvEmployer: 1.1,
   fakEmployer: 1.025, withholdingTax: 5,
