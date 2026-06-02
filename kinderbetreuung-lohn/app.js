@@ -20,18 +20,25 @@ let currentRole = null; // 'owner' | 'admin' | 'employee'
 let membersCache = new Map();
 
 /* ---- DEFAULTS ---- */
+// Ferienentschädigung is an employee-level entitlement: 4, 5 or 6 weeks map to
+// a fixed Zuschlag on the gross hourly wage (Kanton Zürich / NAV Hauswirtschaft).
+const VACATION_WEEKS_PERCENT = { 4: 8.33, 5: 10.63, 6: 13.04 };
+function vacationPercentForWeeks(weeks) {
+  return VACATION_WEEKS_PERCENT[weeks] ?? VACATION_WEEKS_PERCENT[4];
+}
+
 function defaultPaySettingsData() {
   return {
     hourlyRate: 30.00,
-    vacationPercent: 8.33,
+    holidayPercent: 3.59,    // Feiertagsentschädigung: 3.59 % entspricht 9 ZH-Feiertagen (NAV Hauswirtschaft)
     ahvIvEoEmployee: 5.30, ahvIvEoEmployer: 5.30,
     alvEmployee: 1.10,     alvEmployer: 1.10,
-    fakEmployer: 1.00,
+    fakEmployer: 1.025,
     withholdingTax: 5.00,
-    adminFeeEmployer: 0.40,
+    adminFeeEmployer: 5.00,  // Verwaltungskosten: % der AHV/IV/EO-Beiträge (AN + AG)
     uvgEnabled: true,
     uvgBuEmployer: 0.505,
-    uvgNbuEmployee: 1.47
+    uvgNbuEmployee: 1.432
   };
 }
 
@@ -44,7 +51,7 @@ function sanitizePaySettingsData(d) {
   const def = defaultPaySettingsData();
   return {
     hourlyRate:       asNumber(d.hourlyRate,       def.hourlyRate),
-    vacationPercent:  asNumber(d.vacationPercent,  def.vacationPercent),
+    holidayPercent:   asNumber(d.holidayPercent,   def.holidayPercent),
     ahvIvEoEmployee:  asNumber(d.ahvIvEoEmployee,  def.ahvIvEoEmployee),
     ahvIvEoEmployer:  asNumber(d.ahvIvEoEmployer,  def.ahvIvEoEmployer),
     alvEmployee:      asNumber(d.alvEmployee,      def.alvEmployee),
@@ -87,7 +94,8 @@ function sanitizeState(raw) {
       birthDate:      asString(ee.birthDate),
       ahvNumber:      asString(ee.ahvNumber),
       iban:           asString(ee.iban),
-      weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h
+      weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
+      vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4
     },
     paySettings,
     shifts: Array.isArray(raw.shifts)
@@ -126,6 +134,12 @@ function fmtChf(n) {
 }
 
 function round2(n) { return Math.round(n*100)/100; }
+
+// Swiss Rappenrundung: payable amounts settle on the 5-Rappen grid. The SVA
+// calculator rounds the wage components, the Bruttolohn and the Nettolohn this
+// way, so we match it for those figures (contribution line items stay at
+// Rappen precision, exactly as on the SVA breakdown).
+function round5(n) { return Math.round(n*20)/20; }
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -180,60 +194,66 @@ function versionHasShifts(version) {
 }
 
 /* ---- BERECHNUNG ----
-   Each shift's calculation uses the pay_settings version that was active
-   on shift.date. So a future "Lohnerhöhung" via a new version cannot
+   Callers always pass the shifts of a single calendar month. Because
+   pay_settings versions are effective from the first of a month and a new
+   version cannot be inserted over months that already have shifts, exactly
+   one version applies to all shifts of a given month — so a single rate set
+   governs each Abrechnung. A future "Lohnerhöhung" via a new version cannot
    retroactively change past Lohnabrechnungen.
-   For label/percentage display in summaries we use the rates of the most
-   recent shift's version in the period (which equals the only version if
-   rates didn't change within the period). */
+
+   We mirror the SVA Zürich calculator: the gross is built from Rappen-rounded
+   components (Grundlohn, Ferien-, Feiertagszulage), each contribution is then
+   computed on that rounded Bruttolohn at Rappen precision, and the Nettolohn
+   (the actual payout) is rounded to the 5-Rappen grid. */
 function berechneAbrechnung(shifts, employee) {
-  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, bruttoTotal = 0;
-  const an = { ahvIvEo: 0, alv: 0, nbu: 0, quellenst: 0 };
-  const ag = { ahvIvEo: 0, alv: 0, fak: 0, bu: 0, verw: 0 };
+  let stundenTotal = 0, bruttoStundenRaw = 0;
   let nbuApplicable = false;
   let uvgAktivAny = false;
+  // Active rate set for the month. Defaults cover the empty-shift case; the
+  // loop overwrites it with the (single) version that applies to these shifts.
+  let e = defaultPaySettingsData();
 
   for (const x of shifts) {
-    const e = activePaySettingsFor(x.date);
+    e = activePaySettingsFor(x.date);
     const hours = Number(x.hours) || 0;
-    const xBrutto = hours * e.hourlyRate;
-    const xFerien = xBrutto * e.vacationPercent / 100;
-    const xBruttoTotal = xBrutto + xFerien;
-
     stundenTotal += hours;
-    bruttoStunden += xBrutto;
-    ferienzulage += xFerien;
-    bruttoTotal += xBruttoTotal;
-
-    const xNbuApplicable = e.uvgEnabled && employee.weeklyHoursThreshold8h;
-    if (xNbuApplicable) nbuApplicable = true;
+    bruttoStundenRaw += hours * e.hourlyRate;
     if (e.uvgEnabled) uvgAktivAny = true;
-
-    an.ahvIvEo   += xBruttoTotal * e.ahvIvEoEmployee / 100;
-    an.alv       += xBruttoTotal * e.alvEmployee / 100;
-    an.nbu       += xNbuApplicable ? xBruttoTotal * e.uvgNbuEmployee / 100 : 0;
-    an.quellenst += xBruttoTotal * e.withholdingTax / 100;
-
-    ag.ahvIvEo += xBruttoTotal * e.ahvIvEoEmployer / 100;
-    ag.alv     += xBruttoTotal * e.alvEmployer / 100;
-    ag.fak     += xBruttoTotal * e.fakEmployer / 100;
-    ag.bu      += e.uvgEnabled ? xBruttoTotal * e.uvgBuEmployer / 100 : 0;
-    ag.verw    += xBruttoTotal * e.adminFeeEmployer / 100;
+    if (e.uvgEnabled && employee.weeklyHoursThreshold8h) nbuApplicable = true;
   }
 
-  stundenTotal = round2(stundenTotal);
-  bruttoStunden = round2(bruttoStunden);
-  ferienzulage = round2(ferienzulage);
-  bruttoTotal = round2(bruttoTotal);
-  for (const k of Object.keys(an)) an[k] = round2(an[k]);
-  for (const k of Object.keys(ag)) ag[k] = round2(ag[k]);
+  // Ferienzulage is driven by the employee's Ferienanspruch (4/5/6 weeks),
+  // not by the versioned pay_settings.
+  const vacationPercent = vacationPercentForWeeks(employee.vacationWeeks);
 
+  stundenTotal = round2(stundenTotal);
+  const bruttoStunden   = round5(bruttoStundenRaw);
+  const ferienzulage    = round5(bruttoStundenRaw * vacationPercent / 100);
+  const feiertagszulage = round5(bruttoStundenRaw * e.holidayPercent / 100);
+  const bruttoTotal     = round5(bruttoStunden + ferienzulage + feiertagszulage);
+
+  const an = {
+    ahvIvEo:   round2(bruttoTotal * e.ahvIvEoEmployee / 100),
+    alv:       round2(bruttoTotal * e.alvEmployee / 100),
+    nbu:       nbuApplicable ? round2(bruttoTotal * e.uvgNbuEmployee / 100) : 0,
+    quellenst: round2(bruttoTotal * e.withholdingTax / 100)
+  };
   an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
-  const netto = round2(bruttoTotal - an.total);
+  const netto = round5(bruttoTotal - an.total);
+
+  // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
+  const ahvIvEoBeitraege = bruttoTotal * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
+  const ag = {
+    ahvIvEo: round2(bruttoTotal * e.ahvIvEoEmployer / 100),
+    alv:     round2(bruttoTotal * e.alvEmployer / 100),
+    fak:     round2(bruttoTotal * e.fakEmployer / 100),
+    bu:      uvgAktivAny ? round2(bruttoTotal * e.uvgBuEmployer / 100) : 0,
+    verw:    round2(ahvIvEoBeitraege * e.adminFeeEmployer / 100)
+  };
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal, bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
+  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
 }
 
 /* ---- SYNC STATUS ---- */
@@ -746,6 +766,7 @@ function bindStammdaten() {
   refreshFns.push(bind('an-ahvnr',        () => state.employee.ahvNumber, v => state.employee.ahvNumber = v));
   refreshFns.push(bind('an-iban',         () => state.employee.iban,      v => state.employee.iban = v));
   refreshFns.push(bind('an-8h',           () => state.employee.weeklyHoursThreshold8h, v => state.employee.weeklyHoursThreshold8h = v, 'checkbox'));
+  refreshFns.push(bind('an-ferienwochen', () => state.employee.vacationWeeks, v => state.employee.vacationWeeks = v, 'number'));
 }
 
 /* ---- ERFASSUNG ---- */
@@ -883,7 +904,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
     </div>
 
     <div class="doc-title">
-      <h1>Lohnabrechnung Kinderbetreuung</h1>
+      <h1>Lohnabrechnung Privathaushalt</h1>
       <div class="period">${escapeHtml(monthLabel(yyyymm))}</div>
     </div>
 
@@ -896,7 +917,8 @@ function renderLohnabrechnung(eintraege, yyyymm) {
 
     <h4>Bruttolohn</h4>
     <div class="summary-row"><span>Stundenlohn-Summe</span><span>CHF ${fmtChf(calc.bruttoStunden)}</span></div>
-    <div class="summary-row"><span>+ Ferienzulage (${e.vacationPercent} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
+    <div class="summary-row"><span>+ Ferienzulage (${ee.vacationWeeks} Wochen, ${vacationPercentForWeeks(ee.vacationWeeks)} %)</span><span>CHF ${fmtChf(calc.ferienzulage)}</span></div>
+    <div class="summary-row"><span>+ Feiertagszulage (${e.holidayPercent} %)</span><span>CHF ${fmtChf(calc.feiertagszulage)}</span></div>
     <div class="summary-row total"><span>Bruttolohn</span><span>CHF ${fmtChf(calc.bruttoTotal)}</span></div>
 
     <h4>Abzüge Arbeitnehmer/in</h4>
@@ -913,7 +935,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
     <div class="summary-row"><span>ALV (${e.alvEmployer} %)</span><span>CHF ${fmtChf(calc.ag.alv)}</span></div>
     <div class="summary-row"><span>FAK (${e.fakEmployer} %)</span><span>CHF ${fmtChf(calc.ag.fak)}</span></div>
     ${buLine}
-    <div class="summary-row"><span>Verwaltungskosten (${e.adminFeeEmployer} %)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
+    <div class="summary-row"><span>Verwaltungskosten (${e.adminFeeEmployer} % der AHV/IV/EO-Beiträge)</span><span>CHF ${fmtChf(calc.ag.verw)}</span></div>
     <div class="summary-row total"><span>Total Arbeitgeberbeiträge</span><span>CHF ${fmtChf(calc.ag.total)}</span></div>
     <div class="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF ${fmtChf(calc.agKostenTotal)}</span></div>
 
@@ -1068,7 +1090,7 @@ const psFormError    = () => document.getElementById('pay-settings-form-error');
 
 const PS_NUMERIC_FIELDS = [
   ['ps-hourly-rate',       'hourlyRate',       0.01],
-  ['ps-vacation-percent',  'vacationPercent',  0.01],
+  ['ps-holiday-percent',   'holidayPercent',   0.01],
   ['ps-ahv-employee',      'ahvIvEoEmployee',  0.01],
   ['ps-ahv-employer',      'ahvIvEoEmployer',  0.01],
   ['ps-alv-employee',      'alvEmployee',      0.01],
@@ -1090,7 +1112,7 @@ function renderPaySettingsTab() {
     const rows = state.paySettings.map(v => {
       const locked = versionHasShifts(v);
       const monthYm = v.effectiveMonth.slice(0, 7);
-      const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Ferien ${v.data.vacationPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
+      const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Feiertage ${v.data.holidayPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
       const lockHint = locked
         ? '<span class="muted" title="Einsätze in dieser Periode vorhanden">🔒 gesperrt</span>'
         : '';
@@ -1261,7 +1283,7 @@ document.getElementById('btn-export').addEventListener('click', () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `kinderbetreuung-lohn-export-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `salaerli-export-${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
@@ -1471,10 +1493,10 @@ async function renderMitglieder() {
 function openInviteFallbackMail(email, role) {
   // Fallback when the edge function is unreachable / not configured. Opens
   // the user's mail client with a German message ready to send.
-  const subject = 'Einladung — Lohnabrechnung Kinderbetreuung';
+  const subject = 'Einladung — Salärli';
   const body =
     `Hallo,\n\n` +
-    `du wurdest als ${role} zu unserem Haushalt in „Lohnabrechnung Kinderbetreuung" eingeladen.\n\n` +
+    `du wurdest als ${role} zu unserem Haushalt in „Salärli" eingeladen.\n\n` +
     `Öffne dieses Tool und melde dich mit dieser E-Mail-Adresse (${email}) an, ` +
     `dann erscheint die Einladung automatisch:\n${location.origin}${location.pathname}\n\n` +
     `Danke!`;

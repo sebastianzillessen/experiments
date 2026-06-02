@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lohnabrechnung Kinderbetreuung – Vereinfachte Abrechnung Kt. ZH</title>
+<title>Salärli – Lohnabrechnung für Angestellte im Privathaushalt (Kt. ZH)</title>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -12,7 +12,8 @@
 <!-- LOGIN OVERLAY -->
 <div id="login-screen" class="auth-screen" hidden>
   <div class="auth-card">
-    <h1>Lohnabrechnung Kinderbetreuung</h1>
+    <h1>Salärli</h1>
+    <p class="muted" style="margin-top:-6px;">Lohnabrechnung für Angestellte im Privathaushalt</p>
     <p>Trage deine E-Mail-Adresse ein. Du erhältst einen Anmelde-Link in deinem Posteingang.</p>
     <form id="magic-link-form" novalidate style="display:flex; flex-direction:column; gap:12px;">
       <input type="email" id="login-email" placeholder="dein.name@example.com" required autocomplete="email" style="text-align:center;">
@@ -47,8 +48,8 @@
 </div>
 
 <header>
-  <h1>Lohnabrechnung Kinderbetreuung</h1>
-  <div class="sub">Vereinfachte Abrechnung · Kanton Zürich · Stand 1.1.2026</div>
+  <h1>Salärli</h1>
+  <div class="sub">Lohnabrechnung für Angestellte im Privathaushalt · Vereinfachte Abrechnung Kanton Zürich · Stand 1.1.2026</div>
 </header>
 
 <div id="user-strip" class="user-strip no-print" hidden>
@@ -89,7 +90,7 @@
       </div>
       <div>
         <label for="e-notiz">Notiz (optional)</label>
-        <input type="text" id="e-notiz" placeholder="z.B. Kinderbetreuung 17–21h">
+        <input type="text" id="e-notiz" placeholder="z.B. Reinigung 14–17 Uhr">
       </div>
     </div>
     <div class="btn-row">
@@ -189,6 +190,14 @@
         <label for="an-iban">IBAN für Lohnzahlung</label>
         <input type="text" id="an-iban" placeholder="CH00 0000 0000 0000 0000 0">
       </div>
+      <div>
+        <label for="an-ferienwochen">Ferienanspruch</label>
+        <select id="an-ferienwochen">
+          <option value="4">4 Wochen (Ferienzulage 8.33 %)</option>
+          <option value="5">5 Wochen (Ferienzulage 10.63 %)</option>
+          <option value="6">6 Wochen (Ferienzulage 13.04 %)</option>
+        </select>
+      </div>
     </div>
     <div class="checkbox-row">
       <input type="checkbox" id="an-8h">
@@ -228,14 +237,15 @@
       <h3>Lohn</h3>
       <div class="grid-2">
         <div>
-          <label for="ps-hourly-rate">Stundenlohn (CHF, brutto, exkl. Ferienzulage)</label>
+          <label for="ps-hourly-rate">Stundenlohn (CHF, brutto, exkl. Zulagen)</label>
           <input type="number" id="ps-hourly-rate" step="0.01" min="0">
         </div>
         <div>
-          <label for="ps-vacation-percent">Ferienzulage (% auf Bruttostunden, üblich 8.33 %)</label>
-          <input type="number" id="ps-vacation-percent" step="0.01" min="0">
+          <label for="ps-holiday-percent">Feiertagszulage (% auf Bruttostunden, ZH üblich 3.59 %)</label>
+          <input type="number" id="ps-holiday-percent" step="0.01" min="0">
         </div>
       </div>
+      <p class="muted" style="font-size:12px; margin-top:8px;">Der Ferienanspruch (4/5/6 Wochen) wird pro Arbeitnehmer/in in den Stammdaten gewählt.</p>
     </div>
 
     <div class="card">
@@ -262,7 +272,7 @@
           <input type="number" id="ps-fak-employer" step="0.01" min="0">
         </div>
         <div>
-          <label for="ps-admin-fee-employer">Verwaltungskosten Arbeitgeber</label>
+          <label for="ps-admin-fee-employer">Verwaltungskosten (% der AHV/IV/EO-Beiträge)</label>
           <input type="number" id="ps-admin-fee-employer" step="0.01" min="0">
         </div>
         <div>
@@ -360,7 +370,7 @@
       <li>Bruttolohn pro Angestellte/r ≤ <strong>CHF 22'680/Jahr</strong> (= 2× max. AHV-Jahresrente).</li>
       <li>Total Lohnsumme aller Angestellten ≤ CHF 60'480/Jahr.</li>
       <li>Person ist nicht obligatorisch in der 2. Säule (BVG) versichert.</li>
-      <li>Kinderbetreuung gilt als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
+      <li>Tätigkeiten im Privathaushalt (Betreuung, Reinigung, Garten usw.) gelten als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
       <li>Anmeldung bei der Ausgleichskasse: SVA Zürich (Formular «Hausangestellte / Vereinfachte Abrechnung VAV oder VAVplus»).</li>
     </ul>
   </div>
@@ -372,16 +382,18 @@
         <tr><th>Beitrag</th><th class="num">Arbeitnehmer</th><th class="num">Arbeitgeber</th></tr>
       </thead>
       <tbody>
+        <tr><td>Ferienentschädigung (4 / 5 / 6 Ferienwochen)</td><td class="num" colspan="2">8.33 % / 10.63 % / 13.04 % auf Bruttostunden</td></tr>
+        <tr><td>Feiertagsentschädigung (9 gesetzliche ZH-Feiertage)</td><td class="num" colspan="2">3.59 % auf Bruttostunden</td></tr>
         <tr><td>AHV / IV / EO</td><td class="num">5.30 %</td><td class="num">5.30 %</td></tr>
         <tr><td>ALV (Arbeitslosenversicherung)</td><td class="num">1.10 %</td><td class="num">1.10 %</td></tr>
-        <tr><td>FAK Familienausgleichskasse Kt. ZH</td><td class="num">–</td><td class="num">~1.00 % (kassenabhängig)</td></tr>
-        <tr><td>Verwaltungskosten Ausgleichskasse</td><td class="num">–</td><td class="num">~0.40 %</td></tr>
+        <tr><td>FAK Familienausgleichskasse Kt. ZH</td><td class="num">–</td><td class="num">1.025 %</td></tr>
+        <tr><td>Verwaltungskosten Ausgleichskasse</td><td class="num">–</td><td class="num">5.0 % der AHV/IV/EO-Beiträge</td></tr>
         <tr><td>Quellensteuer (für alle Nationalitäten)</td><td class="num">5.00 %</td><td class="num">–</td></tr>
         <tr><td>UVG-BU (VAVplus, optional)</td><td class="num">–</td><td class="num">0.505 %</td></tr>
-        <tr><td>UVG-NBU (ab 8 h/Woche, Prämie versicherer­abhängig)</td><td class="num">~1.47 %</td><td class="num">–</td></tr>
+        <tr><td>UVG-NBU (ab 8 h/Woche)</td><td class="num">1.432 %</td><td class="num">–</td></tr>
       </tbody>
     </table>
-    <div class="muted" style="font-size:12px; margin-top:10px;">Quellen: SVA Zürich Merkblätter «Hausangestellte», AHV-IV Merkblätter 2.06 / 2.07 (Stand 1.1.2026).</div>
+    <div class="muted" style="font-size:12px; margin-top:10px;">Quellen: SVA Zürich, Online-Rechner «Beiträge von Haushaltshilfen berechnen — Löhne ab Januar 2026», Merkblätter «Hausangestellte», AHV-IV Merkblätter 2.06 / 2.07 (Stand 1.1.2026).</div>
   </div>
 
   <div class="card">
@@ -409,6 +421,6 @@
 </div>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=20260510"></script>
+<script type="module" src="app.js?v=20260601d"></script>
 </body>
 </html>
