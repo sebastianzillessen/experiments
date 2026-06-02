@@ -102,6 +102,11 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 /* BUILD VERSION FOOTER */
 .app-version { text-align:center; color:var(--muted); font-size:11px; padding:18px 16px 28px; opacity:0.8; }
 
+/* QR-BILL (Swiss QR-Rechnung for the net wage payout) */
+.qr-bill-section { margin-top:24px; border-top:1px solid var(--border); padding-top:16px; }
+.qr-bill-section h4 { color:var(--primary-dark); }
+#qr-bill-slot svg { width:100%; height:auto; max-width:100%; display:block; }
+
 /* AUTH SCREEN */
 .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
 .auth-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:32px; max-width:420px; width:100%; box-shadow:0 4px 12px rgba(0,0,0,0.06); text-align:center; }
@@ -180,5 +185,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   section.printing { display:block !important; }
   .card { border:none; box-shadow:none; padding:0; margin:0; }
   .print-doc { border:none; padding:0; max-width:none; }
+  /* Print the QR-bill on its own page, like a real invoice's payment part. */
+  .qr-bill-section { break-before:page; border-top:none; padding-top:0; }
   @page { margin:18mm; }
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Salärli – Lohnabrechnung für Angestellte im Privathaushalt (Kt. ZH)</title>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260602f">
+<link rel="stylesheet" href="styles.css?v=20260602j">
 </head>
 <body>
 
@@ -169,8 +169,16 @@
         <input type="text" id="ag-name" placeholder="Max Muster">
       </div>
       <div>
-        <label for="ag-adresse">Adresse</label>
-        <input type="text" id="ag-adresse" placeholder="Bahnhofstrasse 1, 8001 Zürich">
+        <label for="ag-adresse">Strasse &amp; Nr.</label>
+        <input type="text" id="ag-adresse" placeholder="Bahnhofstrasse 1">
+      </div>
+      <div>
+        <label for="ag-plz">PLZ</label>
+        <input type="text" id="ag-plz" placeholder="8001" inputmode="numeric">
+      </div>
+      <div>
+        <label for="ag-ort">Ort</label>
+        <input type="text" id="ag-ort" placeholder="Zürich">
       </div>
       <div>
         <label for="ag-abrechnungsnr">SVA Abrechnungs-Nr. (optional)</label>
@@ -187,8 +195,16 @@
         <input type="text" id="an-name" placeholder="Erika Beispiel">
       </div>
       <div>
-        <label for="an-adresse">Adresse</label>
-        <input type="text" id="an-adresse">
+        <label for="an-adresse">Strasse &amp; Nr.</label>
+        <input type="text" id="an-adresse" placeholder="Musterweg 5">
+      </div>
+      <div>
+        <label for="an-plz">PLZ</label>
+        <input type="text" id="an-plz" placeholder="8400" inputmode="numeric">
+      </div>
+      <div>
+        <label for="an-ort">Ort</label>
+        <input type="text" id="an-ort" placeholder="Winterthur">
       </div>
       <div>
         <label for="an-geburtsdatum">Geburtsdatum</label>
@@ -447,6 +463,6 @@
       : 'Entwicklungsversion';
   })();
 </script>
-<script type="module" src="app.js?v=20260602i"></script>
+<script type="module" src="app.js?v=20260602j"></script>
 </body>
 </html>

@@ -87,11 +87,17 @@ function sanitizeState(raw) {
     employer: {
       name:           asString(er.name),
       address:        asString(er.address),
+      zip:            asString(er.zip),
+      city:           asString(er.city),
+      country:        asString(er.country) || 'CH',
       billingNumber:  asString(er.billingNumber)
     },
     employee: {
       name:           asString(ee.name),
       address:        asString(ee.address),
+      zip:            asString(ee.zip),
+      city:           asString(ee.city),
+      country:        asString(ee.country) || 'CH',
       birthDate:      asString(ee.birthDate),
       ahvNumber:      asString(ee.ahvNumber),
       iban:           asString(ee.iban),
@@ -833,10 +839,14 @@ function bindStammdaten() {
   refreshFns.push(bind('hh-name', () => state.householdName, v => state.householdName = v, 'text', persistHouseholdName));
   refreshFns.push(bind('ag-name',          () => state.employer.name,          v => state.employer.name = v));
   refreshFns.push(bind('ag-adresse',       () => state.employer.address,       v => state.employer.address = v));
+  refreshFns.push(bind('ag-plz',           () => state.employer.zip,           v => state.employer.zip = v));
+  refreshFns.push(bind('ag-ort',           () => state.employer.city,          v => state.employer.city = v));
   refreshFns.push(bind('ag-abrechnungsnr', () => state.employer.billingNumber, v => state.employer.billingNumber = v));
 
   refreshFns.push(bind('an-name',         () => state.employee.name,      v => state.employee.name = v));
   refreshFns.push(bind('an-adresse',      () => state.employee.address,   v => state.employee.address = v));
+  refreshFns.push(bind('an-plz',          () => state.employee.zip,       v => state.employee.zip = v));
+  refreshFns.push(bind('an-ort',          () => state.employee.city,      v => state.employee.city = v));
   refreshFns.push(bind('an-geburtsdatum', () => state.employee.birthDate, v => state.employee.birthDate = v));
   refreshFns.push(bind('an-ahvnr',        () => state.employee.ahvNumber, v => state.employee.ahvNumber = v));
   refreshFns.push(bind('an-iban',         () => state.employee.iban,      v => state.employee.iban = v));
@@ -926,6 +936,51 @@ function renderMonatTab() {
   if (!yyyymm) { target.innerHTML = ''; return; }
   const eintraege = state.shifts.filter(e => e.date.startsWith(yyyymm));
   target.innerHTML = renderLohnabrechnung(eintraege, yyyymm);
+  // Fill the QR-bill slot (if any) asynchronously — the lib loads lazily.
+  const calc = berechneAbrechnung(eintraege, state.employee);
+  injectQrBill(yyyymm, calc.netto);
+}
+
+// Render a Swiss QR-bill (QR-Rechnung) into the monthly doc so the employer
+// can scan it to pay the Nettolohn. Creditor = employee (IBAN holder), debtor
+// = employer. Loaded lazily from a CDN so a load failure never breaks the app.
+async function injectQrBill(yyyymm, netto) {
+  const slot = document.getElementById('qr-bill-slot');
+  if (!slot) return; // no IBAN registered → slot not rendered
+  const ee = state.employee;
+  const er = state.employer;
+  const note = (msg) => { slot.innerHTML = `<div class="warn" style="margin:0;">${escapeHtml(msg)}</div>`; };
+
+  if (!(netto > 0)) { note('QR-Einzahlungsschein wird ab einem Nettolohn über CHF 0.00 erzeugt.'); return; }
+  const iban = ee.iban.replace(/\s+/g, '').toUpperCase();
+  if (!/^(CH|LI)\d{2}[0-9A-Z]{17}$/.test(iban)) {
+    note('QR-Einzahlungsschein nur mit einer Schweizer/Liechtensteiner IBAN (CH/LI) möglich.');
+    return;
+  }
+  if (!ee.zip || !ee.city || !ee.name) { note('Für den QR-Einzahlungsschein bitte Name, PLZ und Ort der Arbeitnehmer/in in den Stammdaten ergänzen.'); return; }
+  if (!er.zip || !er.city || !er.name) { note('Für den QR-Einzahlungsschein bitte Name, PLZ und Ort der Arbeitgeber/in in den Stammdaten ergänzen.'); return; }
+
+  try {
+    const { SwissQRBill } = await import('https://esm.sh/swissqrbill@4/svg');
+    const data = {
+      currency: 'CHF',
+      amount: round2(netto),
+      message: `Lohn ${monthLabel(yyyymm)}`,
+      creditor: {
+        account: iban,
+        name: ee.name, address: ee.address || ee.city, zip: ee.zip, city: ee.city, country: ee.country || 'CH'
+      },
+      debtor: {
+        name: er.name, address: er.address || er.city, zip: er.zip, city: er.city, country: er.country || 'CH'
+      }
+    };
+    const bill = new SwissQRBill(data);
+    slot.innerHTML = '';
+    slot.appendChild(bill.element);
+  } catch (e) {
+    console.warn('QR-bill generation failed', e);
+    note('QR-Einzahlungsschein konnte nicht erzeugt werden (IBAN/Adresse prüfen).');
+  }
 }
 
 function renderLohnabrechnung(eintraege, yyyymm) {
@@ -968,12 +1023,14 @@ function renderLohnabrechnung(eintraege, yyyymm) {
         <div class="label-small">Arbeitgeber/in</div>
         <div class="name">${escapeHtml(er.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
         <div>${escapeHtml(er.address)}</div>
+        ${(er.zip || er.city) ? `<div>${escapeHtml(`${er.zip} ${er.city}`.trim())}</div>` : ''}
         ${er.billingNumber ? `<div class="muted">SVA-Abr.-Nr.: ${escapeHtml(er.billingNumber)}</div>` : ''}
       </div>
       <div class="party" style="text-align:right;">
         <div class="label-small">Arbeitnehmer/in</div>
         <div class="name">${escapeHtml(ee.name) || '<span class="muted">(Stammdaten ergänzen)</span>'}</div>
         <div>${escapeHtml(ee.address)}</div>
+        ${(ee.zip || ee.city) ? `<div>${escapeHtml(`${ee.zip} ${ee.city}`.trim())}</div>` : ''}
         ${ee.ahvNumber ? `<div class="muted">AHV-Nr.: ${escapeHtml(ee.ahvNumber)}</div>` : ''}
       </div>
     </div>
@@ -1022,6 +1079,12 @@ function renderLohnabrechnung(eintraege, yyyymm) {
       <div class="sig">Ort, Datum &amp; Unterschrift Arbeitgeber/in</div>
       <div class="sig">Ort, Datum &amp; Unterschrift Arbeitnehmer/in (Empfangsbestätigung)</div>
     </div>
+    ${ee.iban ? `
+    <div class="qr-bill-section">
+      <h4>Zahlung Nettolohn — QR-Einzahlungsschein</h4>
+      <div class="muted" style="font-size:11px; margin-bottom:8px;">Im Banking-App scannen, um den Nettolohn von CHF ${fmtChf(calc.netto)} an ${escapeHtml(ee.name || 'die Arbeitnehmer/in')} zu überweisen.</div>
+      <div id="qr-bill-slot"><div class="muted">QR-Einzahlungsschein wird geladen …</div></div>
+    </div>` : ''}
   </div>`;
 }
 
