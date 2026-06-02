@@ -170,11 +170,19 @@ Deno.serve(async (req) => {
     );
   }
 
-  const actionLink =
-    (linkData as any)?.properties?.action_link ?? (linkData as any)?.action_link;
-  if (!actionLink) {
-    return jsonResponse({ error: 'generateLink returned no action_link' }, 500);
+  // Build a link to the app carrying the OTP token_hash (NOT the Supabase
+  // /verify URL). The app verifies it client-side via verifyOtp, so email
+  // prefetchers / Resend click-tracking that merely GET the page can't spend
+  // the single-use token (avoids "otp_expired" on the real click).
+  const props = (linkData as any)?.properties ?? {};
+  const hashedToken = props.hashed_token;
+  if (!hashedToken) {
+    return jsonResponse({ error: 'generateLink returned no hashed_token' }, 500);
   }
+  const verificationType = props.verification_type ?? 'magiclink';
+  const sep = APP_URL.includes('?') ? '&' : '?';
+  const actionLink =
+    `${APP_URL}${sep}token_hash=${encodeURIComponent(hashedToken)}&type=${encodeURIComponent(verificationType)}`;
 
   // 3. Send the email via Resend.
   const roleLabel = ROLE_LABELS[invite.role] ?? invite.role;

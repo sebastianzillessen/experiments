@@ -296,6 +296,17 @@ const inviteBanner = document.getElementById('invite-banner');
 const inviteText = document.getElementById('invite-text');
 const authError = document.getElementById('auth-error');
 const authInfo = document.getElementById('auth-info');
+const loginWarning = document.getElementById('login-warning');
+
+// Prominent banner on the login screen, e.g. for an expired/invalid magic link.
+function showLoginWarning(msg) {
+  if (!loginWarning) return;
+  loginWarning.textContent = msg;
+  loginWarning.hidden = false;
+}
+function clearLoginWarning() {
+  if (loginWarning) loginWarning.hidden = true;
+}
 const createHouseholdScreen = document.getElementById('create-household-screen');
 const createHouseholdNameInput = document.getElementById('create-household-name');
 const createHouseholdError = document.getElementById('create-household-error');
@@ -332,6 +343,7 @@ document.getElementById('magic-link-form').addEventListener('submit', async (ev)
   ev.preventDefault();
   authError.hidden = true;
   authInfo.hidden = true;
+  clearLoginWarning();
   const email = document.getElementById('login-email').value.trim().toLowerCase();
   if (!email || !email.includes('@')) {
     authError.textContent = 'Bitte gültige E-Mail-Adresse eingeben.';
@@ -409,6 +421,30 @@ document.getElementById('btn-create-household-signout').addEventListener('click'
 
 /* ---- AUTH FLOW ---- */
 async function bootstrap() {
+  // Magic/invite links carry the OTP as ?token_hash=...&type=... in the query
+  // and we verify it here in JS. The single-use token is therefore only spent
+  // when a real browser runs this code — email scanners / link prefetchers that
+  // merely GET the page (and Resend click-tracking) can't consume it, which
+  // avoids the "otp_expired" error. See the send-invite-email Edge Function.
+  const params = new URLSearchParams(location.search);
+  const tokenHash = params.get('token_hash');
+  const otpType = params.get('type');
+  if (tokenHash && otpType) {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType });
+    history.replaceState(null, '', location.pathname); // strip the token from the URL
+    if (error) {
+      showLoginWarning('Dein Anmelde-Link war ungültig oder ist abgelaufen. Bitte fordere unten einen neuen Link an.');
+      showLogin();
+      return;
+    }
+  } else if (location.hash.includes('error')) {
+    // A failed Supabase verify redirect leaves #error=...&error_description=... .
+    history.replaceState(null, '', location.pathname);
+    showLoginWarning('Dein Anmelde-Link war ungültig oder ist abgelaufen. Bitte fordere unten einen neuen Link an.');
+    showLogin();
+    return;
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) {
     showLogin();
