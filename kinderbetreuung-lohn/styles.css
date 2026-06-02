@@ -153,9 +153,19 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   .print-doc .signatures { grid-template-columns: 1fr; gap: 18px; margin-top: 24px; }
   .print-doc .summary-row.netto { font-size: 14px; padding: 6px 10px; }
 
-  /* iOS Safari renders empty/centered text inside <input type=date>;
-     keep alignment consistent with the other inputs. */
-  input[type="date"], input[type="month"] { text-align: left; }
+  /* Stack all form grids into a single column on phones. Two narrow columns
+     were cramped and, worse, iOS Safari's native <input type=date> overflowed
+     its column and overlapped the next field. One column per row avoids any
+     adjacency to overlap. */
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+
+  /* iOS Safari's native date/month control ignores width:100% and renders with
+     centered text; reset the appearance so it behaves like the other inputs. */
+  input[type="date"], input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: left;
+  }
 }
 
 /* PRINT */
