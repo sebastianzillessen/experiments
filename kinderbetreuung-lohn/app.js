@@ -758,6 +758,11 @@ function applyRoleVisibility(role) {
     else                       visible = true;
     btn.hidden = !visible;
   });
+  // Hide the whole nav when only one tab is visible (e.g. an employee who
+  // only ever sees Stundenerfassung) — a single-tab bar is just noise.
+  const visibleTabs = Array.from(tabButtons).filter(b => !b.hidden).length;
+  const navEl = document.querySelector('nav[role="tablist"]');
+  if (navEl) navEl.hidden = visibleTabs <= 1;
   const userStripRole = document.getElementById('user-strip-role');
   userStripRole.textContent = roleLabel(role);
   userStripRole.className = 'role-badge ' + role;
