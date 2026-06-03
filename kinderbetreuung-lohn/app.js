@@ -1240,39 +1240,14 @@ function renderMonatTab() {
   const emps = scope.emps.filter(e => monthShiftsFor(e.id, yyyymm).length);
   if (!emps.length) { target.innerHTML = `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))} erfasst.</div>`; qrBillReady = Promise.resolve(); return; }
   const slots = [];
-  const overview = renderMonatOverview(emps, yyyymm);
   const docs = emps.map(emp => {
     const eintraege = monthShiftsFor(emp.id, yyyymm);
     const slotId = `qr-bill-slot-${emp.id}`;
     slots.push({ emp, slotId, netto: berechneAbrechnung(eintraege, emp).netto });
     return `<div class="employee-doc">${renderLohnabrechnung(eintraege, yyyymm, emp, slotId)}</div>`;
   }).join('');
-  target.innerHTML = overview + docs;
+  target.innerHTML = docs;
   qrBillReady = Promise.all(slots.map(s => injectQrBill(s.emp, yyyymm, s.netto, s.slotId)));
-}
-
-// Summary page placed before the individual payslips in the "Alle" export.
-function renderMonatOverview(emps, yyyymm) {
-  let tBrutto = 0, tNetto = 0, tAG = 0, tStunden = 0;
-  const rows = emps.map(emp => {
-    const calc = berechneAbrechnung(monthShiftsFor(emp.id, yyyymm), emp);
-    tBrutto += calc.bruttoTotal; tNetto += calc.netto; tAG += calc.ag.total; tStunden += calc.stundenTotal;
-    return `<tr>
-      <td>${escapeHtml(employeeName(emp))}</td>
-      <td class="num">${calc.stundenTotal.toLocaleString('de-CH')}</td>
-      <td class="num">CHF ${fmtChf(calc.bruttoTotal)}</td>
-      <td class="num">CHF ${fmtChf(calc.netto)}</td>
-      <td class="num">CHF ${fmtChf(calc.ag.total)}</td>
-    </tr>`;
-  }).join('');
-  return `<div class="print-doc">
-    <div class="doc-title"><h1>Lohnabrechnungen — Übersicht</h1><div class="period">${escapeHtml(monthLabel(yyyymm))}</div></div>
-    <table>
-      <thead><tr><th>Mitarbeiter/in</th><th class="num">Stunden</th><th class="num">Brutto</th><th class="num">Netto</th><th class="num">AG-Beiträge</th></tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr class="total-row"><td>Total</td><td class="num">${round2(tStunden).toLocaleString('de-CH')}</td><td class="num">CHF ${fmtChf(round2(tBrutto))}</td><td class="num">CHF ${fmtChf(round2(tNetto))}</td><td class="num">CHF ${fmtChf(round2(tAG))}</td></tr></tfoot>
-    </table>
-  </div>`;
 }
 
 // Render a Swiss QR-bill (QR-Rechnung) into the monthly doc so the employer

@@ -192,8 +192,9 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   .print-doc { border:none; padding:0; max-width:none; }
   /* Print the QR-bill on its own page, like a real invoice's payment part. */
   .qr-bill-section { break-before:page; border-top:none; padding-top:0; }
-  /* In the combined "Alle" export, start each employee's payslip on a new page. */
-  .employee-doc { break-before:page; }
+  /* In the combined "Alle" export, start each *subsequent* employee's payslip on
+     a new page (no leading blank page before the first one). */
+  .employee-doc + .employee-doc { break-before:page; }
   @page { margin:18mm; }
 }
 
