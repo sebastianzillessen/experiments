@@ -48,8 +48,11 @@ create policy "members read employees" on public.employees for select
 create policy "admins insert employees" on public.employees for insert
   with check (public.role_in(household_id) in ('owner','admin'));
 
+-- WITH CHECK on the NEW row too, so an admin cannot move an employee into a
+-- household where they have no (owner/admin) role via an UPDATE of household_id.
 create policy "admins update employees" on public.employees for update
-  using (public.role_in(household_id) in ('owner','admin'));
+  using (public.role_in(household_id) in ('owner','admin'))
+  with check (public.role_in(household_id) in ('owner','admin'));
 
 create policy "admins delete employees" on public.employees for delete
   using (public.role_in(household_id) in ('owner','admin'));
@@ -86,8 +89,12 @@ insert into public.employees (household_id, data)
 -- 2. shifts.employee_id (nullable, backward compatible)
 -- =========================================================================
 
+-- NO ACTION (the default) on delete: an employee with shifts cannot be hard
+-- deleted, so historical shifts/payslips are preserved (employees are archived
+-- via archived_at instead). Deleting a whole household still works — shifts are
+-- removed first via shifts.household_id ON DELETE CASCADE, so the check passes.
 alter table public.shifts
-  add column employee_id uuid references public.employees(id) on delete cascade;
+  add column employee_id uuid references public.employees(id);
 
 create index shifts_employee_date_idx on public.shifts (employee_id, date);
 
@@ -105,19 +112,20 @@ returns trigger
 language plpgsql
 as $$
 declare
-  v_employee_id uuid;
+  v_count int;
 begin
   if new.employee_id is null then
-    select id into v_employee_id
+    -- Only attach automatically when the household has exactly one active
+    -- employee; otherwise leave it null (the new UI sets it explicitly).
+    select count(*) into v_count
     from public.employees
     where household_id = new.household_id
       and archived_at is null;
-    -- only when unambiguous (exactly one active employee)
-    if found and (
-      select count(*) from public.employees
-      where household_id = new.household_id and archived_at is null
-    ) = 1 then
-      new.employee_id := v_employee_id;
+    if v_count = 1 then
+      select id into new.employee_id
+      from public.employees
+      where household_id = new.household_id
+        and archived_at is null;
     end if;
   end if;
   return new;
@@ -149,6 +157,9 @@ create policy "members insert shift" on public.shifts for insert
     )
   );
 
+-- WITH CHECK mirrors the insert policy: a non-admin may only leave employee_id
+-- null or point it at their own linked record, so they cannot re-attribute a
+-- shift to a different employee in the household (only owner/admin can).
 drop policy if exists "self or admin update shift" on public.shifts;
 create policy "self or admin update shift" on public.shifts for update
   using (
@@ -157,7 +168,12 @@ create policy "self or admin update shift" on public.shifts for update
     or public.employee_user(employee_id) = auth.uid()
   )
   with check (
-    employee_id is null or public.employee_household(employee_id) = household_id
+    (employee_id is null or public.employee_household(employee_id) = household_id)
+    and (
+      public.role_in(household_id) in ('owner','admin')
+      or employee_id is null
+      or public.employee_user(employee_id) = auth.uid()
+    )
   );
 
 drop policy if exists "self or admin delete shift" on public.shifts;
