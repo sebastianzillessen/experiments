@@ -1319,6 +1319,11 @@ async function injectQrBill(employee, yyyymm, netto, slotId) {
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
     slot.innerHTML = '';
     slot.appendChild(img);
+    // Wait until the image is actually decoded before resolving. Otherwise the
+    // print preview can open while the data-URL image is still decoding; once
+    // it finishes, the layout reflows across the forced page breaks and the
+    // preview blanks/jumps to an empty page.
+    await img.decode().catch(() => {});
   } catch (e) {
     console.warn('QR-bill generation failed', e);
     note('QR-Einzahlungsschein konnte nicht erzeugt werden (IBAN/Adresse prüfen).');
