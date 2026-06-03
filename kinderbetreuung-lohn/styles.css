@@ -177,18 +177,19 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 }
 
 /* PRINT
-   The printable document is cloned into #print-root (a direct child of <body>)
-   so it prints isolated from the app shell. iOS Safari prints blank when the
-   content is nested under sticky/overflow ancestors — this sidesteps that. */
-#print-root { display:none; }
+   Print the active tab's document in place: hide the app chrome and every other
+   tab via static rules (no DOM moving, no JS class). This works for the browser's
+   native Print and the in-app button alike. Crucially the printed node is never
+   display-flipped (it stays the already-visible active tab) and overflow is
+   forced visible — both are what iOS Safari needs to not print a blank page. */
 @media print {
   body, html { background:#fff; }
-  /* Show only the lifted print document; hide the whole app shell. Unconditional
-     (not gated on a JS-toggled class) — iOS Safari can snapshot print styles
-     before a just-added class restyles, which left the whole app chrome in the
-     printout. #print-root is only populated while printing via printSection. */
-  body > *:not(#print-root) { display:none !important; }
-  #print-root { display:block !important; }
+  body > *:not(main) { display:none !important; }
+  main { max-width:none; margin:0; padding:0; }
+  main > section:not(.active) { display:none !important; }
+  /* Within the active printable tab, keep only the document (drop heading + controls). */
+  #monat > *:not(#monat-doc), #jahr > *:not(#jahr-doc) { display:none !important; }
+  .no-print { display:none !important; }
   /* iOS Safari: never let a scroll/overflow ancestor clip printed content. */
   * { overflow:visible !important; }
   .card { border:none; box-shadow:none; padding:0; margin:0; }

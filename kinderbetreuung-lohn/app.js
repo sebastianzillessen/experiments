@@ -1415,7 +1415,7 @@ document.getElementById('btn-print-monat').addEventListener('click', async () =>
   // Wait for the QR-bill to finish injecting so the print preview isn't
   // mutated (and blanked) mid-print.
   try { await qrBillReady; } catch { /* note shown in slot */ }
-  printSection('monat');
+  printSection();
 });
 
 /* ---- JAHRESÜBERSICHT ---- */
@@ -1541,32 +1541,16 @@ function renderJahresuebersicht(eintraege, jahr, employee) {
   </div>`;
 }
 
-document.getElementById('btn-print-jahr').addEventListener('click', () => printSection('jahr'));
+document.getElementById('btn-print-jahr').addEventListener('click', () => printSection());
 
 /* ---- PRINT ----
-   iOS Safari prints a blank page when the printable content sits under the app
-   shell (sticky nav, overflow:auto cards, nested sections). To avoid that we
-   lift a *clone* of the rendered document into a top-level #print-root and print
-   only that, isolated from those ancestors. Cloning (not moving) keeps the
-   on-screen tab intact even if `afterprint` never fires (iOS support is spotty)
-   — #print-root is display:none on screen anyway. */
-function printSection(id) {
-  const host = document.getElementById(id + '-doc');
-  if (!host) return;
-  let root = document.getElementById('print-root');
-  if (!root) { root = document.createElement('div'); root.id = 'print-root'; document.body.appendChild(root); }
-  root.innerHTML = host.innerHTML;
-  const cleanup = () => {
-    root.innerHTML = '';
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  // Decode cloned images (QR-bill) first so nothing reflows mid-print.
-  const imgs = Array.from(root.querySelectorAll('img'));
-  Promise.all(imgs.map(img =>
-    (img.complete && img.naturalWidth) ? Promise.resolve()
-      : (img.decode ? img.decode().catch(() => {}) : Promise.resolve())
-  )).then(() => window.print());
+   Printing is handled entirely by static @media print rules that hide the app
+   chrome and every non-active tab, printing the active tab's document in place.
+   No DOM moving and no JS class toggling, so it works identically for the
+   browser's native Print and the in-app button — and the printed node is never
+   display-flipped, which is what iOS Safari needs to avoid a blank page. */
+function printSection() {
+  window.print();
 }
 
 /* ---- EINSTELLUNGEN-TAB: versionierte pay_settings ---- */
