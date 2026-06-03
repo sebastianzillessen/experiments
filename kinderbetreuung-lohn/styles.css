@@ -176,13 +176,18 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   }
 }
 
-/* PRINT */
+/* PRINT
+   The printable document is cloned into #print-root (a direct child of <body>)
+   so it prints isolated from the app shell. iOS Safari prints blank when the
+   content is nested under sticky/overflow ancestors — this sidesteps that. */
+#print-root { display:none; }
 @media print {
-  nav, header, .no-print, .user-strip, .sync-status, .invite-banner, button { display:none !important; }
   body, html { background:#fff; }
-  main { max-width:none; padding:0; }
-  section { display:none !important; }
-  section.printing { display:block !important; }
+  /* Show only the lifted print document; hide the whole app shell. */
+  body.printing-active > *:not(#print-root) { display:none !important; }
+  body.printing-active #print-root { display:block !important; }
+  /* iOS Safari: never let a scroll/overflow ancestor clip printed content. */
+  * { overflow:visible !important; }
   .card { border:none; box-shadow:none; padding:0; margin:0; }
   .print-doc { border:none; padding:0; max-width:none; }
   /* Print the QR-bill on its own page, like a real invoice's payment part. */

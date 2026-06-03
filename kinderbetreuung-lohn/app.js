@@ -1568,17 +1568,34 @@ function renderJahresuebersicht(eintraege, jahr, employee) {
 
 document.getElementById('btn-print-jahr').addEventListener('click', () => printSection('jahr'));
 
-/* ---- PRINT ---- */
+/* ---- PRINT ----
+   iOS Safari prints a blank page when the printable content sits under the app
+   shell (sticky nav, overflow:auto cards, nested sections). To avoid that we
+   lift a *clone* of the rendered document into a top-level #print-root and print
+   only that, isolated from those ancestors. Cloning (not moving) keeps the
+   on-screen tab intact even if `afterprint` never fires (iOS support is spotty)
+   — #print-root is display:none on screen anyway. */
 function printSection(id) {
-  tabPanels.forEach(s => s.classList.remove('printing'));
-  const el = document.getElementById(id);
-  el.classList.add('printing');
+  const host = document.getElementById(id + '-doc');
+  if (!host) return;
+  let root = document.getElementById('print-root');
+  if (!root) { root = document.createElement('div'); root.id = 'print-root'; document.body.appendChild(root); }
+  root.innerHTML = host.innerHTML;
   const cleanup = () => {
-    el.classList.remove('printing');
+    document.body.classList.remove('printing-active');
+    root.innerHTML = '';
     window.removeEventListener('afterprint', cleanup);
   };
   window.addEventListener('afterprint', cleanup);
-  window.print();
+  // Decode cloned images (QR-bill) first so nothing reflows mid-print.
+  const imgs = Array.from(root.querySelectorAll('img'));
+  Promise.all(imgs.map(img =>
+    (img.complete && img.naturalWidth) ? Promise.resolve()
+      : (img.decode ? img.decode().catch(() => {}) : Promise.resolve())
+  )).then(() => {
+    document.body.classList.add('printing-active');
+    window.print();
+  });
 }
 
 /* ---- EINSTELLUNGEN-TAB: versionierte pay_settings ---- */
