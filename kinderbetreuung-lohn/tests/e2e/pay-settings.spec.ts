@@ -83,7 +83,7 @@ test.describe('Pay settings versions', () => {
     await expect(page.locator('#pay-settings-list')).toContainText(/gesperrt/i, { timeout: 8_000 });
 
     // Open the edit form for the seeded version.
-    await page.locator(`#pay-settings-list button`).first().click();
+    await page.locator('#pay-settings-list button[data-edit-ps]').first().click();
 
     await expect(page.locator('#ps-locked-warn')).toBeVisible({ timeout: 5_000 });
     await expect(page.locator('#ps-holiday-percent')).toBeDisabled();

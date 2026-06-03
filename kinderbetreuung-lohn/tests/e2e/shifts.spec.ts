@@ -53,7 +53,7 @@ test.describe('Shifts', () => {
     await page.locator('#btn-add').click();
 
     await expect(page.locator('#entries-list')).toContainText('Test-Einsatz', { timeout: 8_000 });
-    await expect(page.locator('#entries-list')).toContainText('35');
+    await expect(page.locator('#entries-list')).toContainText('CHF 35.00');
 
     const { data } = await adminClient()
       .from('shifts')
@@ -89,7 +89,7 @@ test.describe('Shifts', () => {
     const entries = page.locator('#entries-list');
     await expect(entries).toContainText('old-rate', { timeout: 8_000 });
     await expect(entries).toContainText('new-rate');
-    await expect(entries).toContainText('30');
-    await expect(entries).toContainText('40');
+    await expect(entries).toContainText('CHF 30.00');
+    await expect(entries).toContainText('CHF 40.00');
   });
 });

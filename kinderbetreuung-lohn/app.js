@@ -1094,14 +1094,19 @@ document.getElementById('btn-add').addEventListener('click', async () => {
   const actives = activeEmployees();
   if (!actives.length) { alert('Bitte zuerst unter „Mitarbeitende" eine Person anlegen.'); return; }
   // Determine the employee the shift belongs to.
-  const employeeId = currentRole === 'employee'
-    ? (ownEmployee() ? ownEmployee().id : null)
-    : selectedEmployeeId;
-  if (!employeeId && actives.length > 1) {
-    alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return;
+  let employeeId;
+  if (currentRole === 'employee') {
+    const own = ownEmployee();
+    if (!own) {
+      alert('Dein Login ist noch keiner/keinem Mitarbeitenden zugeordnet. Bitte wende dich an die Verwaltung des Haushalts.');
+      return;
+    }
+    employeeId = own.id;
+  } else {
+    employeeId = selectedEmployeeId || (actives.length === 1 ? actives[0].id : null);
+    if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
   }
-  // With exactly one employee, employeeId is that one (or the DB trigger fills it).
-  await addShiftCloud({ date, hours, note, employeeId: employeeId || (actives.length === 1 ? actives[0].id : null) });
+  await addShiftCloud({ date, hours, note, employeeId });
   eStunden.value = '';
   eNotiz.value = '';
 });
@@ -1170,33 +1175,41 @@ if (mEmployeeSel) mEmployeeSel.addEventListener('change', renderMonatTab);
 // so printing can wait for a stable DOM instead of mutating mid-print.
 let qrBillReady = Promise.resolve();
 
+// Employees relevant to the reports: all active ones, plus any archived ones
+// that still have shifts — so an archived person's historic Abrechnungen stay
+// viewable/printable (the Mitarbeitende tab promises this). Insertion order.
+function reportableEmployees() {
+  const withShifts = new Set(state.shifts.map(s => s.employeeId).filter(Boolean));
+  return state.employees.filter(e => !e.archivedAt || withShifts.has(e.id));
+}
+
 // Scope for the report tabs. An employee role is pinned to their own record;
-// with a single employee there is no chooser; otherwise the selector offers
-// "Alle" (combined) plus each employee. selId = the <select> element id.
+// with a single relevant employee there is no chooser; otherwise the selector
+// offers "Alle" (combined) plus each employee. selId = the <select> element id.
 function reportScope(selId) {
-  const actives = activeEmployees();
   if (currentRole === 'employee') return { mode: 'one', emp: ownEmployee() };
-  if (actives.length <= 1) return { mode: 'one', emp: actives[0] || null };
+  const reportable = reportableEmployees();
+  if (reportable.length <= 1) return { mode: 'one', emp: reportable[0] || null };
   const sel = document.getElementById(selId);
   const val = sel ? sel.value : '';
-  if (!val) return { mode: 'all', emps: actives };
+  if (!val) return { mode: 'all', emps: reportable };
   return { mode: 'one', emp: employeeById(val) };
 }
 
-// Populate a report employee chooser (Alle + each active employee). Visible
-// only for admins with more than one employee.
-function renderReportEmployeeSelect(wrapId, selId, onChange) {
+// Populate a report employee chooser (Alle + each relevant employee). Visible
+// only for admins with more than one relevant employee.
+function renderReportEmployeeSelect(wrapId, selId) {
   const wrap = document.getElementById(wrapId);
   const sel = document.getElementById(selId);
   if (!wrap || !sel) return;
-  const actives = activeEmployees();
-  const show = currentRole !== 'employee' && actives.length > 1;
+  const reportable = reportableEmployees();
+  const show = currentRole !== 'employee' && reportable.length > 1;
   wrap.hidden = !show;
   if (!show) return;
   const prev = sel.value;
   sel.innerHTML = '<option value="">Alle Mitarbeitenden</option>'
-    + actives.map(e => `<option value="${e.id}">${escapeHtml(employeeName(e))}</option>`).join('');
-  sel.value = actives.some(e => e.id === prev) ? prev : '';
+    + reportable.map(e => `<option value="${e.id}">${escapeHtml(employeeName(e))}${e.archivedAt ? ' (archiviert)' : ''}</option>`).join('');
+  sel.value = reportable.some(e => e.id === prev) ? prev : '';
 }
 
 function monthShiftsFor(empId, yyyymm) {
@@ -1817,7 +1830,7 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
       for (let i = 0; i < fresh.employees.length; i++) {
         const emp = fresh.employees[i];
         const { data: row, error } = await supabase.from('employees')
-          .insert({ household_id: currentHouseholdId, data: emp.data })
+          .insert({ household_id: currentHouseholdId, data: emp.data, archived_at: emp.archivedAt || null })
           .select('id').single();
         if (error) throw error;
         if (emp.id) idMap[emp.id] = row.id;
@@ -1874,7 +1887,10 @@ document.getElementById('btn-clear-all').addEventListener('click', async () => {
     // Dependency order: shifts → employee_wages → pay_settings → employees.
     const { error: delShiftsErr } = await supabase.from('shifts').delete().eq('household_id', currentHouseholdId);
     if (delShiftsErr) throw delShiftsErr;
-    for (const emp of state.employees) {
+    // Re-query employees from the DB (not just local state) so wages of rows
+    // added on another device are also removed before deleting the employees.
+    const { data: allEmps } = await supabase.from('employees').select('id').eq('household_id', currentHouseholdId);
+    for (const emp of (allEmps || [])) {
       await supabase.from('employee_wages').delete().eq('employee_id', emp.id);
     }
     const { error: delPsErr } = await supabase.from('pay_settings').delete().eq('household_id', currentHouseholdId);

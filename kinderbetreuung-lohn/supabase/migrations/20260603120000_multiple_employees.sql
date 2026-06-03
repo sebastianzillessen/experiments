@@ -151,8 +151,11 @@ create policy "members insert shift" on public.shifts for insert
     and entered_by = auth.uid()
     and (employee_id is null or public.employee_household(employee_id) = household_id)
     and (
+      -- owner/admin may attribute to anyone (or leave it null for the
+      -- single-employee auto-backfill trigger); a non-admin must end up on
+      -- their own linked record (the trigger fills it in single-employee
+      -- households, otherwise the new UI sets it) — never null, never a colleague.
       public.role_in(household_id) in ('owner','admin')
-      or employee_id is null
       or public.employee_user(employee_id) = auth.uid()
     )
   );
@@ -170,8 +173,9 @@ create policy "self or admin update shift" on public.shifts for update
   with check (
     (employee_id is null or public.employee_household(employee_id) = household_id)
     and (
+      -- A non-admin may only keep a shift on their own linked record — they
+      -- cannot re-attribute it to a colleague nor orphan it (set null).
       public.role_in(household_id) in ('owner','admin')
-      or employee_id is null
       or public.employee_user(employee_id) = auth.uid()
     )
   );
@@ -210,7 +214,8 @@ create policy "admins insert employee_wages" on public.employee_wages for insert
   with check (public.role_in(public.employee_household(employee_id)) in ('owner','admin'));
 
 create policy "admins update employee_wages" on public.employee_wages for update
-  using (public.role_in(public.employee_household(employee_id)) in ('owner','admin'));
+  using (public.role_in(public.employee_household(employee_id)) in ('owner','admin'))
+  with check (public.role_in(public.employee_household(employee_id)) in ('owner','admin'));
 
 create policy "admins delete employee_wages" on public.employee_wages for delete
   using (public.role_in(public.employee_household(employee_id)) in ('owner','admin'));
