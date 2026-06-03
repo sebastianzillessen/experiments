@@ -36,6 +36,8 @@
  * Static asset serving keeps working regardless.
  */
 
+import * as XLSX from "xlsx";
+
 interface Env {
   ASSETS: Fetcher;
   HOKO_KV?: KVNamespace;
@@ -396,7 +398,7 @@ function buildNotificationText(stay: StoredStay): string {
   });
   lines.push(
     "",
-    `Attached: meldeschein-${stay.code}.xls — open in Excel/Numbers, retype into the Hotelkontrolle portal.`,
+    `Attached: meldeschein-${stay.code}.xls — upload directly to the Hotelkontrolle portal (Meldescheine importieren).`,
   );
   return lines.join("\n");
 }
@@ -414,72 +416,47 @@ function buildNotificationHtml(stay: StoredStay): string {
 <strong>Stay:</strong> ${escapeHtml(stay.ankunft)} – ${escapeHtml(stay.abreise)}</p>
 <p><strong>Guests (${stay.guests.length}):</strong></p>
 <ol>${rows}</ol>
-<p style="color:#6b7480;font-size:13px">Attached: <code>meldeschein-${escapeHtml(stay.code)}.xls</code> — open in Excel/Numbers, retype into the official Hotelkontrolle portal.</p>
+<p style="color:#6b7480;font-size:13px">Attached: <code>meldeschein-${escapeHtml(stay.code)}.xls</code> — upload directly to the Hotelkontrolle portal's <em>Meldescheine importieren</em> page.</p>
 </body></html>`;
 }
 
-// Excel 2003 SpreadsheetML — opens in Excel/Numbers/LibreOffice with no
-// dependencies, columns match the hotelkontrolle.zh.ch portal's import schema.
-// Birth date columns are left empty (the guest form does not collect them yet).
-function buildMeldescheinXls(stay: StoredStay): string {
-  const xmlEscape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const strCell = (v: string) =>
-    `<Cell><Data ss:Type="String">${xmlEscape(v)}</Data></Cell>`;
-  const numCell = (n: number) => `<Cell><Data ss:Type="Number">${n}</Data></Cell>`;
-  const empty = "<Cell/>";
+// Real binary .xls (OLE2/BIFF8) — the hotelkontrolle.zh.ch portal's importer
+// is Apache POI HSSF and rejects anything else (SpreadsheetML, xlsx, CSV).
+// Returns base64-encoded bytes ready for the Resend `attachments` field.
+// Birth-date columns are left empty (the guest form does not collect them yet).
+const MELDESCHEIN_HEADERS = [
+  "Meldeschein Nr.",
+  "Zimmernummer",
+  "Familienname",
+  "Vornamen",
+  "Geboren Tag",
+  "Monat",
+  "Jahr",
+  "Staatsangehörigkeit",
+  "Ausweisnummer",
+  "Ankunft",
+  "Abreise",
+];
 
-  const header =
-    "<Row>" +
-    [
-      "Meldeschein Nr.",
-      "Zimmernummer",
-      "Familienname",
-      "Vornamen",
-      "Geboren Tag",
-      "Monat",
-      "Jahr",
-      "Staatsangehörigkeit",
-      "Ausweisnummer",
-      "Ankunft",
-      "Abreise",
-    ]
-      .map(strCell)
-      .join("") +
-    "</Row>";
-
-  const rows = stay.guests
-    .map(
-      (g, i) =>
-        "<Row>" +
-        numCell(i + 1) +
-        strCell("Studio") +
-        strCell(g.lastname) +
-        strCell(g.firstname) +
-        empty + empty + empty +
-        strCell(g.country) +
-        strCell(g.ausweisnummer) +
-        strCell(stay.ankunft) +
-        strCell(stay.abreise) +
-        "</Row>",
-    )
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Worksheet ss:Name="Meldeschein">
-  <Table>${header}${rows}</Table>
- </Worksheet>
-</Workbook>`;
-}
-
-function utf8ToBase64(s: string): string {
-  const bytes = new TextEncoder().encode(s);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
+function buildMeldescheinXlsBase64(stay: StoredStay): string {
+  const rows: (string | number)[][] = [MELDESCHEIN_HEADERS];
+  stay.guests.forEach((g, i) => {
+    rows.push([
+      i + 1,
+      "Studio",
+      g.lastname,
+      g.firstname,
+      "", "", "", // Geboren Tag / Monat / Jahr
+      g.country,
+      g.ausweisnummer,
+      stay.ankunft,
+      stay.abreise,
+    ]);
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Meldescheine");
+  return XLSX.write(wb, { bookType: "biff8", type: "base64" }) as string;
 }
 
 async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
@@ -501,7 +478,7 @@ async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
     attachments: [
       {
         filename: `meldeschein-${stay.code}.xls`,
-        content: utf8ToBase64(buildMeldescheinXls(stay)),
+        content: buildMeldescheinXlsBase64(stay),
         content_type: "application/vnd.ms-excel",
       },
     ],
