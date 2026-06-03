@@ -394,7 +394,10 @@ function buildNotificationText(stay: StoredStay): string {
     const iso = g.countryIso ? ` [${g.countryIso}]` : "";
     lines.push(`  ${i + 1}. ${g.lastname}, ${g.firstname} — ${g.country}${iso} — ${g.ausweisart}: ${g.ausweisnummer}`);
   });
-  lines.push("", `To upload locally:  cd hoko-cli && npx tsx upload.ts ${stay.code}`);
+  lines.push(
+    "",
+    `Attached: meldeschein-${stay.code}.xls — open in Excel/Numbers, retype into the Hotelkontrolle portal.`,
+  );
   return lines.join("\n");
 }
 
@@ -411,9 +414,72 @@ function buildNotificationHtml(stay: StoredStay): string {
 <strong>Stay:</strong> ${escapeHtml(stay.ankunft)} – ${escapeHtml(stay.abreise)}</p>
 <p><strong>Guests (${stay.guests.length}):</strong></p>
 <ol>${rows}</ol>
-<p style="color:#6b7480;font-size:13px">To upload locally:<br>
-<code>cd hoko-cli &amp;&amp; npx tsx upload.ts ${escapeHtml(stay.code)}</code></p>
+<p style="color:#6b7480;font-size:13px">Attached: <code>meldeschein-${escapeHtml(stay.code)}.xls</code> — open in Excel/Numbers, retype into the official Hotelkontrolle portal.</p>
 </body></html>`;
+}
+
+// Excel 2003 SpreadsheetML — opens in Excel/Numbers/LibreOffice with no
+// dependencies, columns match the hotelkontrolle.zh.ch portal's import schema.
+// Birth date columns are left empty (the guest form does not collect them yet).
+function buildMeldescheinXls(stay: StoredStay): string {
+  const xmlEscape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const strCell = (v: string) =>
+    `<Cell><Data ss:Type="String">${xmlEscape(v)}</Data></Cell>`;
+  const numCell = (n: number) => `<Cell><Data ss:Type="Number">${n}</Data></Cell>`;
+  const empty = "<Cell/>";
+
+  const header =
+    "<Row>" +
+    [
+      "Meldeschein Nr.",
+      "Zimmernummer",
+      "Familienname",
+      "Vornamen",
+      "Geboren Tag",
+      "Monat",
+      "Jahr",
+      "Staatsangehörigkeit",
+      "Ausweisnummer",
+      "Ankunft",
+      "Abreise",
+    ]
+      .map(strCell)
+      .join("") +
+    "</Row>";
+
+  const rows = stay.guests
+    .map(
+      (g, i) =>
+        "<Row>" +
+        numCell(i + 1) +
+        strCell("Studio") +
+        strCell(g.lastname) +
+        strCell(g.firstname) +
+        empty + empty + empty +
+        strCell(g.country) +
+        strCell(g.ausweisnummer) +
+        strCell(stay.ankunft) +
+        strCell(stay.abreise) +
+        "</Row>",
+    )
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Meldeschein">
+  <Table>${header}${rows}</Table>
+ </Worksheet>
+</Workbook>`;
+}
+
+function utf8ToBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
 }
 
 async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
@@ -432,6 +498,13 @@ async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
     subject: `New guest registration — code ${stay.code}`,
     text: buildNotificationText(stay),
     html: buildNotificationHtml(stay),
+    attachments: [
+      {
+        filename: `meldeschein-${stay.code}.xls`,
+        content: utf8ToBase64(buildMeldescheinXls(stay)),
+        content_type: "application/vnd.ms-excel",
+      },
+    ],
   };
 
   const resp = await fetch("https://api.resend.com/emails", {
