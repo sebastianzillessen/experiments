@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Salärli – Lohnabrechnung für Angestellte im Privathaushalt (Kt. ZH)</title>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260602k">
+<link rel="stylesheet" href="styles.css?v=20260603a">
 </head>
 <body>
 
@@ -64,6 +64,7 @@
   <button data-tab="monat"         id="tab-monat"         role="tab" aria-selected="false" aria-controls="monat"         tabindex="-1">Monatsabrechnung</button>
   <button data-tab="jahr"          id="tab-jahr"          role="tab" aria-selected="false" aria-controls="jahr"          tabindex="-1">Jahresübersicht</button>
   <button data-tab="stammdaten"    id="tab-stammdaten"    role="tab" aria-selected="false" aria-controls="stammdaten"    tabindex="-1">Stammdaten</button>
+  <button data-tab="mitarbeitende" id="tab-mitarbeitende" role="tab" aria-selected="false" aria-controls="mitarbeitende" tabindex="-1">Mitarbeitende</button>
   <button data-tab="einstellungen" id="tab-einstellungen" role="tab" aria-selected="false" aria-controls="einstellungen" tabindex="-1">Einstellungen</button>
   <button data-tab="mitglieder"    id="tab-mitglieder"    role="tab" aria-selected="false" aria-controls="mitglieder"    tabindex="-1" hidden>Mitglieder</button>
   <button data-tab="info"          id="tab-info"          role="tab" aria-selected="false" aria-controls="info"          tabindex="-1">Info</button>
@@ -80,6 +81,10 @@
 
   <div class="card">
     <h3>Neuer Einsatz</h3>
+    <div id="e-employee-wrap" hidden style="margin-bottom:12px;">
+      <label for="e-employee">Mitarbeiter/in</label>
+      <select id="e-employee"></select>
+    </div>
     <div class="grid-3">
       <div>
         <label for="e-datum">Datum</label>
@@ -111,10 +116,14 @@
   <div class="section-sub">Wähle einen Monat aus, um die druckfähige Lohnabrechnung anzuzeigen.</div>
 
   <div class="card no-print">
-    <div class="grid-2">
+    <div class="grid-3">
       <div>
         <label for="m-monat">Monat</label>
         <input type="month" id="m-monat">
+      </div>
+      <div id="m-employee-wrap" hidden>
+        <label for="m-employee">Mitarbeiter/in</label>
+        <select id="m-employee"></select>
       </div>
       <div style="display:flex; align-items:flex-end;">
         <button class="btn" id="btn-print-monat">Drucken / als PDF speichern</button>
@@ -131,10 +140,14 @@
   <div class="section-sub">Monatszusammenfassung und Jahres-Lohndeklaration für die SVA Zürich.</div>
 
   <div class="card no-print">
-    <div class="grid-2">
+    <div class="grid-3">
       <div>
         <label for="j-jahr">Jahr</label>
         <input type="number" id="j-jahr" min="2020" max="2099" step="1">
+      </div>
+      <div id="j-employee-wrap" hidden>
+        <label for="j-employee">Mitarbeiter/in</label>
+        <select id="j-employee"></select>
       </div>
       <div style="display:flex; align-items:flex-end;">
         <button class="btn" id="btn-print-jahr">Drucken / als PDF speichern</button>
@@ -187,51 +200,14 @@
     </div>
   </div>
 
-  <div class="card">
-    <h3>Arbeitnehmer/in (Hilfe im Haushalt)</h3>
-    <div class="grid-2">
-      <div>
-        <label for="an-name">Name</label>
-        <input type="text" id="an-name" placeholder="Erika Beispiel">
-      </div>
-      <div>
-        <label for="an-adresse">Strasse &amp; Nr.</label>
-        <input type="text" id="an-adresse" placeholder="Musterweg 5">
-      </div>
-      <div>
-        <label for="an-plz">PLZ</label>
-        <input type="text" id="an-plz" placeholder="8400" inputmode="numeric">
-      </div>
-      <div>
-        <label for="an-ort">Ort</label>
-        <input type="text" id="an-ort" placeholder="Winterthur">
-      </div>
-      <div>
-        <label for="an-geburtsdatum">Geburtsdatum</label>
-        <input type="date" id="an-geburtsdatum">
-      </div>
-      <div>
-        <label for="an-ahvnr">AHV-Nr. (756.xxxx.xxxx.xx)</label>
-        <input type="text" id="an-ahvnr" placeholder="756.0000.0000.00">
-      </div>
-      <div>
-        <label for="an-iban">IBAN für Lohnzahlung</label>
-        <input type="text" id="an-iban" placeholder="CH00 0000 0000 0000 0000 0">
-      </div>
-      <div>
-        <label for="an-ferienwochen">Ferienanspruch</label>
-        <select id="an-ferienwochen">
-          <option value="4">4 Wochen (Ferienzulage 8.33 %)</option>
-          <option value="5">5 Wochen (Ferienzulage 10.63 %)</option>
-          <option value="6">6 Wochen (Ferienzulage 13.04 %)</option>
-        </select>
-      </div>
-    </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="an-8h">
-      <label for="an-8h">Arbeitet ≥ 8 Stunden pro Woche beim selben Arbeitgeber (Pflicht NBU-Versicherung)</label>
-    </div>
-  </div>
+  <div class="info">Die Stammdaten und der Stundenlohn der einzelnen Mitarbeitenden werden im Bereich <strong>Mitarbeitende</strong> verwaltet.</div>
+</section>
+
+<!-- MITARBEITENDE -->
+<section id="mitarbeitende" role="tabpanel" aria-labelledby="tab-mitarbeitende" tabindex="0">
+  <h2>Mitarbeitende</h2>
+  <div class="section-sub">Lege je Person Stammdaten und einen eigenen, versionierten Stundenlohn an. Optional kannst du eine Person einladen, damit sie sich anmelden und eigene Stunden erfassen kann.</div>
+  <div id="mitarbeitende-root"></div>
 </section>
 
 <!-- EINSTELLUNGEN -->
@@ -262,18 +238,14 @@
     </div>
 
     <div class="card">
-      <h3>Lohn</h3>
+      <h3>Zulagen</h3>
       <div class="grid-2">
-        <div>
-          <label for="ps-hourly-rate">Stundenlohn (CHF, brutto, exkl. Zulagen)</label>
-          <input type="number" id="ps-hourly-rate" step="0.01" min="0">
-        </div>
         <div>
           <label for="ps-holiday-percent">Feiertagszulage (% auf Bruttostunden, ZH üblich 3.59 %)</label>
           <input type="number" id="ps-holiday-percent" step="0.01" min="0">
         </div>
       </div>
-      <p class="muted" style="font-size:12px; margin-top:8px;">Der Ferienanspruch (4/5/6 Wochen) wird pro Arbeitnehmer/in in den Stammdaten gewählt.</p>
+      <p class="muted" style="font-size:12px; margin-top:8px;">Der <strong>Stundenlohn</strong> wird pro Person im Bereich „Mitarbeitende" festgelegt. Der Ferienanspruch (4/5/6 Wochen) wird ebenfalls pro Person dort gewählt. Diese Sätze hier gelten haushaltsweit für alle Mitarbeitenden.</p>
     </div>
 
     <div class="card">
@@ -463,6 +435,6 @@
       : 'Entwicklungsversion';
   })();
 </script>
-<script type="module" src="app.js?v=20260602k"></script>
+<script type="module" src="app.js?v=20260603a"></script>
 </body>
 </html>
