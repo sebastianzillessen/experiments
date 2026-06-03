@@ -195,7 +195,25 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   /* In the combined "Alle" export, start each *subsequent* employee's payslip on
      a new page (no leading blank page before the first one). */
   .employee-doc + .employee-doc { break-before:page; }
-  @page { margin:18mm; }
+
+  /* Condense the payslip so it usually fits on a single page. iOS prints the
+     mobile layout, so these override the narrow-viewport rules above. */
+  .print-doc { font-size:11px; line-height:1.35; }
+  .print-doc .doc-header { margin-bottom:12px; }
+  .print-doc .doc-title { margin:4px 0 10px; }
+  .print-doc .doc-title h1 { font-size:16px; }
+  .print-doc h4 { margin:9px 0 3px; font-size:12px; }
+  .print-doc table { font-size:10.5px; margin:4px 0; }
+  .print-doc table th, .print-doc table td { padding:2px 6px; }
+  .print-doc .summary-row { padding:1px 0; }
+  .print-doc .summary-row.total { padding-top:4px; margin-top:4px; }
+  .print-doc .summary-row.netto { font-size:13px; padding:5px 10px; margin:5px 0; }
+  .print-doc .footnote { margin-top:12px; }
+  /* Signatures always side by side (left = Arbeitgeber, right = Arbeitnehmer),
+     even on the mobile layout that iOS prints. */
+  .print-doc .signatures { grid-template-columns:1fr 1fr !important; gap:28px; margin-top:22px; }
+  .print-doc .signatures .sig { padding-top:6px; }
+  @page { margin:14mm; }
 }
 
 /* On screen, separate the stacked documents of the combined "Alle" export. */
