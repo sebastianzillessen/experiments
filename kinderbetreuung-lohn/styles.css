@@ -183,9 +183,12 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 #print-root { display:none; }
 @media print {
   body, html { background:#fff; }
-  /* Show only the lifted print document; hide the whole app shell. */
-  body.printing-active > *:not(#print-root) { display:none !important; }
-  body.printing-active #print-root { display:block !important; }
+  /* Show only the lifted print document; hide the whole app shell. Unconditional
+     (not gated on a JS-toggled class) — iOS Safari can snapshot print styles
+     before a just-added class restyles, which left the whole app chrome in the
+     printout. #print-root is only populated while printing via printSection. */
+  body > *:not(#print-root) { display:none !important; }
+  #print-root { display:block !important; }
   /* iOS Safari: never let a scroll/overflow ancestor clip printed content. */
   * { overflow:visible !important; }
   .card { border:none; box-shadow:none; padding:0; margin:0; }

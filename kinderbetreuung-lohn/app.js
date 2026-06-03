@@ -1557,7 +1557,6 @@ function printSection(id) {
   if (!root) { root = document.createElement('div'); root.id = 'print-root'; document.body.appendChild(root); }
   root.innerHTML = host.innerHTML;
   const cleanup = () => {
-    document.body.classList.remove('printing-active');
     root.innerHTML = '';
     window.removeEventListener('afterprint', cleanup);
   };
@@ -1567,10 +1566,7 @@ function printSection(id) {
   Promise.all(imgs.map(img =>
     (img.complete && img.naturalWidth) ? Promise.resolve()
       : (img.decode ? img.decode().catch(() => {}) : Promise.resolve())
-  )).then(() => {
-    document.body.classList.add('printing-active');
-    window.print();
-  });
+  )).then(() => window.print());
 }
 
 /* ---- EINSTELLUNGEN-TAB: versionierte pay_settings ---- */
