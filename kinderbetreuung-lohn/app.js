@@ -18,6 +18,7 @@ let currentUser = null;
 let currentHouseholdId = null;
 let currentRole = null; // 'owner' | 'admin' | 'employee'
 let membersCache = new Map();
+let openInvites = []; // unaccepted invites for the current household (owner/admin)
 // Which employee the Stundenerfassung form attributes new shifts to. The
 // reports (Monat/Jahr) keep their own scope selector (incl. "Alle").
 let selectedEmployeeId = null;
@@ -579,6 +580,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     currentHouseholdId = null;
     currentRole = null;
     membersCache = new Map();
+    openInvites = [];
     state = sanitizeState({});
     showLogin();
   }
@@ -618,6 +620,7 @@ async function onSignedIn(user) {
 
   if (currentRole === 'owner' || currentRole === 'admin') {
     try { await loadMembers(); } catch (e) { console.warn(e); }
+    try { await loadInvitesList(); } catch (e) { console.warn(e); }
   }
 
   hideLogin();
@@ -1930,11 +1933,15 @@ async function loadMembers() {
 async function loadInvitesList() {
   const { data, error } = await supabase
     .from('invites')
-    .select('id, email, role, created_at, accepted_at')
+    .select('id, email, role, employee_id, created_at, accepted_at')
     .eq('household_id', currentHouseholdId)
     .is('accepted_at', null);
   if (error) throw error;
-  return data || [];
+  openInvites = (data || []).map(i => ({
+    id: i.id, email: i.email, role: i.role,
+    employeeId: i.employee_id, createdAt: i.created_at
+  }));
+  return openInvites;
 }
 
 async function renderMitglieder() {
@@ -1956,11 +1963,13 @@ async function renderMitglieder() {
       membersList.innerHTML = members.map(m => {
         const isSelf = m.user_id === currentUser.id;
         const showRemove = m.role !== 'owner' && !isSelf;
+        const linkedEmp = state.employees.find(e => e.userId === m.user_id);
+        const empNote = linkedEmp ? ` · Mitarbeiter/in: ${escapeHtml(employeeName(linkedEmp))}` : '';
         return `
           <div class="member-row">
             <div class="info-block">
               <div class="name">${escapeHtml(m.full_name || m.email)}</div>
-              <div class="meta">${escapeHtml(m.email)}${isSelf ? ' · du' : ''}</div>
+              <div class="meta">${escapeHtml(m.email)}${isSelf ? ' · du' : ''}${empNote}</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="role-badge ${m.role}">${escapeHtml(roleLabel(m.role))}</span>
@@ -1999,17 +2008,21 @@ async function renderMitglieder() {
     if (!invitesArr.length) {
       invitesList.innerHTML = '<div class="empty-state">Keine offenen Einladungen.</div>';
     } else {
-      invitesList.innerHTML = invitesArr.map(i => `
+      invitesList.innerHTML = invitesArr.map(i => {
+        const inviteEmp = i.employeeId ? employeeById(i.employeeId) : null;
+        const empNote = inviteEmp ? ` · verknüpft mit ${escapeHtml(employeeName(inviteEmp))}` : '';
+        return `
         <div class="member-row">
           <div class="info-block">
             <div class="name">${escapeHtml(i.email)}</div>
-            <div class="meta">eingeladen am ${fmtDate(i.created_at.slice(0,10))}</div>
+            <div class="meta">eingeladen am ${fmtDate(i.createdAt.slice(0,10))}${empNote}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="role-badge ${i.role}">${escapeHtml(roleLabel(i.role))}</span>
             <button class="btn btn-small btn-danger" data-revoke="${i.id}">Zurückziehen</button>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       invitesList.querySelectorAll('button[data-revoke]').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('Einladung zurückziehen?')) return;
@@ -2143,7 +2156,20 @@ function employeeFormHtml(emp) {
       <div id="wage-form-error" class="auth-error" hidden style="margin-top:8px;"></div>
     </div>` : '';
 
-  const inviteSection = (emp && emp.id && !linked) ? `
+  const pendingInvite = (emp && emp.id) ? openInvites.find(i => i.employeeId === emp.id) : null;
+  let inviteSection = '';
+  if (emp && emp.id && !linked) {
+    if (pendingInvite) {
+      inviteSection = `
+    <div class="card">
+      <h3>Login verknüpfen (optional)</h3>
+      <div class="info" style="margin-bottom:12px;">Einladung an <strong>${escapeHtml(pendingInvite.email)}</strong> ist offen. Sobald die Person den Anmelde-Link annimmt, wird ihr Login automatisch mit diesem Eintrag verknüpft.</div>
+      <div class="btn-row">
+        <button class="btn btn-danger" id="emp-invite-revoke" data-invite-id="${pendingInvite.id}">Einladung zurückziehen</button>
+      </div>
+    </div>`;
+    } else {
+      inviteSection = `
     <div class="card">
       <h3>Login verknüpfen (optional)</h3>
       <div class="section-sub">Lade die Person ein, damit sie sich anmelden und ihre eigenen Stunden erfassen kann. Ohne Einladung bleibt dieser Eintrag reine Stammdaten.</div>
@@ -2151,7 +2177,9 @@ function employeeFormHtml(emp) {
         <div><label for="emp-invite-email">E-Mail-Adresse</label><input type="email" id="emp-invite-email" placeholder="person@example.com"></div>
         <div style="display:flex; align-items:flex-end;"><button class="btn" id="emp-invite-btn">Als Mitarbeitende/r einladen</button></div>
       </div>
-    </div>` : '';
+    </div>`;
+    }
+  }
   const linkedNote = linked ? '<div class="info" style="margin-bottom:12px;">Mit einem Login verknüpft — diese Person kann sich anmelden und eigene Stunden erfassen.</div>' : '';
 
   return `
@@ -2321,7 +2349,20 @@ function wireMitarbeitende() {
     const email = root.querySelector('#emp-invite-email').value.trim().toLowerCase();
     if (!email || !email.includes('@')) { alert('Bitte gültige E-Mail-Adresse eingeben.'); return; }
     const ok = await createInvite({ email, role: 'employee', employeeId: empId });
-    if (ok) renderMitarbeitende();
+    if (ok) { try { await loadInvitesList(); } catch (e) { console.warn(e); } renderMitarbeitende(); }
+  });
+
+  const inviteRevokeBtn = root.querySelector('#emp-invite-revoke');
+  if (inviteRevokeBtn) inviteRevokeBtn.addEventListener('click', async () => {
+    if (!confirm('Offene Einladung zurückziehen?')) return;
+    setSyncStatus('pending');
+    try {
+      const { error } = await supabase.from('invites').delete().eq('id', inviteRevokeBtn.dataset.inviteId);
+      if (error) throw error;
+      setSyncStatus('ok');
+      await loadInvitesList().catch(() => {});
+      renderMitarbeitende();
+    } catch (e) { setSyncStatus('error', e); }
   });
 }
 
