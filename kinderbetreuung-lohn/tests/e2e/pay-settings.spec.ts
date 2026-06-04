@@ -63,10 +63,20 @@ test.describe('Pay settings versions', () => {
       .single();
     expect(psErr).toBeNull();
 
+    // Every shift now belongs to an employee (shifts.employee_id is NOT NULL),
+    // so seed one and attribute the shift to it.
+    const { data: emp, error: empErr } = await adminClient()
+      .from('employees')
+      .insert({ household_id: householdId, data: { name: 'Test-Mitarbeiter/in' } })
+      .select('id')
+      .single();
+    expect(empErr).toBeNull();
+
     const { error: shiftErr } = await adminClient()
       .from('shifts')
       .insert({
         household_id: householdId,
+        employee_id: emp!.id,
         date: `${month}-15`,
         hours: 4,
         note: 'lock-trigger',
