@@ -485,6 +485,18 @@ function buildMeldescheinXlsBase64(stay: StoredStay): string {
   const setNum = (c: number, r: number, v: number) => {
     (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = { t: "n", v };
   };
+  const setDate = (c: number, r: number, german: string) => {
+    const m = german.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return;
+    const serial = Math.round(
+      (Date.UTC(+m[3], +m[2] - 1, +m[1]) - Date.UTC(1899, 11, 30)) / 86400000,
+    );
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = {
+      t: "n",
+      v: serial,
+      z: "dd.mm.yyyy",
+    };
+  };
 
   stay.guests.forEach((g, i) => {
     const r = i + 1; // row 0 holds headers
@@ -498,8 +510,8 @@ function buildMeldescheinXlsBase64(stay: StoredStay): string {
     setStr(7, r, country);          // H Staatsangehörigkeit
     if (iso) setStr(8, r, iso);     // I Staatsanghörigkeit ISO (template typo preserved)
     setStr(9, r, g.ausweisnummer);  // J Ausweisnummer
-    setStr(10, r, stay.ankunft);    // K Ankunft
-    setStr(11, r, stay.abreise);    // L Abreise
+    setDate(10, r, stay.ankunft);   // K Ankunft  — real date cell, not string
+    setDate(11, r, stay.abreise);   // L Abreise — real date cell, not string
   });
 
   sheet["!ref"] = `A1:L${stay.guests.length + 1}`;
