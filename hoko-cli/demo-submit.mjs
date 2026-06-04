@@ -15,12 +15,20 @@ const SAMPLE_GUESTS = [
   { firstname: "Marco",     lastname: "Rossi",    country: "Italy",         countryIso: "IT", ausweisart: "Passport", ausweisnummer: "YA8451293" },
 ];
 
+// Crockford-style alphabet (no 0/O/1/I), matching the worker's auto-code.
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function generateTestCode() {
+  let suffix = "";
+  for (let i = 0; i < 4; i++) suffix += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  return `TEST-${suffix}`;
+}
+
 const DEFAULTS = {
   url: "https://hoko.zillessen.dev/api/hoko/submit",
   guests: 2,
   ankunft: "10.07.2026",
   abreise: "13.07.2026",
-  code: undefined, // let the worker auto-generate a 6-char code
+  code: generateTestCode(), // TEST-XXXX prefix so test runs stand out in the inbox
 };
 
 function parseArgs(argv) {
@@ -50,7 +58,7 @@ const body = {
 };
 
 console.log(`POST ${opts.url}`);
-console.log(`  ${opts.guests} guest(s), stay ${opts.ankunft} – ${opts.abreise}${opts.code ? `, code ${opts.code}` : " (auto code)"}`);
+console.log(`  ${opts.guests} guest(s), stay ${opts.ankunft} – ${opts.abreise}, code ${opts.code}`);
 
 const resp = await fetch(opts.url, {
   method: "POST",
