@@ -36,6 +36,9 @@
  * Static asset serving keeps working regardless.
  */
 
+import * as XLSX from "xlsx";
+import { TEMPLATE_XLT_BASE64 } from "./template";
+
 interface Env {
   ASSETS: Fetcher;
   HOKO_KV?: KVNamespace;
@@ -396,7 +399,7 @@ function buildNotificationText(stay: StoredStay): string {
   });
   lines.push(
     "",
-    `Attached: meldeschein-${stay.code}.xls — open in Excel/Numbers, retype into the Hotelkontrolle portal.`,
+    `Attached: meldeschein-${stay.code}.xls — upload directly to the Hotelkontrolle portal (Meldescheine importieren).`,
   );
   return lines.join("\n");
 }
@@ -414,72 +417,107 @@ function buildNotificationHtml(stay: StoredStay): string {
 <strong>Stay:</strong> ${escapeHtml(stay.ankunft)} – ${escapeHtml(stay.abreise)}</p>
 <p><strong>Guests (${stay.guests.length}):</strong></p>
 <ol>${rows}</ol>
-<p style="color:#6b7480;font-size:13px">Attached: <code>meldeschein-${escapeHtml(stay.code)}.xls</code> — open in Excel/Numbers, retype into the official Hotelkontrolle portal.</p>
+<p style="color:#6b7480;font-size:13px">Attached: <code>meldeschein-${escapeHtml(stay.code)}.xls</code> — upload directly to the Hotelkontrolle portal's <em>Meldescheine importieren</em> page.</p>
 </body></html>`;
 }
 
-// Excel 2003 SpreadsheetML — opens in Excel/Numbers/LibreOffice with no
-// dependencies, columns match the hotelkontrolle.zh.ch portal's import schema.
-// Birth date columns are left empty (the guest form does not collect them yet).
-function buildMeldescheinXls(stay: StoredStay): string {
-  const xmlEscape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const strCell = (v: string) =>
-    `<Cell><Data ss:Type="String">${xmlEscape(v)}</Data></Cell>`;
-  const numCell = (n: number) => `<Cell><Data ss:Type="Number">${n}</Data></Cell>`;
-  const empty = "<Cell/>";
+// Real binary .xls (OLE2/BIFF8) — the hotelkontrolle.zh.ch portal's importer
+// is Apache POI HSSF and is strict about structure: it expects the official
+// ImportFormular template (sheet name "HoKo", 12 columns including the typo
+// "Staatsanghörigkeit ISO" in column I, hidden CodeTable lookup sheet, named
+// ranges, etc.). Instead of building from scratch, we start from the embedded
+// template and only mutate the data rows.
+//
+// Birth-date columns are left blank (the guest form does not collect them).
+// Staatsangehörigkeit (column H) is set to the German country name resolved
+// from the template's CodeTable via the guest's ISO code, falling back to the
+// guest-typed country name so we never write null.
 
-  const header =
-    "<Row>" +
-    [
-      "Meldeschein Nr.",
-      "Zimmernummer",
-      "Familienname",
-      "Vornamen",
-      "Geboren Tag",
-      "Monat",
-      "Jahr",
-      "Staatsangehörigkeit",
-      "Ausweisnummer",
-      "Ankunft",
-      "Abreise",
-    ]
-      .map(strCell)
-      .join("") +
-    "</Row>";
-
-  const rows = stay.guests
-    .map(
-      (g, i) =>
-        "<Row>" +
-        numCell(i + 1) +
-        strCell("Studio") +
-        strCell(g.lastname) +
-        strCell(g.firstname) +
-        empty + empty + empty +
-        strCell(g.country) +
-        strCell(g.ausweisnummer) +
-        strCell(stay.ankunft) +
-        strCell(stay.abreise) +
-        "</Row>",
-    )
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Worksheet ss:Name="Meldeschein">
-  <Table>${header}${rows}</Table>
- </Worksheet>
-</Workbook>`;
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
-function utf8ToBase64(s: string): string {
-  const bytes = new TextEncoder().encode(s);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
+let cachedIsoToGerman: Record<string, string> | null = null;
+
+function buildIsoToGermanMap(wb: XLSX.WorkBook): Record<string, string> {
+  if (cachedIsoToGerman) return cachedIsoToGerman;
+  const sheet = wb.Sheets["CodeTable"];
+  const map: Record<string, string> = {};
+  if (sheet && sheet["!ref"]) {
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+    for (let r = 1; r <= range.e.r; r++) {
+      const nameCell = sheet[XLSX.utils.encode_cell({ c: 0, r })];
+      const isoCell = sheet[XLSX.utils.encode_cell({ c: 1, r })];
+      const name = nameCell && nameCell.v != null ? String(nameCell.v) : "";
+      const iso = isoCell && isoCell.v != null ? String(isoCell.v).toUpperCase() : "";
+      if (name && /^[A-Z]{2}$/.test(iso)) map[iso] = name;
+    }
+  }
+  cachedIsoToGerman = map;
+  return map;
+}
+
+function buildMeldescheinXlsBase64(stay: StoredStay): string {
+  const wb = XLSX.read(base64ToBytes(TEMPLATE_XLT_BASE64), { type: "array" });
+  const isoToGerman = buildIsoToGermanMap(wb);
+
+  const src = wb.Sheets["HoKo"];
+  if (!src) throw new Error("HoKo sheet missing from template");
+
+  // Start a fresh sheet keeping only the row-1 headers + sheet-level metadata
+  // (column widths, merges, etc.). Drops the 500+ pre-numbered placeholder
+  // rows so the portal stops at our data.
+  const sheet: XLSX.WorkSheet = {};
+  for (const key of Object.keys(src)) {
+    if (key.startsWith("!")) {
+      (sheet as Record<string, unknown>)[key] = (src as Record<string, unknown>)[key];
+    } else if (XLSX.utils.decode_cell(key).r === 0) {
+      (sheet as Record<string, unknown>)[key] = (src as Record<string, unknown>)[key];
+    }
+  }
+
+  const setStr = (c: number, r: number, v: string) => {
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = { t: "s", v };
+  };
+  const setNum = (c: number, r: number, v: number) => {
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = { t: "n", v };
+  };
+  const setDate = (c: number, r: number, german: string) => {
+    const m = german.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return;
+    const serial = Math.round(
+      (Date.UTC(+m[3], +m[2] - 1, +m[1]) - Date.UTC(1899, 11, 30)) / 86400000,
+    );
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = {
+      t: "n",
+      v: serial,
+      z: "dd.mm.yyyy",
+    };
+  };
+
+  stay.guests.forEach((g, i) => {
+    const r = i + 1; // row 0 holds headers
+    const iso = (g.countryIso || "").toUpperCase();
+    const country = isoToGerman[iso] || g.country;
+    setNum(0, r, i + 1);            // A Meldeschein Nr.
+    setStr(1, r, "Studio");         // B Zimmernummer
+    setStr(2, r, g.lastname);       // C Familienname
+    setStr(3, r, g.firstname);      // D Vornamen
+    // E/F/G Geboren Tag/Monat/Jahr — left empty (guest form doesn't ask)
+    setStr(7, r, country);          // H Staatsangehörigkeit
+    if (iso) setStr(8, r, iso);     // I Staatsanghörigkeit ISO (template typo preserved)
+    setStr(9, r, g.ausweisnummer);  // J Ausweisnummer
+    setDate(10, r, stay.ankunft);   // K Ankunft  — real date cell, not string
+    setDate(11, r, stay.abreise);   // L Abreise — real date cell, not string
+  });
+
+  sheet["!ref"] = `A1:L${stay.guests.length + 1}`;
+  wb.Sheets["HoKo"] = sheet;
+
+  return XLSX.write(wb, { bookType: "biff8", type: "base64" }) as string;
 }
 
 async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
@@ -501,7 +539,7 @@ async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
     attachments: [
       {
         filename: `meldeschein-${stay.code}.xls`,
-        content: utf8ToBase64(buildMeldescheinXls(stay)),
+        content: buildMeldescheinXlsBase64(stay),
         content_type: "application/vnd.ms-excel",
       },
     ],
