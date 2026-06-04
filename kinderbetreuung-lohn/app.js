@@ -18,6 +18,22 @@ let currentUser = null;
 let currentHouseholdId = null;
 let currentRole = null; // 'owner' | 'admin' | 'employee'
 let membersCache = new Map();
+let openInvites = []; // unaccepted invites for the current household (owner/admin)
+// Which employee the Stundenerfassung form attributes new shifts to. The
+// reports (Monat/Jahr) keep their own scope selector (incl. "Alle").
+let selectedEmployeeId = null;
+
+// Keep selectedEmployeeId valid. An employee-role user is pinned to their own
+// linked record; everyone else falls back to the first active employee.
+function ensureSelectedEmployee() {
+  const own = ownEmployee();
+  if (currentRole === 'employee') { selectedEmployeeId = own ? own.id : null; return; }
+  const actives = activeEmployees();
+  if (!actives.some(e => e.id === selectedEmployeeId)) {
+    selectedEmployeeId = (own && actives.some(e => e.id === own.id)) ? own.id
+      : (actives[0] ? actives[0].id : null);
+  }
+}
 
 /* ---- DEFAULTS ---- */
 // Ferienentschädigung is an employee-level entitlement: 4, 5 or 6 weeks map to
@@ -65,10 +81,38 @@ function sanitizePaySettingsData(d) {
   };
 }
 
+// Stammdaten of a single employee (same shape as the old household_profile.employee).
+function sanitizeEmployeeData(ee) {
+  ee = (ee && typeof ee === 'object') ? ee : {};
+  return {
+    name:           asString(ee.name),
+    address:        asString(ee.address),
+    zip:            asString(ee.zip),
+    city:           asString(ee.city),
+    country:        asString(ee.country) || 'CH',
+    birthDate:      asString(ee.birthDate),
+    ahvNumber:      asString(ee.ahvNumber),
+    iban:           asString(ee.iban),
+    weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
+    vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4
+  };
+}
+
+// Versioned hourly wage of one employee (newest effective_month wins per date).
+function sanitizeWageList(arr) {
+  return Array.isArray(arr)
+    ? arr.map(w => {
+        if (!w || typeof w !== 'object') return null;
+        const effectiveMonth = normalizeEffectiveMonth(w.effectiveMonth);
+        if (!effectiveMonth) return null;
+        return { id: asString(w.id) || null, effectiveMonth, hourlyRate: asNumber(w.hourlyRate, 0) };
+      }).filter(Boolean).sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
+    : [];
+}
+
 function sanitizeState(raw) {
   raw = (raw && typeof raw === 'object') ? raw : {};
   const er = (raw.employer && typeof raw.employer === 'object') ? raw.employer : {};
-  const ee = (raw.employee && typeof raw.employee === 'object') ? raw.employee : {};
   const paySettings = Array.isArray(raw.paySettings)
     ? raw.paySettings.map(v => {
         if (!v || typeof v !== 'object') return null;
@@ -82,6 +126,30 @@ function sanitizeState(raw) {
       }).filter(Boolean)
         .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
     : [];
+
+  // Employees: prefer the multi-employee shape; fall back to a legacy single
+  // `employee` object (old exports) as one entry so import stays compatible.
+  let employees = [];
+  if (Array.isArray(raw.employees)) {
+    employees = raw.employees.map(e => {
+      if (!e || typeof e !== 'object') return null;
+      return {
+        id: asString(e.id) || null,
+        data: sanitizeEmployeeData(e.data),
+        userId: asString(e.userId || e.user_id) || null,
+        archivedAt: asString(e.archivedAt || e.archived_at) || null
+      };
+    }).filter(Boolean);
+  } else if (raw.employee && typeof raw.employee === 'object') {
+    employees = [{ id: null, data: sanitizeEmployeeData(raw.employee), userId: null, archivedAt: null }];
+  }
+
+  // Wages keyed by employee id.
+  const wages = {};
+  if (raw.wages && typeof raw.wages === 'object') {
+    for (const k of Object.keys(raw.wages)) wages[k] = sanitizeWageList(raw.wages[k]);
+  }
+
   return {
     householdName: asString(raw.householdName),
     employer: {
@@ -92,18 +160,8 @@ function sanitizeState(raw) {
       country:        asString(er.country) || 'CH',
       billingNumber:  asString(er.billingNumber)
     },
-    employee: {
-      name:           asString(ee.name),
-      address:        asString(ee.address),
-      zip:            asString(ee.zip),
-      city:           asString(ee.city),
-      country:        asString(ee.country) || 'CH',
-      birthDate:      asString(ee.birthDate),
-      ahvNumber:      asString(ee.ahvNumber),
-      iban:           asString(ee.iban),
-      weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
-      vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4
-    },
+    employees,
+    wages,
     paySettings,
     shifts: Array.isArray(raw.shifts)
       ? raw.shifts.map(x => {
@@ -115,11 +173,50 @@ function sanitizeState(raw) {
             id: asString(x.id),
             date, hours,
             note: asString(x.note),
-            entered_by: asString(x.entered_by)
+            entered_by: asString(x.entered_by),
+            employeeId: asString(x.employeeId || x.employee_id) || null
           };
         }).filter(Boolean)
       : []
   };
+}
+
+/* ---- EMPLOYEE / WAGE HELPERS ---- */
+// Active (non-archived) employees, in stable insertion order.
+function activeEmployees() { return state.employees.filter(e => !e.archivedAt); }
+function employeeById(id) { return state.employees.find(e => e.id === id) || null; }
+
+// Employee record linked to the currently logged-in user (for the employee role).
+function ownEmployee() {
+  return state.employees.find(e => e.userId && currentUser && e.userId === currentUser.id) || null;
+}
+
+// Newest hourly wage effective on or before `date` (ISO yyyy-mm-dd); 0 if none.
+function activeWageFor(employeeId, date) {
+  const list = state.wages[employeeId] || [];
+  let rate = 0;
+  for (const w of list) {
+    if (w.effectiveMonth <= date) rate = w.hourlyRate;
+    else break;
+  }
+  return rate;
+}
+
+// True iff a wage version of this employee has shifts inside its effective
+// period (i.e. up to the next version) — then it is locked, like pay_settings.
+function wageVersionHasShifts(employeeId, version) {
+  const list = state.wages[employeeId] || [];
+  const idx = list.findIndex(v => v.id === version.id);
+  const next = idx >= 0 ? list[idx + 1] : null;
+  const from = version.effectiveMonth;
+  const to = next ? next.effectiveMonth : null;
+  return state.shifts.some(s =>
+    s.employeeId === employeeId && s.date >= from && (to === null || s.date < to));
+}
+
+// Display name for an employee (falls back to a generic label).
+function employeeName(emp) {
+  return (emp && emp.data && emp.data.name) ? emp.data.name : 'Mitarbeiter/in';
 }
 
 // Accept "YYYY-MM" or "YYYY-MM-DD"; return "YYYY-MM-01" or null on bad input.
@@ -216,7 +313,12 @@ function versionHasShifts(version) {
    components (Grundlohn, Ferien-, Feiertagszulage), each contribution is then
    computed on that rounded Bruttolohn at Rappen precision, and the Nettolohn
    (the actual payout) is rounded to the 5-Rappen grid. */
+// `employee` is an employee record { id, data:{…} }. The hourly wage comes from
+// that employee's versioned employee_wages; the statutory/cantonal rates still
+// come from the household-wide pay_settings.
 function berechneAbrechnung(shifts, employee) {
+  const empData = (employee && employee.data) ? employee.data : (employee || {});
+  const empId = (employee && employee.id) ? employee.id : null;
   let stundenTotal = 0, bruttoStundenRaw = 0;
   let nbuApplicable = false;
   let uvgAktivAny = false;
@@ -227,15 +329,16 @@ function berechneAbrechnung(shifts, employee) {
   for (const x of shifts) {
     e = activePaySettingsFor(x.date);
     const hours = Number(x.hours) || 0;
+    const rate = empId ? activeWageFor(empId, x.date) : 0;
     stundenTotal += hours;
-    bruttoStundenRaw += hours * e.hourlyRate;
+    bruttoStundenRaw += hours * rate;
     if (e.uvgEnabled) uvgAktivAny = true;
-    if (e.uvgEnabled && employee.weeklyHoursThreshold8h) nbuApplicable = true;
+    if (e.uvgEnabled && empData.weeklyHoursThreshold8h) nbuApplicable = true;
   }
 
   // Ferienzulage is driven by the employee's Ferienanspruch (4/5/6 weeks),
   // not by the versioned pay_settings.
-  const vacationPercent = vacationPercentForWeeks(employee.vacationWeeks);
+  const vacationPercent = vacationPercentForWeeks(empData.vacationWeeks);
 
   stundenTotal = round2(stundenTotal);
   const bruttoStunden   = round5(bruttoStundenRaw);
@@ -477,6 +580,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     currentHouseholdId = null;
     currentRole = null;
     membersCache = new Map();
+    openInvites = [];
     state = sanitizeState({});
     showLogin();
   }
@@ -516,12 +620,15 @@ async function onSignedIn(user) {
 
   if (currentRole === 'owner' || currentRole === 'admin') {
     try { await loadMembers(); } catch (e) { console.warn(e); }
+    try { await loadInvitesList(); } catch (e) { console.warn(e); }
   }
 
   hideLogin();
   applyRoleVisibility(currentRole);
   refreshFns.forEach(fn => fn());
+  renderErfassungEmployeeSelect();
   renderEntries();
+  renderMitarbeitende();
   renderPaySettingsTab();
   setSyncStatus('ok');
 }
@@ -574,22 +681,36 @@ function showInviteBanner(invite) {
 
 /* ---- CLOUD LOAD ---- */
 async function loadFromCloud() {
-  const [profileRes, shiftsRes, settingsRes, householdRes] = await Promise.all([
+  const [profileRes, shiftsRes, settingsRes, householdRes, employeesRes, wagesRes] = await Promise.all([
     supabase.from('household_profile').select('*').eq('household_id', currentHouseholdId).maybeSingle(),
-    supabase.from('shifts').select('id, date, hours, note, entered_by').eq('household_id', currentHouseholdId).order('date'),
+    supabase.from('shifts').select('id, date, hours, note, entered_by, employee_id').eq('household_id', currentHouseholdId).order('date'),
     supabase.from('pay_settings').select('id, effective_month, data').eq('household_id', currentHouseholdId).order('effective_month'),
-    supabase.from('households').select('name').eq('id', currentHouseholdId).maybeSingle()
+    supabase.from('households').select('name').eq('id', currentHouseholdId).maybeSingle(),
+    supabase.from('employees').select('id, data, user_id, archived_at').eq('household_id', currentHouseholdId).order('created_at'),
+    // employee_wages has no household_id; RLS already scopes rows to this household.
+    supabase.from('employee_wages').select('id, employee_id, effective_month, hourly_rate').order('effective_month')
   ]);
   if (profileRes.error) throw profileRes.error;
   if (shiftsRes.error) throw shiftsRes.error;
   if (settingsRes.error) throw settingsRes.error;
   if (householdRes.error) throw householdRes.error;
+  if (employeesRes.error) throw employeesRes.error;
+  if (wagesRes.error) throw wagesRes.error;
 
   const profileRow = profileRes.data || {};
+  const wages = {};
+  for (const w of (wagesRes.data || [])) {
+    (wages[w.employee_id] = wages[w.employee_id] || []).push({
+      id: w.id, effectiveMonth: w.effective_month, hourlyRate: Number(w.hourly_rate)
+    });
+  }
   state = sanitizeState({
     householdName: householdRes.data?.name,
     employer: profileRow.employer,
-    employee: profileRow.employee,
+    employees: (employeesRes.data || []).map(r => ({
+      id: r.id, data: r.data, userId: r.user_id, archivedAt: r.archived_at
+    })),
+    wages,
     paySettings: (settingsRes.data || []).map(r => ({
       id: r.id,
       effectiveMonth: r.effective_month,
@@ -597,9 +718,10 @@ async function loadFromCloud() {
     })),
     shifts: (shiftsRes.data || []).map(r => ({
       id: r.id, date: r.date, hours: Number(r.hours),
-      note: r.note || '', entered_by: r.entered_by
+      note: r.note || '', entered_by: r.entered_by, employeeId: r.employee_id
     }))
   });
+  ensureSelectedEmployee();
 }
 
 /* ---- CLOUD SAVE: household_profile (debounced) ---- */
@@ -615,7 +737,6 @@ function persistHouseholdProfile() {
         .upsert({
           household_id: currentHouseholdId,
           employer: state.employer,
-          employee: state.employee,
           updated_at: new Date().toISOString()
         });
       if (error) throw error;
@@ -652,27 +773,32 @@ function persistHouseholdName() {
 }
 
 /* ---- CLOUD SAVE: shifts ---- */
-async function addShiftCloud({ date, hours, note }) {
+async function addShiftCloud({ date, hours, note, employeeId }) {
   setSyncStatus('pending');
   try {
+    const insert = {
+      household_id: currentHouseholdId,
+      date, hours, note,
+      entered_by: currentUser.id
+    };
+    // Attribute to an employee. With a single active employee the DB trigger
+    // would also fill it, but we set it explicitly whenever we know it.
+    if (employeeId) insert.employee_id = employeeId;
     const { data, error } = await supabase
       .from('shifts')
-      .insert({
-        household_id: currentHouseholdId,
-        date, hours, note,
-        entered_by: currentUser.id
-      })
+      .insert(insert)
       .select()
       .single();
     if (error) throw error;
     state.shifts.push({
       id: data.id, date: data.date, hours: Number(data.hours),
-      note: data.note || '', entered_by: data.entered_by
+      note: data.note || '', entered_by: data.entered_by, employeeId: data.employee_id
     });
     state.shifts.sort((a, b) => a.date.localeCompare(b.date));
     setSyncStatus('ok');
     renderEntries();
-    renderPaySettingsTab(); // shift may now lock a pay_settings version
+    renderMitarbeitende();   // a shift may now lock a wage version
+    renderPaySettingsTab();  // shift may now lock a pay_settings version
   } catch (e) { setSyncStatus('error', e); }
 }
 
@@ -684,8 +810,92 @@ async function deleteShiftCloud(id) {
     state.shifts = state.shifts.filter(x => x.id !== id);
     setSyncStatus('ok');
     renderEntries();
-    renderPaySettingsTab(); // shift removal may unlock a version
+    renderMitarbeitende();  // shift removal may unlock a wage version
+    renderPaySettingsTab(); // shift removal may unlock a pay_settings version
   } catch (e) { setSyncStatus('error', e); }
+}
+
+/* ---- CLOUD SAVE: employees ---- */
+async function addEmployeeCloud(data) {
+  setSyncStatus('pending');
+  try {
+    const { data: row, error } = await supabase
+      .from('employees')
+      .insert({ household_id: currentHouseholdId, data })
+      .select('id, data, user_id, archived_at')
+      .single();
+    if (error) throw error;
+    state.employees.push({ id: row.id, data: sanitizeEmployeeData(row.data), userId: row.user_id, archivedAt: row.archived_at });
+    state.wages[row.id] = state.wages[row.id] || [];
+    ensureSelectedEmployee();
+    setSyncStatus('ok');
+    return row.id;
+  } catch (e) { setSyncStatus('error', e); return null; }
+}
+
+async function updateEmployeeCloud(id, patch) {
+  setSyncStatus('pending');
+  try {
+    const { data: row, error } = await supabase
+      .from('employees')
+      .update(patch)
+      .eq('id', id)
+      .select('id, data, user_id, archived_at')
+      .single();
+    if (error) throw error;
+    const emp = employeeById(id);
+    if (emp) { emp.data = sanitizeEmployeeData(row.data); emp.archivedAt = row.archived_at; emp.userId = row.user_id; }
+    ensureSelectedEmployee();
+    setSyncStatus('ok');
+    return true;
+  } catch (e) { setSyncStatus('error', e); return false; }
+}
+
+/* ---- CLOUD SAVE: employee_wages ---- */
+async function addWageCloud(employeeId, effectiveMonth, hourlyRate) {
+  setSyncStatus('pending');
+  try {
+    const { data: row, error } = await supabase
+      .from('employee_wages')
+      .insert({ employee_id: employeeId, effective_month: effectiveMonth, hourly_rate: hourlyRate })
+      .select('id, employee_id, effective_month, hourly_rate')
+      .single();
+    if (error) throw error;
+    (state.wages[employeeId] = state.wages[employeeId] || []).push({
+      id: row.id, effectiveMonth: row.effective_month, hourlyRate: Number(row.hourly_rate)
+    });
+    state.wages[employeeId].sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth));
+    setSyncStatus('ok');
+    return true;
+  } catch (e) { setSyncStatus('error', e); return false; }
+}
+
+async function updateWageCloud(employeeId, id, hourlyRate) {
+  setSyncStatus('pending');
+  try {
+    const { data: row, error } = await supabase
+      .from('employee_wages')
+      .update({ hourly_rate: hourlyRate })
+      .eq('id', id)
+      .select('hourly_rate')
+      .single();
+    if (error) throw error;
+    const w = (state.wages[employeeId] || []).find(x => x.id === id);
+    if (w) w.hourlyRate = Number(row.hourly_rate);
+    setSyncStatus('ok');
+    return true;
+  } catch (e) { setSyncStatus('error', e); return false; }
+}
+
+async function deleteWageCloud(employeeId, id) {
+  setSyncStatus('pending');
+  try {
+    const { error } = await supabase.from('employee_wages').delete().eq('id', id);
+    if (error) throw error;
+    state.wages[employeeId] = (state.wages[employeeId] || []).filter(x => x.id !== id);
+    setSyncStatus('ok');
+    return true;
+  } catch (e) { setSyncStatus('error', e); return false; }
 }
 
 /* ---- CLOUD SAVE: pay_settings ---- */
@@ -763,6 +973,7 @@ function showTab(id) {
   if (id === 'monat')         renderMonatTab();
   if (id === 'jahr')          renderJahrTab();
   if (id === 'erfassung')     renderEntries();
+  if (id === 'mitarbeitende') renderMitarbeitende();
   if (id === 'einstellungen') renderPaySettingsTab();
   if (id === 'mitglieder')    renderMitglieder();
 }
@@ -791,7 +1002,7 @@ tabButtons.forEach((b, idx) => {
 
 function applyRoleVisibility(role) {
   const employeeAllowed = ['erfassung'];
-  const adminAllowed = ['erfassung','monat','jahr','stammdaten','einstellungen','info'];
+  const adminAllowed = ['erfassung','monat','jahr','stammdaten','mitarbeitende','einstellungen','info'];
   tabButtons.forEach(btn => {
     const tab = btn.dataset.tab;
     let visible;
@@ -836,22 +1047,14 @@ function bind(id, getter, setter, type, persist = persistHouseholdProfile) {
 const refreshFns = [];
 
 function bindStammdaten() {
+  // Stammdaten now holds household + employer only. Each employee's own
+  // Stammdaten live on the "Mitarbeitende" tab (renderMitarbeitende).
   refreshFns.push(bind('hh-name', () => state.householdName, v => state.householdName = v, 'text', persistHouseholdName));
   refreshFns.push(bind('ag-name',          () => state.employer.name,          v => state.employer.name = v));
   refreshFns.push(bind('ag-adresse',       () => state.employer.address,       v => state.employer.address = v));
   refreshFns.push(bind('ag-plz',           () => state.employer.zip,           v => state.employer.zip = v));
   refreshFns.push(bind('ag-ort',           () => state.employer.city,          v => state.employer.city = v));
   refreshFns.push(bind('ag-abrechnungsnr', () => state.employer.billingNumber, v => state.employer.billingNumber = v));
-
-  refreshFns.push(bind('an-name',         () => state.employee.name,      v => state.employee.name = v));
-  refreshFns.push(bind('an-adresse',      () => state.employee.address,   v => state.employee.address = v));
-  refreshFns.push(bind('an-plz',          () => state.employee.zip,       v => state.employee.zip = v));
-  refreshFns.push(bind('an-ort',          () => state.employee.city,      v => state.employee.city = v));
-  refreshFns.push(bind('an-geburtsdatum', () => state.employee.birthDate, v => state.employee.birthDate = v));
-  refreshFns.push(bind('an-ahvnr',        () => state.employee.ahvNumber, v => state.employee.ahvNumber = v));
-  refreshFns.push(bind('an-iban',         () => state.employee.iban,      v => state.employee.iban = v));
-  refreshFns.push(bind('an-8h',           () => state.employee.weeklyHoursThreshold8h, v => state.employee.weeklyHoursThreshold8h = v, 'checkbox'));
-  refreshFns.push(bind('an-ferienwochen', () => state.employee.vacationWeeks, v => state.employee.vacationWeeks = v, 'number'));
 }
 
 /* ---- ERFASSUNG ---- */
@@ -860,6 +1063,29 @@ const eStunden = document.getElementById('e-stunden');
 const eNotiz = document.getElementById('e-notiz');
 eDatum.value = new Date().toISOString().slice(0,10);
 
+// Employee chooser for the "new shift" form. Hidden when an employee role is
+// logged in (pinned to themselves) or the household has only one employee.
+function renderErfassungEmployeeSelect() {
+  const wrap = document.getElementById('e-employee-wrap');
+  const sel = document.getElementById('e-employee');
+  if (!wrap || !sel) return;
+  const actives = activeEmployees();
+  const showChooser = currentRole !== 'employee' && actives.length > 1;
+  wrap.hidden = !showChooser;
+  if (!showChooser) return;
+  ensureSelectedEmployee();
+  sel.innerHTML = actives.map(e => `<option value="${e.id}">${escapeHtml(employeeName(e))}</option>`).join('');
+  sel.value = selectedEmployeeId || '';
+}
+
+const eEmployeeSel = document.getElementById('e-employee');
+if (eEmployeeSel) {
+  eEmployeeSel.addEventListener('change', () => {
+    selectedEmployeeId = eEmployeeSel.value || null;
+    renderEntries();
+  });
+}
+
 document.getElementById('btn-add').addEventListener('click', async () => {
   const date = eDatum.value;
   const hours = Number(eStunden.value);
@@ -867,7 +1093,23 @@ document.getElementById('btn-add').addEventListener('click', async () => {
   if (!date) { alert('Bitte ein Datum eingeben.'); return; }
   if (!hours || hours <= 0) { alert('Bitte gültige Stundenzahl eingeben.'); return; }
   if (!currentHouseholdId) { alert('Nicht angemeldet.'); return; }
-  await addShiftCloud({ date, hours, note });
+
+  const actives = activeEmployees();
+  if (!actives.length) { alert('Bitte zuerst unter „Mitarbeitende" eine Person anlegen.'); return; }
+  // Determine the employee the shift belongs to.
+  let employeeId;
+  if (currentRole === 'employee') {
+    const own = ownEmployee();
+    if (!own) {
+      alert('Dein Login ist noch keiner/keinem Mitarbeitenden zugeordnet. Bitte wende dich an die Verwaltung des Haushalts.');
+      return;
+    }
+    employeeId = own.id;
+  } else {
+    employeeId = selectedEmployeeId || (actives.length === 1 ? actives[0].id : null);
+    if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
+  }
+  await addShiftCloud({ date, hours, note, employeeId });
   eStunden.value = '';
   eNotiz.value = '';
 });
@@ -875,32 +1117,33 @@ document.getElementById('btn-add').addEventListener('click', async () => {
 function renderEntries() {
   const list = document.getElementById('entries-list');
   if (!list) return;
+  renderErfassungEmployeeSelect();
   const userId = currentUser ? currentUser.id : null;
-  const visible = currentRole === 'employee'
-    ? state.shifts.filter(e => e.entered_by === userId)
+  const own = ownEmployee();
+  // Employee role: only their own shifts (by linked employee, or self-entered).
+  let visible = currentRole === 'employee'
+    ? state.shifts.filter(e => (own && e.employeeId === own.id) || e.entered_by === userId)
     : state.shifts;
 
   if (!visible.length) {
     list.innerHTML = '<div class="empty-state">Noch keine Einsätze erfasst.</div>';
     return;
   }
-  const showEnteredBy = currentRole === 'owner' || currentRole === 'admin';
-  const enteredByLabel = (id) => {
-    if (!id) return '–';
-    if (id === userId) return 'Du';
-    const m = membersCache.get(id);
-    if (!m) return '–';
-    return m.full_name || m.email || '–';
+  const isAdmin = currentRole === 'owner' || currentRole === 'admin';
+  const showEmployee = isAdmin && activeEmployees().length > 1;
+  const empLabel = (id) => {
+    const emp = employeeById(id);
+    return emp ? employeeName(emp) : '–';
   };
   const rows = visible.map(e => {
-    const lohn = activePaySettingsFor(e.date).hourlyRate;
+    const lohn = e.employeeId ? activeWageFor(e.employeeId, e.date) : 0;
     const betrag = round2(e.hours * lohn);
-    const canDelete = currentRole !== 'employee' || e.entered_by === userId;
+    const canDelete = currentRole !== 'employee' || (own && e.employeeId === own.id) || e.entered_by === userId;
     const delBtn = canDelete ? `<button class="btn btn-small btn-danger" data-del="${e.id}">Löschen</button>` : '';
-    const enteredCell = showEnteredBy ? `<td>${escapeHtml(enteredByLabel(e.entered_by))}</td>` : '';
+    const empCell = showEmployee ? `<td>${escapeHtml(empLabel(e.employeeId))}</td>` : '';
     return `<tr>
       <td>${fmtDate(e.date)}</td>
-      ${enteredCell}
+      ${empCell}
       <td>${e.note ? escapeHtml(e.note) : '<span class="muted">–</span>'}</td>
       <td class="num">${e.hours.toLocaleString('de-CH')}</td>
       <td class="num">CHF ${fmtChf(lohn)}</td>
@@ -909,11 +1152,11 @@ function renderEntries() {
     </tr>`;
   }).join('');
   const totalH = visible.reduce((s,e) => s + e.hours, 0);
-  const totalB = round2(visible.reduce((s,e) => s + e.hours * activePaySettingsFor(e.date).hourlyRate, 0));
-  const enteredHead = showEnteredBy ? '<th>Erfasst von</th>' : '';
-  const totalColspan = showEnteredBy ? 3 : 2;
+  const totalB = round2(visible.reduce((s,e) => s + e.hours * (e.employeeId ? activeWageFor(e.employeeId, e.date) : 0), 0));
+  const empHead = showEmployee ? '<th>Mitarbeiter/in</th>' : '';
+  const totalColspan = showEmployee ? 3 : 2;
   list.innerHTML = `<table>
-    <thead><tr><th>Datum</th>${enteredHead}<th>Notiz</th><th class="num">Stunden</th><th class="num">Stundenlohn</th><th class="num">Betrag</th><th></th></tr></thead>
+    <thead><tr><th>Datum</th>${empHead}<th>Notiz</th><th class="num">Stunden</th><th class="num">Stundenlohn</th><th class="num">Betrag</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr class="total-row"><td colspan="${totalColspan}">Total</td><td class="num">${totalH.toLocaleString('de-CH')}</td><td></td><td class="num">CHF ${fmtChf(totalB)}</td><td></td></tr></tfoot>
   </table>`;
@@ -929,28 +1172,91 @@ function renderEntries() {
 const mInput = document.getElementById('m-monat');
 mInput.value = new Date().toISOString().slice(0,7);
 mInput.addEventListener('input', renderMonatTab);
+const mEmployeeSel = document.getElementById('m-employee');
+if (mEmployeeSel) mEmployeeSel.addEventListener('change', renderMonatTab);
 // Resolves once the (async) QR-bill for the current month has been injected,
 // so printing can wait for a stable DOM instead of mutating mid-print.
 let qrBillReady = Promise.resolve();
+
+// Employees relevant to the reports: all active ones, plus any archived ones
+// that still have shifts — so an archived person's historic Abrechnungen stay
+// viewable/printable (the Mitarbeitende tab promises this). Insertion order.
+function reportableEmployees() {
+  const withShifts = new Set(state.shifts.map(s => s.employeeId).filter(Boolean));
+  return state.employees.filter(e => !e.archivedAt || withShifts.has(e.id));
+}
+
+// Scope for the report tabs. An employee role is pinned to their own record;
+// with a single relevant employee there is no chooser; otherwise the selector
+// offers "Alle" (combined) plus each employee. selId = the <select> element id.
+function reportScope(selId) {
+  if (currentRole === 'employee') return { mode: 'one', emp: ownEmployee() };
+  const reportable = reportableEmployees();
+  if (reportable.length <= 1) return { mode: 'one', emp: reportable[0] || null };
+  const sel = document.getElementById(selId);
+  const val = sel ? sel.value : '';
+  if (!val) return { mode: 'all', emps: reportable };
+  return { mode: 'one', emp: employeeById(val) };
+}
+
+// Populate a report employee chooser (Alle + each relevant employee). Visible
+// only for admins with more than one relevant employee.
+function renderReportEmployeeSelect(wrapId, selId) {
+  const wrap = document.getElementById(wrapId);
+  const sel = document.getElementById(selId);
+  if (!wrap || !sel) return;
+  const reportable = reportableEmployees();
+  const show = currentRole !== 'employee' && reportable.length > 1;
+  wrap.hidden = !show;
+  if (!show) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Alle Mitarbeitenden</option>'
+    + reportable.map(e => `<option value="${e.id}">${escapeHtml(employeeName(e))}${e.archivedAt ? ' (archiviert)' : ''}</option>`).join('');
+  sel.value = reportable.some(e => e.id === prev) ? prev : '';
+}
+
+function monthShiftsFor(empId, yyyymm) {
+  return state.shifts.filter(e => e.employeeId === empId && e.date.startsWith(yyyymm));
+}
 
 function renderMonatTab() {
   const yyyymm = mInput.value;
   const target = document.getElementById('monat-doc');
   if (!yyyymm) { target.innerHTML = ''; return; }
-  const eintraege = state.shifts.filter(e => e.date.startsWith(yyyymm));
-  target.innerHTML = renderLohnabrechnung(eintraege, yyyymm);
-  // Fill the QR-bill slot (if any) asynchronously — the lib loads lazily.
-  const calc = berechneAbrechnung(eintraege, state.employee);
-  qrBillReady = injectQrBill(yyyymm, calc.netto);
+  renderReportEmployeeSelect('m-employee-wrap', 'm-employee');
+  const scope = reportScope('m-employee');
+
+  if (scope.mode === 'one') {
+    if (!scope.emp) { target.innerHTML = '<div class="empty-state">Bitte zuerst unter „Mitarbeitende" eine Person anlegen.</div>'; qrBillReady = Promise.resolve(); return; }
+    const eintraege = monthShiftsFor(scope.emp.id, yyyymm);
+    const slotId = `qr-bill-slot-${scope.emp.id}`;
+    target.innerHTML = renderLohnabrechnung(eintraege, yyyymm, scope.emp, slotId);
+    const calc = berechneAbrechnung(eintraege, scope.emp);
+    qrBillReady = injectQrBill(scope.emp, yyyymm, calc.netto, slotId);
+    return;
+  }
+
+  // "Alle": one combined document, one payslip per employee (page break each).
+  const emps = scope.emps.filter(e => monthShiftsFor(e.id, yyyymm).length);
+  if (!emps.length) { target.innerHTML = `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))} erfasst.</div>`; qrBillReady = Promise.resolve(); return; }
+  const slots = [];
+  const docs = emps.map(emp => {
+    const eintraege = monthShiftsFor(emp.id, yyyymm);
+    const slotId = `qr-bill-slot-${emp.id}`;
+    slots.push({ emp, slotId, netto: berechneAbrechnung(eintraege, emp).netto });
+    return `<div class="employee-doc">${renderLohnabrechnung(eintraege, yyyymm, emp, slotId)}</div>`;
+  }).join('');
+  target.innerHTML = docs;
+  qrBillReady = Promise.all(slots.map(s => injectQrBill(s.emp, yyyymm, s.netto, s.slotId)));
 }
 
 // Render a Swiss QR-bill (QR-Rechnung) into the monthly doc so the employer
 // can scan it to pay the Nettolohn. Creditor = employee (IBAN holder), debtor
 // = employer. Loaded lazily from a CDN so a load failure never breaks the app.
-async function injectQrBill(yyyymm, netto) {
-  const slot = document.getElementById('qr-bill-slot');
+async function injectQrBill(employee, yyyymm, netto, slotId) {
+  const slot = document.getElementById(slotId || 'qr-bill-slot');
   if (!slot) return; // no IBAN registered → slot not rendered
-  const ee = state.employee;
+  const ee = (employee && employee.data) ? employee.data : {};
   const er = state.employer;
   const note = (msg) => { slot.innerHTML = `<div class="warn" style="margin:0;">${escapeHtml(msg)}</div>`; };
 
@@ -988,19 +1294,25 @@ async function injectQrBill(yyyymm, netto) {
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
     slot.innerHTML = '';
     slot.appendChild(img);
+    // Wait until the image is actually decoded before resolving. Otherwise the
+    // print preview can open while the data-URL image is still decoding; once
+    // it finishes, the layout reflows across the forced page breaks and the
+    // preview blanks/jumps to an empty page.
+    await img.decode().catch(() => {});
   } catch (e) {
     console.warn('QR-bill generation failed', e);
     note('QR-Einzahlungsschein konnte nicht erzeugt werden (IBAN/Adresse prüfen).');
   }
 }
 
-function renderLohnabrechnung(eintraege, yyyymm) {
+function renderLohnabrechnung(eintraege, yyyymm, employee, slotId) {
   const er = state.employer;
-  const ee = state.employee;
-  const calc = berechneAbrechnung(eintraege, ee);
+  const ee = (employee && employee.data) ? employee.data : {};
+  const empId = (employee && employee.id) ? employee.id : null;
+  const calc = berechneAbrechnung(eintraege, employee);
 
   if (!eintraege.length) {
-    return `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))} erfasst.</div>`;
+    return `<div class="empty-state">Keine Einsätze in ${escapeHtml(monthLabel(yyyymm))}${employee ? ` für ${escapeHtml(employeeName(employee))}` : ''} erfasst.</div>`;
   }
 
   // Use the rates of the latest shift in the period for label percentages.
@@ -1009,14 +1321,14 @@ function renderLohnabrechnung(eintraege, yyyymm) {
   const e = activePaySettingsFor(sorted[sorted.length - 1].date);
 
   const stundenRows = sorted.map(x => {
-    const xE = activePaySettingsFor(x.date);
+    const rate = empId ? activeWageFor(empId, x.date) : 0;
     return `
     <tr>
       <td>${fmtDate(x.date)}</td>
       <td>${x.note ? escapeHtml(x.note) : ''}</td>
       <td class="num">${x.hours.toLocaleString('de-CH')}</td>
-      <td class="num">CHF ${fmtChf(xE.hourlyRate)}</td>
-      <td class="num">CHF ${fmtChf(round2(x.hours * xE.hourlyRate))}</td>
+      <td class="num">CHF ${fmtChf(rate)}</td>
+      <td class="num">CHF ${fmtChf(round2(x.hours * rate))}</td>
     </tr>`;
   }).join('');
 
@@ -1094,7 +1406,7 @@ function renderLohnabrechnung(eintraege, yyyymm) {
     <div class="qr-bill-section">
       <h4>Zahlung Nettolohn — QR-Einzahlungsschein</h4>
       <div class="muted" style="font-size:11px; margin-bottom:8px;">Im Banking-App scannen, um den Nettolohn von CHF ${fmtChf(calc.netto)} an ${escapeHtml(ee.name || 'die Arbeitnehmer/in')} zu überweisen.</div>
-      <div id="qr-bill-slot"><div class="muted">QR-Einzahlungsschein wird geladen …</div></div>
+      <div id="${slotId || 'qr-bill-slot'}"><div class="muted">QR-Einzahlungsschein wird geladen …</div></div>
     </div>` : ''}
   </div>`;
 }
@@ -1103,24 +1415,41 @@ document.getElementById('btn-print-monat').addEventListener('click', async () =>
   // Wait for the QR-bill to finish injecting so the print preview isn't
   // mutated (and blanked) mid-print.
   try { await qrBillReady; } catch { /* note shown in slot */ }
-  printSection('monat');
+  printSection();
 });
 
 /* ---- JAHRESÜBERSICHT ---- */
 const jInput = document.getElementById('j-jahr');
 jInput.value = new Date().getFullYear();
 jInput.addEventListener('input', renderJahrTab);
+const jEmployeeSel = document.getElementById('j-employee');
+if (jEmployeeSel) jEmployeeSel.addEventListener('change', renderJahrTab);
+
+function yearShiftsFor(empId, jahr) {
+  return state.shifts.filter(e => e.employeeId === empId && e.date.startsWith(String(jahr)));
+}
 
 function renderJahrTab() {
   const jahr = Number(jInput.value);
   const target = document.getElementById('jahr-doc');
   if (!jahr) { target.innerHTML = ''; return; }
-  const eintraege = state.shifts.filter(e => e.date.startsWith(String(jahr)));
-  target.innerHTML = renderJahresuebersicht(eintraege, jahr);
+  renderReportEmployeeSelect('j-employee-wrap', 'j-employee');
+  const scope = reportScope('j-employee');
+
+  if (scope.mode === 'one') {
+    if (!scope.emp) { target.innerHTML = '<div class="empty-state">Bitte zuerst unter „Mitarbeitende" eine Person anlegen.</div>'; return; }
+    target.innerHTML = renderJahresuebersicht(yearShiftsFor(scope.emp.id, jahr), jahr, scope.emp);
+    return;
+  }
+  const emps = scope.emps.filter(e => yearShiftsFor(e.id, jahr).length);
+  if (!emps.length) { target.innerHTML = `<div class="empty-state">Keine Einsätze im Jahr ${jahr} erfasst.</div>`; return; }
+  target.innerHTML = emps.map(emp =>
+    `<div class="employee-doc">${renderJahresuebersicht(yearShiftsFor(emp.id, jahr), jahr, emp)}</div>`
+  ).join('');
 }
 
-function renderJahresuebersicht(eintraege, jahr) {
-  const ee = state.employee;
+function renderJahresuebersicht(eintraege, jahr, employee) {
+  const ee = (employee && employee.data) ? employee.data : {};
   const er = state.employer;
   const uvgUsedAnywhere = eintraege.some(x => activePaySettingsFor(x.date).uvgEnabled);
 
@@ -1132,7 +1461,7 @@ function renderJahresuebersicht(eintraege, jahr) {
     const yyyymm = `${jahr}-${mm}`;
     const monatEintraege = eintraege.filter(x => x.date.startsWith(yyyymm));
     if (!monatEintraege.length) continue;
-    const calc = berechneAbrechnung(monatEintraege, ee);
+    const calc = berechneAbrechnung(monatEintraege, employee);
     yJahresStunden += calc.stundenTotal;
     yJahresBrutto += calc.bruttoTotal;
     yJahresNetto += calc.netto;
@@ -1212,18 +1541,15 @@ function renderJahresuebersicht(eintraege, jahr) {
   </div>`;
 }
 
-document.getElementById('btn-print-jahr').addEventListener('click', () => printSection('jahr'));
+document.getElementById('btn-print-jahr').addEventListener('click', () => printSection());
 
-/* ---- PRINT ---- */
-function printSection(id) {
-  tabPanels.forEach(s => s.classList.remove('printing'));
-  const el = document.getElementById(id);
-  el.classList.add('printing');
-  const cleanup = () => {
-    el.classList.remove('printing');
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
+/* ---- PRINT ----
+   Printing is handled entirely by static @media print rules that hide the app
+   chrome and every non-active tab, printing the active tab's document in place.
+   No DOM moving and no JS class toggling, so it works identically for the
+   browser's native Print and the in-app button — and the printed node is never
+   display-flipped, which is what iOS Safari needs to avoid a blank page. */
+function printSection() {
   window.print();
 }
 
@@ -1243,7 +1569,8 @@ const psBtnDelete    = () => document.getElementById('btn-delete-pay-settings');
 const psFormError    = () => document.getElementById('pay-settings-form-error');
 
 const PS_NUMERIC_FIELDS = [
-  ['ps-hourly-rate',       'hourlyRate',       0.01],
+  // hourlyRate moved to per-employee employee_wages — only household-wide
+  // statutory/cantonal rates live here now.
   ['ps-holiday-percent',   'holidayPercent',   0.01],
   ['ps-ahv-employee',      'ahvIvEoEmployee',  0.01],
   ['ps-ahv-employer',      'ahvIvEoEmployer',  0.01],
@@ -1266,7 +1593,7 @@ function renderPaySettingsTab() {
     const rows = state.paySettings.map(v => {
       const locked = versionHasShifts(v);
       const monthYm = v.effectiveMonth.slice(0, 7);
-      const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Feiertage ${v.data.holidayPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
+      const summary = `Feiertage ${v.data.holidayPercent} % · AHV ${v.data.ahvIvEoEmployee} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
       const lockHint = locked
         ? '<span class="muted" title="Einsätze in dieser Periode vorhanden">🔒 gesperrt</span>'
         : '';
@@ -1460,37 +1787,66 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
       const { error: profErr } = await supabase.from('household_profile').upsert({
         household_id: currentHouseholdId,
         employer: fresh.employer,
-        employee: fresh.employee,
         updated_at: new Date().toISOString()
       });
       if (profErr) throw profErr;
-      // Order matters: triggers reject pay_settings changes while shifts cover the period.
-      // Drop shifts first, then pay_settings, then re-insert pay_settings, then shifts.
-      const { error: delShiftsErr } = await supabase.from('shifts').delete().eq('household_id', currentHouseholdId);
-      if (delShiftsErr) throw delShiftsErr;
-      const { error: delPsErr } = await supabase.from('pay_settings').delete().eq('household_id', currentHouseholdId);
-      if (delPsErr) throw delPsErr;
+      // Order matters: FK + period-lock triggers. Drop dependents first
+      // (shifts → employee_wages → pay_settings → employees), then re-insert in
+      // dependency order, remapping employee ids from the imported file.
+      for (const tbl of ['shifts', 'pay_settings']) {
+        const { error } = await supabase.from(tbl).delete().eq('household_id', currentHouseholdId);
+        if (error) throw error;
+      }
+      // employee_wages has no household_id; remove via the (still present) employees.
+      const { data: oldEmps } = await supabase.from('employees').select('id').eq('household_id', currentHouseholdId);
+      for (const oe of (oldEmps || [])) {
+        await supabase.from('employee_wages').delete().eq('employee_id', oe.id);
+      }
+      await supabase.from('employees').delete().eq('household_id', currentHouseholdId);
+
+      // Re-insert employees and build old-id → new-id map (old id is the file's
+      // employee.id; entries without an id map by array index fallback).
+      const idMap = {};
+      for (let i = 0; i < fresh.employees.length; i++) {
+        const emp = fresh.employees[i];
+        const { data: row, error } = await supabase.from('employees')
+          .insert({ household_id: currentHouseholdId, data: emp.data, archived_at: emp.archivedAt || null })
+          .select('id').single();
+        if (error) throw error;
+        if (emp.id) idMap[emp.id] = row.id;
+        idMap['__idx_' + i] = row.id;
+      }
       if (fresh.paySettings.length) {
-        const psRows = fresh.paySettings.map(v => ({
-          household_id: currentHouseholdId,
-          effective_month: v.effectiveMonth,
-          data: v.data
-        }));
-        const { error: insPsErr } = await supabase.from('pay_settings').insert(psRows);
-        if (insPsErr) throw insPsErr;
+        const { error } = await supabase.from('pay_settings').insert(fresh.paySettings.map(v => ({
+          household_id: currentHouseholdId, effective_month: v.effectiveMonth, data: v.data
+        })));
+        if (error) throw error;
+      }
+      // employee_wages, remapped to the new employee ids.
+      const wageRows = [];
+      for (const oldId of Object.keys(fresh.wages)) {
+        const newId = idMap[oldId];
+        if (!newId) continue;
+        for (const w of fresh.wages[oldId]) wageRows.push({ employee_id: newId, effective_month: w.effectiveMonth, hourly_rate: w.hourlyRate });
+      }
+      if (wageRows.length) {
+        const { error } = await supabase.from('employee_wages').insert(wageRows);
+        if (error) throw error;
       }
       if (fresh.shifts.length) {
-        const rows = fresh.shifts.map(e => ({
-          household_id: currentHouseholdId,
-          date: e.date, hours: e.hours, note: e.note,
-          entered_by: currentUser.id
-        }));
+        const rows = fresh.shifts.map(e => {
+          const row = { household_id: currentHouseholdId, date: e.date, hours: e.hours, note: e.note, entered_by: currentUser.id };
+          if (e.employeeId && idMap[e.employeeId]) row.employee_id = idMap[e.employeeId];
+          return row;
+        });
         const { error: insErr } = await supabase.from('shifts').insert(rows);
         if (insErr) throw insErr;
       }
       await loadFromCloud();
       refreshFns.forEach(fn => fn());
+      renderErfassungEmployeeSelect();
       renderEntries();
+      renderMitarbeitende();
       renderPaySettingsTab();
       setSyncStatus('ok');
       alert('Daten importiert.');
@@ -1504,25 +1860,36 @@ document.getElementById('import-file').addEventListener('change', (ev) => {
 });
 
 document.getElementById('btn-clear-all').addEventListener('click', async () => {
-  if (!confirm('Wirklich ALLE Daten (Stammdaten, Einsätze, Sätze) löschen?')) return;
+  if (!confirm('Wirklich ALLE Daten (Stammdaten, Mitarbeitende, Einsätze, Sätze) löschen?')) return;
   if (!confirm('Sicher? Dies kann nicht rückgängig gemacht werden.')) return;
   setSyncStatus('pending');
   try {
+    // Dependency order: shifts → employee_wages → pay_settings → employees.
     const { error: delShiftsErr } = await supabase.from('shifts').delete().eq('household_id', currentHouseholdId);
     if (delShiftsErr) throw delShiftsErr;
+    // Re-query employees from the DB (not just local state) so wages of rows
+    // added on another device are also removed before deleting the employees.
+    const { data: allEmps } = await supabase.from('employees').select('id').eq('household_id', currentHouseholdId);
+    for (const emp of (allEmps || [])) {
+      await supabase.from('employee_wages').delete().eq('employee_id', emp.id);
+    }
     const { error: delPsErr } = await supabase.from('pay_settings').delete().eq('household_id', currentHouseholdId);
     if (delPsErr) throw delPsErr;
+    const { error: delEmpErr } = await supabase.from('employees').delete().eq('household_id', currentHouseholdId);
+    if (delEmpErr) throw delEmpErr;
     const blank = sanitizeState({});
     const { error: profErr } = await supabase.from('household_profile').upsert({
       household_id: currentHouseholdId,
       employer: blank.employer,
-      employee: blank.employee,
       updated_at: new Date().toISOString()
     });
     if (profErr) throw profErr;
     state = blank;
+    ensureSelectedEmployee();
     refreshFns.forEach(fn => fn());
+    renderErfassungEmployeeSelect();
     renderEntries();
+    renderMitarbeitende();
     renderPaySettingsTab();
     closePaySettingsEdit();
     setSyncStatus('ok');
@@ -1543,11 +1910,15 @@ async function loadMembers() {
 async function loadInvitesList() {
   const { data, error } = await supabase
     .from('invites')
-    .select('id, email, role, created_at, accepted_at')
+    .select('id, email, role, employee_id, created_at, accepted_at')
     .eq('household_id', currentHouseholdId)
     .is('accepted_at', null);
   if (error) throw error;
-  return data || [];
+  openInvites = (data || []).map(i => ({
+    id: i.id, email: i.email, role: i.role,
+    employeeId: i.employee_id, createdAt: i.created_at
+  }));
+  return openInvites;
 }
 
 async function renderMitglieder() {
@@ -1569,11 +1940,13 @@ async function renderMitglieder() {
       membersList.innerHTML = members.map(m => {
         const isSelf = m.user_id === currentUser.id;
         const showRemove = m.role !== 'owner' && !isSelf;
+        const linkedEmp = state.employees.find(e => e.userId === m.user_id);
+        const empNote = linkedEmp ? ` · Mitarbeiter/in: ${escapeHtml(employeeName(linkedEmp))}` : '';
         return `
           <div class="member-row">
             <div class="info-block">
               <div class="name">${escapeHtml(m.full_name || m.email)}</div>
-              <div class="meta">${escapeHtml(m.email)}${isSelf ? ' · du' : ''}</div>
+              <div class="meta">${escapeHtml(m.email)}${isSelf ? ' · du' : ''}${empNote}</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="role-badge ${m.role}">${escapeHtml(roleLabel(m.role))}</span>
@@ -1612,17 +1985,21 @@ async function renderMitglieder() {
     if (!invitesArr.length) {
       invitesList.innerHTML = '<div class="empty-state">Keine offenen Einladungen.</div>';
     } else {
-      invitesList.innerHTML = invitesArr.map(i => `
+      invitesList.innerHTML = invitesArr.map(i => {
+        const inviteEmp = i.employeeId ? employeeById(i.employeeId) : null;
+        const empNote = inviteEmp ? ` · verknüpft mit ${escapeHtml(employeeName(inviteEmp))}` : '';
+        return `
         <div class="member-row">
           <div class="info-block">
             <div class="name">${escapeHtml(i.email)}</div>
-            <div class="meta">eingeladen am ${fmtDate(i.created_at.slice(0,10))}</div>
+            <div class="meta">eingeladen am ${fmtDate(i.createdAt.slice(0,10))}${empNote}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="role-badge ${i.role}">${escapeHtml(roleLabel(i.role))}</span>
             <button class="btn btn-small btn-danger" data-revoke="${i.id}">Zurückziehen</button>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       invitesList.querySelectorAll('button[data-revoke]').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('Einladung zurückziehen?')) return;
@@ -1662,28 +2039,17 @@ function openInviteFallbackMail(email, role) {
     encodeURIComponent(body);
 }
 
-document.getElementById('btn-invite').addEventListener('click', async () => {
-  const emailEl = document.getElementById('inv-email');
-  const roleEl = document.getElementById('inv-role');
-  const email = emailEl.value.trim().toLowerCase();
-  const role = roleEl.value;
-  if (!email || !email.includes('@')) { alert('Bitte gültige E-Mail-Adresse eingeben.'); return; }
+// Create an invite (optionally linked to an employee record so accepting it
+// links that employee's login) and trigger the invitation email.
+async function createInvite({ email, role, employeeId }) {
   setSyncStatus('pending');
   try {
+    const insert = { household_id: currentHouseholdId, email, role, invited_by: currentUser.id };
+    if (employeeId) insert.employee_id = employeeId;
     const { data: inserted, error } = await supabase
-      .from('invites')
-      .insert({
-        household_id: currentHouseholdId,
-        email,
-        role,
-        invited_by: currentUser.id,
-      })
-      .select('id')
-      .single();
+      .from('invites').insert(insert).select('id').single();
     if (error) throw error;
-    emailEl.value = '';
     setSyncStatus('ok');
-    renderMitglieder();
 
     // Fire-and-await the edge function that sends the actual email. We don't
     // want to block the UI on failure — if it errors we offer a mailto
@@ -1696,18 +2062,286 @@ document.getElementById('btn-invite').addEventListener('click', async () => {
       console.warn('[invite] send-invite-email failed:', fnErr);
       const useMailto = confirm(
         'Einladung gespeichert, aber automatische E-Mail konnte nicht versendet werden.\n\n' +
-          'Möchtest du eine E-Mail aus deinem Mail-Programm an ' +
-          email +
-          ' verfassen?'
+          'Möchtest du eine E-Mail aus deinem Mail-Programm an ' + email + ' verfassen?'
       );
       if (useMailto) openInviteFallbackMail(email, role);
     } else {
       alert('Einladung an ' + email + ' versendet.');
     }
+    return true;
   } catch (e) {
     setSyncStatus('error', e);
+    return false;
   }
+}
+
+document.getElementById('btn-invite').addEventListener('click', async () => {
+  const emailEl = document.getElementById('inv-email');
+  const roleEl = document.getElementById('inv-role');
+  const email = emailEl.value.trim().toLowerCase();
+  const role = roleEl.value;
+  if (!email || !email.includes('@')) { alert('Bitte gültige E-Mail-Adresse eingeben.'); return; }
+  const ok = await createInvite({ email, role });
+  if (ok) { emailEl.value = ''; renderMitglieder(); }
 });
+
+/* ---- MITARBEITENDE (employees + per-employee wages, owner/admin) ---- */
+// UI state: list, or an edit/add form for one employee.
+let mitUi = { mode: 'list', empId: null };
+
+const EMP_FIELDS = [
+  ['emp-f-name',     'name',      'text'],
+  ['emp-f-address',  'address',   'text'],
+  ['emp-f-zip',      'zip',       'text'],
+  ['emp-f-city',     'city',      'text'],
+  ['emp-f-birth',    'birthDate', 'date'],
+  ['emp-f-ahv',      'ahvNumber', 'text'],
+  ['emp-f-iban',     'iban',      'text']
+];
+
+function employeeFormHtml(emp) {
+  const d = emp ? emp.data : sanitizeEmployeeData({});
+  const linked = emp && emp.userId;
+  const wages = emp && emp.id ? (state.wages[emp.id] || []) : [];
+  const wageRows = wages.length
+    ? wages.map(w => {
+        const locked = wageVersionHasShifts(emp.id, w);
+        return `<div class="member-row">
+          <div class="info-block">
+            <div class="name">ab ${escapeHtml(monthLabel(w.effectiveMonth.slice(0,7)))}</div>
+            <div class="meta">CHF ${fmtChf(w.hourlyRate)} / Stunde ${locked ? '· 🔒 gesperrt (Einsätze vorhanden)' : ''}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${locked ? '' : `<input type="number" step="0.01" min="0" value="${w.hourlyRate}" data-wage-rate="${w.id}" style="width:90px;">`}
+            ${locked ? '' : `<button class="btn btn-small" data-wage-save="${w.id}">Speichern</button>`}
+            ${locked ? '' : `<button class="btn btn-small btn-danger" data-wage-del="${w.id}">Löschen</button>`}
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="empty-state">Noch kein Stundenlohn hinterlegt.</div>';
+
+  const wageSection = (emp && emp.id) ? `
+    <div class="card">
+      <h3>Stundenlohn (versioniert)</h3>
+      <div class="section-sub">Eine Lohnerhöhung legst du als neue Version „gültig ab" an. Frühere Versionen sind gesperrt, sobald Einsätze in deren Periode liegen.</div>
+      ${wageRows}
+      <div class="grid-3" style="margin-top:10px;">
+        <div><label for="wage-new-month">Gültig ab Monat</label><input type="month" id="wage-new-month"></div>
+        <div><label for="wage-new-rate">Stundenlohn (CHF)</label><input type="number" id="wage-new-rate" step="0.01" min="0" placeholder="z.B. 30.00"></div>
+        <div style="display:flex; align-items:flex-end;"><button class="btn" id="wage-add">Lohn-Version hinzufügen</button></div>
+      </div>
+      <div id="wage-form-error" class="auth-error" hidden style="margin-top:8px;"></div>
+    </div>` : '';
+
+  const pendingInvite = (emp && emp.id) ? openInvites.find(i => i.employeeId === emp.id) : null;
+  let inviteSection = '';
+  if (emp && emp.id && !linked) {
+    if (pendingInvite) {
+      inviteSection = `
+    <div class="card">
+      <h3>Login verknüpfen (optional)</h3>
+      <div class="info" style="margin-bottom:12px;">Einladung an <strong>${escapeHtml(pendingInvite.email)}</strong> ist offen. Sobald die Person den Anmelde-Link annimmt, wird ihr Login automatisch mit diesem Eintrag verknüpft.</div>
+      <div class="btn-row">
+        <button class="btn btn-danger" id="emp-invite-revoke" data-invite-id="${pendingInvite.id}">Einladung zurückziehen</button>
+      </div>
+    </div>`;
+    } else {
+      inviteSection = `
+    <div class="card">
+      <h3>Login verknüpfen (optional)</h3>
+      <div class="section-sub">Lade die Person ein, damit sie sich anmelden und ihre eigenen Stunden erfassen kann. Ohne Einladung bleibt dieser Eintrag reine Stammdaten.</div>
+      <div class="grid-2">
+        <div><label for="emp-invite-email">E-Mail-Adresse</label><input type="email" id="emp-invite-email" placeholder="person@example.com"></div>
+        <div style="display:flex; align-items:flex-end;"><button class="btn" id="emp-invite-btn">Als Mitarbeitende/r einladen</button></div>
+      </div>
+    </div>`;
+    }
+  }
+  const linkedNote = linked ? '<div class="info" style="margin-bottom:12px;">Mit einem Login verknüpft — diese Person kann sich anmelden und eigene Stunden erfassen.</div>' : '';
+
+  return `
+    <div class="card">
+      <h3>${emp ? 'Mitarbeiter/in bearbeiten' : 'Neue/r Mitarbeiter/in'}</h3>
+      ${linkedNote}
+      <div class="grid-2">
+        <div><label for="emp-f-name">Name</label><input type="text" id="emp-f-name" value="${escapeHtml(d.name)}" placeholder="Erika Beispiel"></div>
+        <div><label for="emp-f-address">Strasse &amp; Nr.</label><input type="text" id="emp-f-address" value="${escapeHtml(d.address)}" placeholder="Musterweg 5"></div>
+        <div><label for="emp-f-zip">PLZ</label><input type="text" id="emp-f-zip" value="${escapeHtml(d.zip)}" inputmode="numeric" placeholder="8400"></div>
+        <div><label for="emp-f-city">Ort</label><input type="text" id="emp-f-city" value="${escapeHtml(d.city)}" placeholder="Winterthur"></div>
+        <div><label for="emp-f-birth">Geburtsdatum</label><input type="date" id="emp-f-birth" value="${escapeHtml(d.birthDate)}"></div>
+        <div><label for="emp-f-ahv">AHV-Nr.</label><input type="text" id="emp-f-ahv" value="${escapeHtml(d.ahvNumber)}" placeholder="756.0000.0000.00"></div>
+        <div><label for="emp-f-iban">IBAN für Lohnzahlung</label><input type="text" id="emp-f-iban" value="${escapeHtml(d.iban)}" placeholder="CH00 0000 0000 0000 0000 0"></div>
+        <div>
+          <label for="emp-f-vacation">Ferienanspruch</label>
+          <select id="emp-f-vacation">
+            <option value="4"${d.vacationWeeks===4?' selected':''}>4 Wochen (8.33 %)</option>
+            <option value="5"${d.vacationWeeks===5?' selected':''}>5 Wochen (10.63 %)</option>
+            <option value="6"${d.vacationWeeks===6?' selected':''}>6 Wochen (13.04 %)</option>
+          </select>
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="emp-f-8h"${d.weeklyHoursThreshold8h?' checked':''}>
+        <label for="emp-f-8h">Arbeitet ≥ 8 Stunden pro Woche beim selben Arbeitgeber (Pflicht NBU-Versicherung)</label>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="emp-save">Speichern</button>
+        <button class="btn btn-secondary" id="emp-cancel">Abbrechen</button>
+      </div>
+    </div>
+    ${wageSection}
+    ${inviteSection}`;
+}
+
+function readEmployeeForm() {
+  const d = sanitizeEmployeeData({});
+  for (const [domId, key] of EMP_FIELDS) {
+    const el = document.getElementById(domId);
+    if (el) d[key] = el.value;
+  }
+  d.vacationWeeks = Number(document.getElementById('emp-f-vacation').value) || 4;
+  d.weeklyHoursThreshold8h = !!document.getElementById('emp-f-8h').checked;
+  return sanitizeEmployeeData(d);
+}
+
+function renderMitarbeitende() {
+  const root = document.getElementById('mitarbeitende-root');
+  if (!root) return;
+  if (currentRole !== 'owner' && currentRole !== 'admin') { root.innerHTML = ''; return; }
+
+  const listHtml = state.employees.length
+    ? state.employees.map(emp => {
+        const archived = !!emp.archivedAt;
+        const wageCount = (state.wages[emp.id] || []).length;
+        const badges = [
+          emp.userId ? '<span class="role-badge employee">Login</span>' : '',
+          archived ? '<span class="muted">archiviert</span>' : ''
+        ].join(' ');
+        return `<div class="member-row"${archived ? ' style="opacity:.6;"' : ''}>
+          <div class="info-block">
+            <div class="name">${escapeHtml(employeeName(emp))}</div>
+            <div class="meta">${wageCount ? `${wageCount} Lohn-Version(en)` : 'kein Stundenlohn'}${emp.data.iban ? ' · IBAN hinterlegt' : ''} ${badges}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-small" data-emp-edit="${emp.id}">Bearbeiten</button>
+            <button class="btn btn-small btn-secondary" data-emp-archive="${emp.id}">${archived ? 'Reaktivieren' : 'Archivieren'}</button>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="empty-state">Noch keine Mitarbeitenden. Lege die erste Person an.</div>';
+
+  let html = `<div class="card">
+      <h3>Mitarbeitende</h3>
+      <div class="section-sub">Jede Person hat eigene Stammdaten und einen eigenen, versionierten Stundenlohn. Archivierte Personen behalten ihre Einsätze und Abrechnungen.</div>
+      ${listHtml}
+      <div class="btn-row"><button class="btn" id="mit-add">Mitarbeiter/in hinzufügen</button></div>
+    </div>`;
+
+  if (mitUi.mode === 'add') html += employeeFormHtml(null);
+  else if (mitUi.mode === 'edit') {
+    const emp = employeeById(mitUi.empId);
+    if (emp) html += employeeFormHtml(emp);
+  }
+  root.innerHTML = html;
+  wireMitarbeitende();
+}
+
+function wireMitarbeitende() {
+  const root = document.getElementById('mitarbeitende-root');
+  if (!root) return;
+  const addBtn = root.querySelector('#mit-add');
+  if (addBtn) addBtn.addEventListener('click', () => { mitUi = { mode: 'add', empId: null }; renderMitarbeitende(); });
+
+  root.querySelectorAll('button[data-emp-edit]').forEach(btn =>
+    btn.addEventListener('click', () => { mitUi = { mode: 'edit', empId: btn.dataset.empEdit }; renderMitarbeitende(); }));
+
+  root.querySelectorAll('button[data-emp-archive]').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      const emp = employeeById(btn.dataset.empArchive);
+      if (!emp) return;
+      const archive = !emp.archivedAt;
+      if (archive && !confirm('Mitarbeiter/in archivieren? Die Person erscheint dann nicht mehr zur Auswahl, Einsätze und Abrechnungen bleiben erhalten.')) return;
+      const ok = await updateEmployeeCloud(emp.id, { archived_at: archive ? new Date().toISOString() : null });
+      if (ok) { renderMitarbeitende(); renderErfassungEmployeeSelect(); renderEntries(); }
+    }));
+
+  const saveBtn = root.querySelector('#emp-save');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const data = readEmployeeForm();
+    if (!data.name.trim()) { alert('Bitte einen Namen eingeben.'); return; }
+    let ok;
+    if (mitUi.mode === 'add') {
+      const id = await addEmployeeCloud(data);
+      ok = !!id;
+      if (ok) mitUi = { mode: 'edit', empId: id }; // stay open to add a wage
+    } else {
+      ok = await updateEmployeeCloud(mitUi.empId, { data });
+    }
+    if (ok) { renderMitarbeitende(); renderErfassungEmployeeSelect(); renderEntries(); }
+  });
+
+  const cancelBtn = root.querySelector('#emp-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { mitUi = { mode: 'list', empId: null }; renderMitarbeitende(); });
+
+  // Wage versions
+  const empId = mitUi.empId;
+  const wageErr = root.querySelector('#wage-form-error');
+  const showWageErr = (msg) => { if (wageErr) { wageErr.textContent = msg; wageErr.hidden = false; } };
+
+  const wageAdd = root.querySelector('#wage-add');
+  if (wageAdd) wageAdd.addEventListener('click', async () => {
+    if (wageErr) wageErr.hidden = true;
+    const month = normalizeEffectiveMonth(root.querySelector('#wage-new-month').value);
+    const rate = Number(root.querySelector('#wage-new-rate').value);
+    if (!month) { showWageErr('Bitte einen gültigen Monat wählen.'); return; }
+    if (!Number.isFinite(rate) || rate < 0) { showWageErr('Bitte einen gültigen Stundenlohn eingeben.'); return; }
+    if ((state.wages[empId] || []).some(w => w.effectiveMonth === month)) { showWageErr('Für diesen Monat existiert bereits eine Lohn-Version.'); return; }
+    if (state.shifts.some(s => s.employeeId === empId && s.date >= month)) {
+      showWageErr('Es existieren bereits Einsätze am oder nach diesem Monat — der Lohn würde rückwirkend gelten. Bitte späteren Monat wählen.');
+      return;
+    }
+    const ok = await addWageCloud(empId, month, rate);
+    if (ok) renderMitarbeitende();
+  });
+
+  root.querySelectorAll('button[data-wage-save]').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.wageSave;
+      const input = root.querySelector(`input[data-wage-rate="${id}"]`);
+      const rate = Number(input.value);
+      if (!Number.isFinite(rate) || rate < 0) { showWageErr('Bitte einen gültigen Stundenlohn eingeben.'); return; }
+      const ok = await updateWageCloud(empId, id, rate);
+      if (ok) renderMitarbeitende();
+    }));
+
+  root.querySelectorAll('button[data-wage-del]').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      if (!confirm('Diese Lohn-Version löschen?')) return;
+      const ok = await deleteWageCloud(empId, btn.dataset.wageDel);
+      if (ok) renderMitarbeitende();
+    }));
+
+  const inviteBtn = root.querySelector('#emp-invite-btn');
+  if (inviteBtn) inviteBtn.addEventListener('click', async () => {
+    const email = root.querySelector('#emp-invite-email').value.trim().toLowerCase();
+    if (!email || !email.includes('@')) { alert('Bitte gültige E-Mail-Adresse eingeben.'); return; }
+    const ok = await createInvite({ email, role: 'employee', employeeId: empId });
+    if (ok) { try { await loadInvitesList(); } catch (e) { console.warn(e); } renderMitarbeitende(); }
+  });
+
+  const inviteRevokeBtn = root.querySelector('#emp-invite-revoke');
+  if (inviteRevokeBtn) inviteRevokeBtn.addEventListener('click', async () => {
+    if (!confirm('Offene Einladung zurückziehen?')) return;
+    setSyncStatus('pending');
+    try {
+      const { error } = await supabase.from('invites').delete().eq('id', inviteRevokeBtn.dataset.inviteId);
+      if (error) throw error;
+      setSyncStatus('ok');
+      await loadInvitesList().catch(() => {});
+      renderMitarbeitende();
+    } catch (e) { setSyncStatus('error', e); }
+  });
+}
 
 /* ---- BOOTSTRAP ---- */
 bindStammdaten();

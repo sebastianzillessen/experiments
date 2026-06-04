@@ -16,22 +16,21 @@ test.describe('Household bootstrap', () => {
     expect(membership?.household_id).toBe(householdId);
   });
 
-  test('Stammdaten persist across reload', async ({ signedInUser }) => {
+  test('Employer Stammdaten persist across reload', async ({ signedInUser }) => {
     const { page, householdId } = signedInUser;
 
     await page.locator('#tab-stammdaten').click();
     await page.locator('#ag-name').fill('Familie Test');
     await page.locator('#ag-adresse').fill('Bahnhofstrasse 1, 8001 Zürich');
-    await page.locator('#an-name').fill('Erika Beispiel');
 
     // Trigger blur to fire the debounced save.
-    await page.locator('#an-name').blur();
+    await page.locator('#ag-adresse').blur();
 
     // Wait for the debounced (1 s) save + round-trip.
     await expect.poll(async () => {
       const { data } = await adminClient()
         .from('household_profile')
-        .select('employer, employee')
+        .select('employer')
         .eq('household_id', householdId)
         .maybeSingle();
       return data?.employer?.name;
@@ -43,6 +42,28 @@ test.describe('Household bootstrap', () => {
 
     await expect(page.locator('#ag-name')).toHaveValue('Familie Test');
     await expect(page.locator('#ag-adresse')).toHaveValue('Bahnhofstrasse 1, 8001 Zürich');
-    await expect(page.locator('#an-name')).toHaveValue('Erika Beispiel');
+  });
+
+  test('employee Stammdaten can be created on the Mitarbeitende tab', async ({ signedInUser }) => {
+    const { page, householdId } = signedInUser;
+
+    await page.locator('#tab-mitarbeitende').click();
+    await page.locator('#mit-add').click();
+    await page.locator('#emp-f-name').fill('Erika Beispiel');
+    await page.locator('#emp-f-iban').fill('CH93 0076 2011 6238 5295 7');
+    await page.locator('#emp-save').click();
+
+    await expect.poll(async () => {
+      const { data } = await adminClient()
+        .from('employees')
+        .select('data')
+        .eq('household_id', householdId);
+      return data?.[0]?.data?.name;
+    }, { timeout: 8_000 }).toBe('Erika Beispiel');
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#tab-mitarbeitende').click();
+    await expect(page.locator('#mitarbeitende-root')).toContainText('Erika Beispiel');
   });
 });
