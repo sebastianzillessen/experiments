@@ -45,7 +45,6 @@ function vacationPercentForWeeks(weeks) {
 
 function defaultPaySettingsData() {
   return {
-    hourlyRate: 30.00,
     holidayPercent: 3.59,    // Feiertagsentschädigung: 3.59 % entspricht 9 ZH-Feiertagen (NAV Hauswirtschaft)
     ahvIvEoEmployee: 5.30, ahvIvEoEmployer: 5.30,
     alvEmployee: 1.10,     alvEmployer: 1.10,
@@ -66,7 +65,6 @@ function sanitizePaySettingsData(d) {
   d = (d && typeof d === 'object') ? d : {};
   const def = defaultPaySettingsData();
   return {
-    hourlyRate:       asNumber(d.hourlyRate,       def.hourlyRate),
     holidayPercent:   asNumber(d.holidayPercent,   def.holidayPercent),
     ahvIvEoEmployee:  asNumber(d.ahvIvEoEmployee,  def.ahvIvEoEmployee),
     ahvIvEoEmployer:  asNumber(d.ahvIvEoEmployer,  def.ahvIvEoEmployer),
