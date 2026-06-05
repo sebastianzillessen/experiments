@@ -69,6 +69,23 @@ export function LoginScreen() {
     }
   }
 
+  async function onForgotPassword() {
+    resetMessages();
+    const addr = validEmail();
+    if (!addr) return;
+    setPwBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(addr, { redirectTo: location.href });
+      if (error) throw error;
+      setInfo(`E-Mail zum Festlegen eines neuen Passworts an ${addr} gesendet. Bitte Posteingang prüfen (auch Spam).`);
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || String(e);
+      setAuthError('Senden fehlgeschlagen: ' + msg);
+    } finally {
+      setPwBusy(false);
+    }
+  }
+
   async function onPasswordSignUp() {
     resetMessages();
     const addr = validEmail();
@@ -130,6 +147,11 @@ export function LoginScreen() {
             Neues Konto erstellen
           </button>
         </form>
+        <button type="button" id="btn-forgot-password" disabled={pwBusy}
+          style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', marginTop: 12, fontSize: 13, fontFamily: 'inherit', textDecoration: 'underline' }}
+          onClick={onForgotPassword}>
+          Passwort vergessen oder noch keins festgelegt?
+        </button>
         <div id="auth-info" className="success" hidden={!info} style={{ marginTop: 14, textAlign: 'left' }}>{info}</div>
         <div id="auth-error" className="auth-error" hidden={!authError}>{authError}</div>
       </div>

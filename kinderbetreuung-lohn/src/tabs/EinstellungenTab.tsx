@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { supabase } from '../supabaseClient';
 import { useApp } from '../context/AppContext';
 import { versionHasShifts } from '../lib/payroll';
 import { monthLabel } from '../lib/format';
@@ -38,6 +39,58 @@ function fieldsFromData(d: PaySettingsData): Record<NumericKey, string> {
   const out = {} as Record<NumericKey, string>;
   for (const f of PS_NUMERIC_FIELDS) out[f.key] = String(d[f.key]);
   return out;
+}
+
+// Set or change the signed-in user's password (works for accounts created via
+// magic link too). Employees without access to this tab use the
+// "Passwort vergessen?" recovery flow on the login screen instead.
+function AccountCard() {
+  const [password, setPassword] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onChangePassword() {
+    setMsg(null);
+    if (!password || password.length < 8) {
+      setMsg({ ok: false, text: 'Bitte ein Passwort mit mindestens 8 Zeichen wählen.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPassword('');
+      setMsg({ ok: true, text: 'Passwort aktualisiert. Du kannst dich ab jetzt mit E-Mail und Passwort anmelden.' });
+    } catch (e) {
+      const m = (e as { message?: string })?.message || String(e);
+      setMsg({ ok: false, text: 'Speichern fehlgeschlagen: ' + m });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3>Konto</h3>
+      <div className="grid-2">
+        <div>
+          <label htmlFor="account-new-password">Neues Passwort (min. 8 Zeichen)</label>
+          <input type="password" id="account-new-password" autoComplete="new-password"
+            value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <button className="btn" id="btn-change-password" disabled={busy} onClick={onChangePassword}>
+            {busy ? 'Wird gespeichert …' : 'Passwort festlegen / ändern'}
+          </button>
+        </div>
+      </div>
+      {msg && (
+        <div id="account-password-msg" className={msg.ok ? 'success' : 'auth-error'} style={{ marginTop: 12 }}>
+          {msg.text}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function EinstellungenTab() {
@@ -314,6 +367,8 @@ export function EinstellungenTab() {
           </div>
         </div>
       </div>
+
+      <AccountCard />
 
       <div className="card">
         <h3>Daten verwalten</h3>

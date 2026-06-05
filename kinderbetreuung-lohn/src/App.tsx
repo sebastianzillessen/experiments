@@ -2,6 +2,7 @@ import { AppProvider } from './context/AppContext';
 import { LoginScreen } from './components/LoginScreen';
 import { InviteBanner } from './components/InviteBanner';
 import { CreateHouseholdScreen } from './components/CreateHouseholdScreen';
+import { SetPasswordScreen } from './components/SetPasswordScreen';
 import { Header, UserStrip, TabNav, SyncWarn, SyncStatus, AppVersionFooter } from './components/Chrome';
 import { ErfassungTab } from './tabs/ErfassungTab';
 import { MonatTab } from './tabs/MonatTab';
@@ -22,6 +23,7 @@ export default function App() {
       <LoginScreen />
       <InviteBanner />
       <CreateHouseholdScreen />
+      <SetPasswordScreen />
       <Header />
       <UserStrip />
       <TabNav />

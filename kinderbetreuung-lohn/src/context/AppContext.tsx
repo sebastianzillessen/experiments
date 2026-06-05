@@ -64,6 +64,10 @@ type AppContextValue = {
   setAuthError: (msg: string | null) => void;
   loginWarning: string | null;
   setLoginWarning: (msg: string | null) => void;
+  // True while the user arrived via a password-recovery link and has not yet
+  // set a new password — the set-password overlay is shown on top.
+  recoveryMode: boolean;
+  setRecoveryMode: (on: boolean) => void;
   activeTab: TabId;
   tabVisible: Record<TabId, boolean>;
   showTab: (id: TabId) => void;
@@ -122,6 +126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sync, setSync] = useState<SyncState>({ visible: false, state: 'idle', warn: null });
   const [authError, setAuthError] = useState<string | null>(null);
   const [loginWarning, setLoginWarning] = useState<string | null>(null);
+  const [recoveryMode, setRecoveryMode] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('erfassung');
   const [tabVisible, setTabVisible] = useState<Record<TabId, boolean>>(INITIAL_TAB_VISIBLE);
   const [primedTabs, setPrimedTabs] = useState<ReadonlySet<TabId>>(new Set());
@@ -356,7 +361,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session && session.user) {
+      if (event === 'PASSWORD_RECOVERY') {
+        // Arrived via a recovery link — show the set-password overlay on top
+        // of whatever the signed-in flow renders behind it.
+        setRecoveryMode(true);
+      } else if (event === 'SIGNED_IN' && session && session.user) {
         onSignedIn(session.user);
       } else if (event === 'SIGNED_OUT') {
         userRef.current = null;
@@ -838,6 +847,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextValue>(() => ({
     user, role, householdId, members, openInvites, data, ui, sync,
     authError, setAuthError, loginWarning, setLoginWarning,
+    recoveryMode, setRecoveryMode,
     activeTab, tabVisible, showTab, primedTabs,
     selectedEmployeeId, setSelectedEmployeeId,
     setSyncStatus, refreshSignedIn, hideInviteBanner,
@@ -847,6 +857,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     importState, clearAll, loadMembersList, reloadInvites, createInvite
   }), [
     user, role, householdId, members, openInvites, data, ui, sync, authError, loginWarning,
+    recoveryMode,
     activeTab, tabVisible, showTab, primedTabs, selectedEmployeeId, setSelectedEmployeeId,
     setSyncStatus, refreshSignedIn, hideInviteBanner,
     updateHouseholdName, updateEmployer, addShift, deleteShift,
