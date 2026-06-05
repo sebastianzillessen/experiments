@@ -7,7 +7,7 @@ import { Input, Field, FieldLabel, FieldHint } from "../components/ui/Input";
 import { Chip, Chips } from "../components/ui/Chip";
 import { Checkbox } from "../components/ui/Checkbox";
 import { NumberStepper } from "../components/ui/NumberStepper";
-import { fuzzyMatchCategory } from "../data/derive";
+import { calculateQuantity, fuzzyMatchCategory } from "../data/derive";
 import { useDataProvider } from "../data/DataProviderContext";
 import type { Condition, PackingItem, Person, QuantityUnit } from "../types";
 import { conditionEmoji } from "../labels";
@@ -137,11 +137,18 @@ export function ItemForm({
 
   const previewQty = (() => {
     const sampleDays = 7;
+    const sampleNights = sampleDays - 1;
     if (frequency === "per_trip") return `Pro Trip = ${baseQuantity} Stück`;
-    if (frequency === "daily") return `Bei ${sampleDays}-Tage-Trip = ${baseQuantity * sampleDays} Stück (täglich)`;
-    const interval = Math.max(1, perDays);
-    const cycles = Math.ceil(sampleDays / interval);
-    return `Bei ${sampleDays}-Tage-Trip = ${baseQuantity * cycles} Stück (alle ${interval} Tage, aufgerundet)`;
+    // Mengen werden pro Übernachtung gerechnet (siehe calculateQuantity).
+    // Wir nutzen dieselbe Funktion, damit die Vorschau exakt zum Ergebnis passt.
+    const resolvedPerDays = frequency === "daily" ? 1 : Math.max(1, perDays);
+    const qty = calculateQuantity(
+      { baseQuantity, unit: "per_day", washable, perDays: resolvedPerDays },
+      { durationDays: sampleDays, hasWasher: false },
+    );
+    if (frequency === "daily")
+      return `Bei ${sampleDays}-Tage-Trip (${sampleNights} Nächte) = ${qty} Stück (täglich)`;
+    return `Bei ${sampleDays}-Tage-Trip (${sampleNights} Nächte) = ${qty} Stück (alle ${resolvedPerDays} Tage, aufgerundet)`;
   })();
 
   function submit() {

@@ -31,8 +31,8 @@ test("Neuer Trip via Modal → Detail-Seite mit berechneten Mengen", async ({
   await expect(page.getByText(/🧺.*alle 3 Tage/)).toBeVisible();
 
   // Mengen-Berechnung: Unterhose (1 pro Tag, washable=true).
-  // 5 Tage + has_washer + Intervall 3 → effectiveDays = min(5, 4) = 4
-  // → quantity = 4 (nicht 5)
+  // 5 Tage = 4 Nächte + has_washer + Intervall 3 → effectiveDays = min(4, 4) = 4
+  // → quantity = 4
   const unterhose = tripItemRow(page, "Unterhose");
   await expect(unterhose).toBeVisible();
   await expect(unterhose.getByText("0/4")).toBeVisible();

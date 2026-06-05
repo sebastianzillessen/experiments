@@ -17,7 +17,7 @@ test("Item-Packen: Plus, Minus, Alle, Sortier-Toggle, Person-Filter", async ({
     name: "Pack-Trip",
     days: 5,
     conditions: ["Sonne", "Schwimmen"],
-    // Kein Washer — qty bleibt 5 für per_day-Items.
+    // Kein Washer — qty = 4 (5 Tage = 4 Nächte) für per_day-Items.
   });
 
   // --- Plus auf Sonnencreme (per_trip, 0/1 → 1/1) ---
@@ -32,11 +32,11 @@ test("Item-Packen: Plus, Minus, Alle, Sortier-Toggle, Person-Filter", async ({
     .click();
   await expect(sonnencreme.getByText("0/1")).toBeVisible();
 
-  // --- "Alle"-Klick aufs Qty-Feld bei T-Shirt (5 Tage, no washer → 0/5) ---
+  // --- "Alle"-Klick aufs Qty-Feld bei T-Shirt (5 Tage = 4 Nächte, no washer → 0/4) ---
   const tshirt = tripItemRow(page, "T-Shirt");
-  await expect(tshirt.getByText("0/5")).toBeVisible();
-  await tshirt.getByRole("button", { name: /Alle 5 einpacken/ }).click();
-  await expect(tshirt.getByText("5/5")).toBeVisible();
+  await expect(tshirt.getByText("0/4")).toBeVisible();
+  await tshirt.getByRole("button", { name: /Alle 4 einpacken/ }).click();
+  await expect(tshirt.getByText("4/4")).toBeVisible();
 
   // --- T-Shirt ist nun komplett gepackt → "Erledigt"-Sektion sichtbar ---
   // Sortier-Toggle Standard = "Offene zuerst" (laut TripDetail.tsx).
