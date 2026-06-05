@@ -15,7 +15,7 @@ export function InfoTab() {
           <li>Bruttolohn pro Angestellte/r ≤ <strong>CHF 22'680/Jahr</strong> (= 2× max. AHV-Jahresrente).</li>
           <li>Total Lohnsumme aller Angestellten ≤ CHF 60'480/Jahr.</li>
           <li>Person ist nicht obligatorisch in der 2. Säule (BVG) versichert.</li>
-          <li>Kinderbetreuung gilt als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
+          <li>Tätigkeiten im Privathaushalt (Betreuung, Reinigung, Garten usw.) gelten als Hausdienst → AHV-Beiträge sind <strong>immer</strong> abzurechnen, unabhängig von der Lohnhöhe.</li>
           <li>Anmeldung bei der Ausgleichskasse: SVA Zürich (Formular «Hausangestellte / Vereinfachte Abrechnung VAV oder VAVplus»).</li>
         </ul>
       </div>
@@ -27,16 +27,18 @@ export function InfoTab() {
             <tr><th>Beitrag</th><th className="num">Arbeitnehmer</th><th className="num">Arbeitgeber</th></tr>
           </thead>
           <tbody>
+            <tr><td>Ferienentschädigung (4 / 5 / 6 Ferienwochen)</td><td className="num" colSpan={2}>8.33 % / 10.63 % / 13.04 % auf Bruttostunden</td></tr>
+            <tr><td>Feiertagsentschädigung (9 gesetzliche ZH-Feiertage)</td><td className="num" colSpan={2}>3.59 % auf Bruttostunden</td></tr>
             <tr><td>AHV / IV / EO</td><td className="num">5.30 %</td><td className="num">5.30 %</td></tr>
             <tr><td>ALV (Arbeitslosenversicherung)</td><td className="num">1.10 %</td><td className="num">1.10 %</td></tr>
-            <tr><td>FAK Familienausgleichskasse Kt. ZH</td><td className="num">–</td><td className="num">~1.00 % (kassenabhängig)</td></tr>
-            <tr><td>Verwaltungskosten Ausgleichskasse</td><td className="num">–</td><td className="num">~0.40 %</td></tr>
+            <tr><td>FAK Familienausgleichskasse Kt. ZH</td><td className="num">–</td><td className="num">1.025 %</td></tr>
+            <tr><td>Verwaltungskosten Ausgleichskasse</td><td className="num">–</td><td className="num">5.0 % der AHV/IV/EO-Beiträge</td></tr>
             <tr><td>Quellensteuer (für alle Nationalitäten)</td><td className="num">5.00 %</td><td className="num">–</td></tr>
             <tr><td>UVG-BU (VAVplus, optional)</td><td className="num">–</td><td className="num">0.505 %</td></tr>
-            <tr><td>UVG-NBU (ab 8 h/Woche, Prämie versicherer{'­'}abhängig)</td><td className="num">~1.47 %</td><td className="num">–</td></tr>
+            <tr><td>UVG-NBU (ab 8 h/Woche)</td><td className="num">1.432 %</td><td className="num">–</td></tr>
           </tbody>
         </table>
-        <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>Quellen: SVA Zürich Merkblätter «Hausangestellte», AHV-IV Merkblätter 2.06 / 2.07 (Stand 1.1.2026).</div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>Quellen: SVA Zürich, Online-Rechner «Beiträge von Haushaltshilfen berechnen — Löhne ab Januar 2026», Merkblätter «Hausangestellte», AHV-IV Merkblätter 2.06 / 2.07 (Stand 1.1.2026).</div>
       </div>
 
       <div className="card">

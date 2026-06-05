@@ -1,9 +1,53 @@
-// Verbatim port of the pay-settings lookup + Abrechnung calculation from app.js.
+// Verbatim port of the pay-settings/wage lookup + Abrechnung calculation from app.js.
 
-import { defaultPaySettingsData } from './state';
-import type { AppState, Employee, PaySettingsData, PaySettingsVersion, Shift } from './state';
-import { round2 } from './format';
+import { defaultPaySettingsData, vacationPercentForWeeks } from './state';
+import type { AppState, Employee, PaySettingsData, PaySettingsVersion, Shift, WageVersion } from './state';
+import { round2, round5 } from './format';
 
+/* ---- EMPLOYEE / WAGE HELPERS ---- */
+// Active (non-archived) employees, in stable insertion order.
+export function activeEmployees(state: AppState): Employee[] {
+  return state.employees.filter(e => !e.archivedAt);
+}
+
+export function employeeById(state: AppState, id: string | null): Employee | null {
+  return state.employees.find(e => e.id === id) || null;
+}
+
+// Employee record linked to the given user id (for the employee role).
+export function ownEmployee(state: AppState, userId: string | null): Employee | null {
+  return state.employees.find(e => e.userId && userId && e.userId === userId) || null;
+}
+
+// Newest hourly wage effective on or before `date` (ISO yyyy-mm-dd); 0 if none.
+export function activeWageFor(state: AppState, employeeId: string, date: string): number {
+  const list = state.wages[employeeId] || [];
+  let rate = 0;
+  for (const w of list) {
+    if (w.effectiveMonth <= date) rate = w.hourlyRate;
+    else break;
+  }
+  return rate;
+}
+
+// True iff a wage version of this employee has shifts inside its effective
+// period (i.e. up to the next version) — then it is locked, like pay_settings.
+export function wageVersionHasShifts(state: AppState, employeeId: string, version: WageVersion): boolean {
+  const list = state.wages[employeeId] || [];
+  const idx = list.findIndex(v => v.id === version.id);
+  const next = idx >= 0 ? list[idx + 1] : null;
+  const from = version.effectiveMonth;
+  const to = next ? next.effectiveMonth : null;
+  return state.shifts.some(s =>
+    s.employeeId === employeeId && s.date >= from && (to === null || s.date < to));
+}
+
+// Display name for an employee (falls back to a generic label).
+export function employeeName(emp: Employee | null): string {
+  return (emp && emp.data && emp.data.name) ? emp.data.name : 'Mitarbeiter/in';
+}
+
+/* ---- PAY SETTINGS LOOKUP ---- */
 // Returns the active pay_settings.data for a given ISO date string. Falls
 // back to defaults when no version covers the date (no versions yet, or
 // the date predates the earliest version).
@@ -43,6 +87,7 @@ export type Abrechnung = {
   stundenTotal: number;
   bruttoStunden: number;
   ferienzulage: number;
+  feiertagszulage: number;
   bruttoTotal: number;
   an: { ahvIvEo: number; alv: number; nbu: number; quellenst: number; total: number };
   netto: number;
@@ -52,65 +97,73 @@ export type Abrechnung = {
   uvgAktivAny: boolean;
 };
 
-/* Each shift's calculation uses the pay_settings version that was active
-   on shift.date. So a future "Lohnerhöhung" via a new version cannot
+/* ---- BERECHNUNG ----
+   Callers always pass the shifts of a single calendar month. Because
+   pay_settings versions are effective from the first of a month and a new
+   version cannot be inserted over months that already have shifts, exactly
+   one version applies to all shifts of a given month — so a single rate set
+   governs each Abrechnung. A future "Lohnerhöhung" via a new version cannot
    retroactively change past Lohnabrechnungen.
-   For label/percentage display in summaries we use the rates of the most
-   recent shift's version in the period (which equals the only version if
-   rates didn't change within the period). */
-export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: Employee): Abrechnung {
-  let stundenTotal = 0, bruttoStunden = 0, ferienzulage = 0, bruttoTotal = 0;
-  const an = { ahvIvEo: 0, alv: 0, nbu: 0, quellenst: 0, total: 0 };
-  const ag = { ahvIvEo: 0, alv: 0, fak: 0, bu: 0, verw: 0, total: 0 };
+
+   We mirror the SVA Zürich calculator: the gross is built from Rappen-rounded
+   components (Grundlohn, Ferien-, Feiertagszulage), each contribution is then
+   computed on that rounded Bruttolohn at Rappen precision, and the Nettolohn
+   (the actual payout) is rounded to the 5-Rappen grid. */
+// `employee` is an employee record { id, data:{…} }. The hourly wage comes from
+// that employee's versioned employee_wages; the statutory/cantonal rates still
+// come from the household-wide pay_settings.
+export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: Employee | null): Abrechnung {
+  const empData = (employee && employee.data) ? employee.data : null;
+  const empId = (employee && employee.id) ? employee.id : null;
+  let stundenTotal = 0, bruttoStundenRaw = 0;
   let nbuApplicable = false;
   let uvgAktivAny = false;
+  // Active rate set for the month. Defaults cover the empty-shift case; the
+  // loop overwrites it with the (single) version that applies to these shifts.
+  let e = defaultPaySettingsData();
 
   for (const x of shifts) {
-    const e = activePaySettingsFor(state, x.date);
+    e = activePaySettingsFor(state, x.date);
     const hours = Number(x.hours) || 0;
-    const xBrutto = hours * e.hourlyRate;
-    const xFerien = xBrutto * e.vacationPercent / 100;
-    const xBruttoTotal = xBrutto + xFerien;
-
+    const rate = empId ? activeWageFor(state, empId, x.date) : 0;
     stundenTotal += hours;
-    bruttoStunden += xBrutto;
-    ferienzulage += xFerien;
-    bruttoTotal += xBruttoTotal;
-
-    const xNbuApplicable = e.uvgEnabled && employee.weeklyHoursThreshold8h;
-    if (xNbuApplicable) nbuApplicable = true;
+    bruttoStundenRaw += hours * rate;
     if (e.uvgEnabled) uvgAktivAny = true;
-
-    an.ahvIvEo   += xBruttoTotal * e.ahvIvEoEmployee / 100;
-    an.alv       += xBruttoTotal * e.alvEmployee / 100;
-    an.nbu       += xNbuApplicable ? xBruttoTotal * e.uvgNbuEmployee / 100 : 0;
-    an.quellenst += xBruttoTotal * e.withholdingTax / 100;
-
-    ag.ahvIvEo += xBruttoTotal * e.ahvIvEoEmployer / 100;
-    ag.alv     += xBruttoTotal * e.alvEmployer / 100;
-    ag.fak     += xBruttoTotal * e.fakEmployer / 100;
-    ag.bu      += e.uvgEnabled ? xBruttoTotal * e.uvgBuEmployer / 100 : 0;
-    ag.verw    += xBruttoTotal * e.adminFeeEmployer / 100;
+    if (e.uvgEnabled && empData?.weeklyHoursThreshold8h) nbuApplicable = true;
   }
 
-  stundenTotal = round2(stundenTotal);
-  bruttoStunden = round2(bruttoStunden);
-  ferienzulage = round2(ferienzulage);
-  bruttoTotal = round2(bruttoTotal);
-  an.ahvIvEo = round2(an.ahvIvEo);
-  an.alv = round2(an.alv);
-  an.nbu = round2(an.nbu);
-  an.quellenst = round2(an.quellenst);
-  ag.ahvIvEo = round2(ag.ahvIvEo);
-  ag.alv = round2(ag.alv);
-  ag.fak = round2(ag.fak);
-  ag.bu = round2(ag.bu);
-  ag.verw = round2(ag.verw);
+  // Ferienzulage is driven by the employee's Ferienanspruch (4/5/6 weeks),
+  // not by the versioned pay_settings.
+  const vacationPercent = vacationPercentForWeeks(empData?.vacationWeeks ?? 4);
 
+  stundenTotal = round2(stundenTotal);
+  const bruttoStunden   = round5(bruttoStundenRaw);
+  const ferienzulage    = round5(bruttoStundenRaw * vacationPercent / 100);
+  const feiertagszulage = round5(bruttoStundenRaw * e.holidayPercent / 100);
+  const bruttoTotal     = round5(bruttoStunden + ferienzulage + feiertagszulage);
+
+  const an = {
+    ahvIvEo:   round2(bruttoTotal * e.ahvIvEoEmployee / 100),
+    alv:       round2(bruttoTotal * e.alvEmployee / 100),
+    nbu:       nbuApplicable ? round2(bruttoTotal * e.uvgNbuEmployee / 100) : 0,
+    quellenst: round2(bruttoTotal * e.withholdingTax / 100),
+    total: 0
+  };
   an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
-  const netto = round2(bruttoTotal - an.total);
+  const netto = round5(bruttoTotal - an.total);
+
+  // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
+  const ahvIvEoBeitraege = bruttoTotal * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
+  const ag = {
+    ahvIvEo: round2(bruttoTotal * e.ahvIvEoEmployer / 100),
+    alv:     round2(bruttoTotal * e.alvEmployer / 100),
+    fak:     round2(bruttoTotal * e.fakEmployer / 100),
+    bu:      uvgAktivAny ? round2(bruttoTotal * e.uvgBuEmployer / 100) : 0,
+    verw:    round2(ahvIvEoBeitraege * e.adminFeeEmployer / 100),
+    total: 0
+  };
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal, bruttoStunden, ferienzulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
+  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
 }

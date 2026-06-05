@@ -15,7 +15,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "swissqrbill": "^4.3.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

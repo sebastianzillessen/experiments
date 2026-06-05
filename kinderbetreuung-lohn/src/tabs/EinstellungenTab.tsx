@@ -2,21 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useApp } from '../context/AppContext';
 import { versionHasShifts } from '../lib/payroll';
-import { fmtChf, monthLabel } from '../lib/format';
+import { monthLabel } from '../lib/format';
 import { defaultPaySettingsData, normalizeEffectiveMonth } from '../lib/state';
 import type { PaySettingsData } from '../lib/state';
 
 type NumericKey = Exclude<keyof PaySettingsData, 'uvgEnabled'>;
 
 const PS_NUMERIC_FIELDS: { domId: string; key: NumericKey; step: number; label: string }[] = [
-  { domId: 'ps-hourly-rate',       key: 'hourlyRate',       step: 0.01,  label: 'Stundenlohn (CHF, brutto, exkl. Ferienzulage)' },
-  { domId: 'ps-vacation-percent',  key: 'vacationPercent',  step: 0.01,  label: 'Ferienzulage (% auf Bruttostunden, üblich 8.33 %)' },
+  // hourlyRate moved to per-employee employee_wages — only household-wide
+  // statutory/cantonal rates live here now.
+  { domId: 'ps-holiday-percent',   key: 'holidayPercent',   step: 0.01,  label: 'Feiertagszulage (% auf Bruttostunden, ZH üblich 3.59 %)' },
   { domId: 'ps-ahv-employee',      key: 'ahvIvEoEmployee',  step: 0.01,  label: 'AHV/IV/EO Arbeitnehmer' },
   { domId: 'ps-ahv-employer',      key: 'ahvIvEoEmployer',  step: 0.01,  label: 'AHV/IV/EO Arbeitgeber' },
   { domId: 'ps-alv-employee',      key: 'alvEmployee',      step: 0.01,  label: 'ALV Arbeitnehmer' },
   { domId: 'ps-alv-employer',      key: 'alvEmployer',      step: 0.01,  label: 'ALV Arbeitgeber' },
   { domId: 'ps-fak-employer',      key: 'fakEmployer',      step: 0.01,  label: 'FAK Arbeitgeber (Kt. ZH)' },
-  { domId: 'ps-admin-fee-employer',key: 'adminFeeEmployer', step: 0.01,  label: 'Verwaltungskosten Arbeitgeber' },
+  { domId: 'ps-admin-fee-employer',key: 'adminFeeEmployer', step: 0.01,  label: 'Verwaltungskosten (% der AHV/IV/EO-Beiträge)' },
   { domId: 'ps-withholding-tax',   key: 'withholdingTax',   step: 0.01,  label: 'Quellensteuer (VAV, einheitlich 5 %)' },
   { domId: 'ps-uvg-bu-employer',   key: 'uvgBuEmployer',    step: 0.001, label: 'UVG-BU Arbeitgeber (%)' },
   { domId: 'ps-uvg-nbu-employee',  key: 'uvgNbuEmployee',   step: 0.001, label: 'UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)' }
@@ -153,7 +154,7 @@ export function EinstellungenTab() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `kinderbetreuung-lohn-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `salaerli-export-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
@@ -179,7 +180,7 @@ export function EinstellungenTab() {
   }
 
   async function onClearAll() {
-    if (!confirm('Wirklich ALLE Daten (Stammdaten, Einsätze, Sätze) löschen?')) return;
+    if (!confirm('Wirklich ALLE Daten (Stammdaten, Mitarbeitende, Einsätze, Sätze) löschen?')) return;
     if (!confirm('Sicher? Dies kann nicht rückgängig gemacht werden.')) return;
     try {
       await clearAll();
@@ -197,7 +198,7 @@ export function EinstellungenTab() {
     <section id="einstellungen" role="tabpanel" aria-labelledby="tab-einstellungen" tabIndex={0}
       className={activeTab === 'einstellungen' ? 'active' : undefined}>
       <h2>Einstellungen &amp; Beitragssätze</h2>
-      <div className="section-sub">Sätze gelten ab dem gewählten Monatsanfang. Eine Lohnerhöhung oder geänderte SV-Sätze legst du als neue Version „gültig ab" an. Frühere Versionen sind gesperrt, sobald Einsätze in deren Periode liegen.</div>
+      <div className="section-sub">Diese Sätze (Feiertagszulage, Sozialversicherung, UVG, Quellensteuer, Verwaltungskosten) gelten haushaltsweit für alle Mitarbeitenden ab dem gewählten Monatsanfang. Geänderte Sätze (z.&nbsp;B. neue Jahres-Sätze) legst du als neue Version „gültig ab" an; frühere Versionen sind gesperrt, sobald Einsätze in deren Periode liegen. Den <strong>Stundenlohn</strong> legst du pro Person unter „Mitarbeitende" fest.</div>
 
       <div className="card">
         <h3>Versionen</h3>
@@ -210,7 +211,7 @@ export function EinstellungenTab() {
             data.paySettings.map(v => {
               const isLocked = versionHasShifts(data, v);
               const monthYm = v.effectiveMonth.slice(0, 7);
-              const summary = `Stundenlohn CHF ${fmtChf(v.data.hourlyRate)} · Ferien ${v.data.vacationPercent} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
+              const summary = `Feiertage ${v.data.holidayPercent} % · AHV ${v.data.ahvIvEoEmployee} %${v.data.uvgEnabled ? ' · UVG' : ''}`;
               return (
                 <div className="member-row" key={v.id ?? monthYm}>
                   <div className="info-block">
@@ -252,9 +253,9 @@ export function EinstellungenTab() {
         </div>
 
         <div className="card">
-          <h3>Lohn</h3>
+          <h3>Zulagen</h3>
           <div className="grid-2">
-            {PS_NUMERIC_FIELDS.slice(0, 2).map(f => (
+            {PS_NUMERIC_FIELDS.slice(0, 1).map(f => (
               <div key={f.domId}>
                 <label htmlFor={f.domId}>{f.label}</label>
                 <input type="number" id={f.domId} step={f.step} min="0"
@@ -264,12 +265,13 @@ export function EinstellungenTab() {
               </div>
             ))}
           </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Der <strong>Stundenlohn</strong> wird pro Person im Bereich „Mitarbeitende" festgelegt. Der Ferienanspruch (4/5/6 Wochen) wird ebenfalls pro Person dort gewählt. Diese Sätze hier gelten haushaltsweit für alle Mitarbeitenden.</p>
         </div>
 
         <div className="card">
           <h3>Sozialversicherungs-Beitragssätze (%)</h3>
           <div className="grid-3">
-            {PS_NUMERIC_FIELDS.slice(2, 9).map(f => (
+            {PS_NUMERIC_FIELDS.slice(1, 8).map(f => (
               <div key={f.domId}>
                 <label htmlFor={f.domId}>{f.label}</label>
                 <input type="number" id={f.domId} step={f.step} min="0"
@@ -291,7 +293,7 @@ export function EinstellungenTab() {
             <label htmlFor="ps-uvg-enabled">UVG via SVA Zürich abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
           </div>
           <div className="grid-2">
-            {PS_NUMERIC_FIELDS.slice(9).map(f => (
+            {PS_NUMERIC_FIELDS.slice(8).map(f => (
               <div key={f.domId}>
                 <label htmlFor={f.domId}>{f.label}</label>
                 <input type="number" id={f.domId} step={f.step} min="0"

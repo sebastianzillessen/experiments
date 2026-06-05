@@ -1,15 +1,26 @@
 import { useApp } from '../context/AppContext';
 
 export function StammdatenTab() {
-  const { activeTab, data, updateEmployer, updateEmployee } = useApp();
+  const { activeTab, data, updateHouseholdName, updateEmployer } = useApp();
   const er = data.employer;
-  const ee = data.employee;
 
   return (
     <section id="stammdaten" role="tabpanel" aria-labelledby="tab-stammdaten" tabIndex={0}
       className={activeTab === 'stammdaten' ? 'active' : undefined}>
       <h2>Stammdaten</h2>
       <div className="section-sub">Diese Daten erscheinen auf jeder Lohnabrechnung.</div>
+
+      <div className="card">
+        <h3>Haushalt</h3>
+        <div className="grid-2">
+          <div>
+            <label htmlFor="hh-name">Name des Haushalts</label>
+            <input type="text" id="hh-name" placeholder="z.B. Familie Muster"
+              value={data.householdName} onChange={e => updateHouseholdName(e.target.value)} />
+          </div>
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Dieser Name erscheint in Einladungs-E-Mails an weitere Personen.</p>
+      </div>
 
       <div className="card">
         <h3>Arbeitgeber/in (Privathaushalt)</h3>
@@ -20,9 +31,19 @@ export function StammdatenTab() {
               value={er.name} onChange={e => updateEmployer({ name: e.target.value })} />
           </div>
           <div>
-            <label htmlFor="ag-adresse">Adresse</label>
-            <input type="text" id="ag-adresse" placeholder="Bahnhofstrasse 1, 8001 Zürich"
+            <label htmlFor="ag-adresse">Strasse &amp; Nr.</label>
+            <input type="text" id="ag-adresse" placeholder="Bahnhofstrasse 1"
               value={er.address} onChange={e => updateEmployer({ address: e.target.value })} />
+          </div>
+          <div>
+            <label htmlFor="ag-plz">PLZ</label>
+            <input type="text" id="ag-plz" placeholder="8001" inputMode="numeric"
+              value={er.zip} onChange={e => updateEmployer({ zip: e.target.value })} />
+          </div>
+          <div>
+            <label htmlFor="ag-ort">Ort</label>
+            <input type="text" id="ag-ort" placeholder="Zürich"
+              value={er.city} onChange={e => updateEmployer({ city: e.target.value })} />
           </div>
           <div>
             <label htmlFor="ag-abrechnungsnr">SVA Abrechnungs-Nr. (optional)</label>
@@ -32,42 +53,7 @@ export function StammdatenTab() {
         </div>
       </div>
 
-      <div className="card">
-        <h3>Arbeitnehmer/in (Hilfe im Haushalt)</h3>
-        <div className="grid-2">
-          <div>
-            <label htmlFor="an-name">Name</label>
-            <input type="text" id="an-name" placeholder="Erika Beispiel"
-              value={ee.name} onChange={e => updateEmployee({ name: e.target.value })} />
-          </div>
-          <div>
-            <label htmlFor="an-adresse">Adresse</label>
-            <input type="text" id="an-adresse"
-              value={ee.address} onChange={e => updateEmployee({ address: e.target.value })} />
-          </div>
-          <div>
-            <label htmlFor="an-geburtsdatum">Geburtsdatum</label>
-            <input type="date" id="an-geburtsdatum"
-              value={ee.birthDate} onChange={e => updateEmployee({ birthDate: e.target.value })} />
-          </div>
-          <div>
-            <label htmlFor="an-ahvnr">AHV-Nr. (756.xxxx.xxxx.xx)</label>
-            <input type="text" id="an-ahvnr" placeholder="756.0000.0000.00"
-              value={ee.ahvNumber} onChange={e => updateEmployee({ ahvNumber: e.target.value })} />
-          </div>
-          <div>
-            <label htmlFor="an-iban">IBAN für Lohnzahlung</label>
-            <input type="text" id="an-iban" placeholder="CH00 0000 0000 0000 0000 0"
-              value={ee.iban} onChange={e => updateEmployee({ iban: e.target.value })} />
-          </div>
-        </div>
-        <div className="checkbox-row">
-          <input type="checkbox" id="an-8h"
-            checked={ee.weeklyHoursThreshold8h}
-            onChange={e => updateEmployee({ weeklyHoursThreshold8h: e.target.checked })} />
-          <label htmlFor="an-8h">Arbeitet ≥ 8 Stunden pro Woche beim selben Arbeitgeber (Pflicht NBU-Versicherung)</label>
-        </div>
-      </div>
+      <div className="info">Die Stammdaten und der Stundenlohn der einzelnen Mitarbeitenden werden im Bereich <strong>Mitarbeitende</strong> verwaltet.</div>
     </section>
   );
 }

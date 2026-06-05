@@ -2,10 +2,11 @@ import { adminClient, getStackInfo } from './supabase';
 
 export type CreatedUser = { id: string; email: string };
 
-export async function createConfirmedUser(email: string): Promise<CreatedUser> {
+export async function createConfirmedUser(email: string, password?: string): Promise<CreatedUser> {
   const { data, error } = await adminClient().auth.admin.createUser({
     email,
-    email_confirm: true
+    email_confirm: true,
+    ...(password ? { password } : {})
   });
   if (error) throw error;
   return { id: data.user!.id, email: data.user!.email! };

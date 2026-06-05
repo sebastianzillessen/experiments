@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { useApp } from '../context/AppContext';
+import { roleLabel } from '../lib/format';
 
 export function InviteBanner() {
   const { ui, setSyncStatus, refreshSignedIn, hideInviteBanner } = useApp();
@@ -28,7 +29,7 @@ export function InviteBanner() {
   return (
     <div id="invite-banner" className="invite-banner no-print" hidden={!invite}>
       <div className="text" id="invite-text">
-        {invite ? `Du wurdest in „${householdName}“ als ${invite.role} eingeladen.` : ''}
+        {invite ? `Du wurdest in „${householdName}“ als ${roleLabel(invite.role)} eingeladen.` : ''}
       </div>
       <div className="actions">
         <button className="btn btn-small" id="btn-accept-invite" onClick={accept}>Einladung annehmen</button>

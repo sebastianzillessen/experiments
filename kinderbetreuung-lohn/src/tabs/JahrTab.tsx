@@ -2,12 +2,18 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { activePaySettingsFor, berechneAbrechnung } from '../lib/payroll';
 import { fmtChf, fmtNum, monthLabel, round2 } from '../lib/format';
-import { printSection } from '../lib/print';
 import { LIMIT_VEREINFACHT } from '../lib/state';
-import type { AppState, Shift } from '../lib/state';
+import type { AppState, Employee, Shift } from '../lib/state';
+import { ReportEmployeeSelect, reportScope } from './MonatTab';
 
-function Jahresuebersicht({ data, eintraege, jahr }: { data: AppState; eintraege: Shift[]; jahr: number }) {
-  const ee = data.employee;
+export function yearShiftsFor(state: AppState, empId: string | null, jahr: number): Shift[] {
+  return state.shifts.filter(e => e.employeeId === empId && e.date.startsWith(String(jahr)));
+}
+
+function Jahresuebersicht({ data, eintraege, jahr, employee }: {
+  data: AppState; eintraege: Shift[]; jahr: number; employee: Employee | null;
+}) {
+  const ee = employee?.data ?? null;
   const er = data.employer;
   const uvgUsedAnywhere = eintraege.some(x => activePaySettingsFor(data, x.date).uvgEnabled);
 
@@ -19,7 +25,7 @@ function Jahresuebersicht({ data, eintraege, jahr }: { data: AppState; eintraege
     const yyyymm = `${jahr}-${mm}`;
     const monatEintraege = eintraege.filter(x => x.date.startsWith(yyyymm));
     if (!monatEintraege.length) continue;
-    const calc = berechneAbrechnung(data, monatEintraege, ee);
+    const calc = berechneAbrechnung(data, monatEintraege, employee);
     yJahresStunden += calc.stundenTotal;
     yJahresBrutto += calc.bruttoTotal;
     yJahresNetto += calc.netto;
@@ -60,8 +66,8 @@ function Jahresuebersicht({ data, eintraege, jahr }: { data: AppState; eintraege
         </div>
         <div className="party" style={{ textAlign: 'right' }}>
           <div className="label-small">Arbeitnehmer/in</div>
-          <div className="name">{ee.name || <span className="muted">(Stammdaten)</span>}</div>
-          {ee.ahvNumber ? <div className="muted">AHV-Nr.: {ee.ahvNumber}</div> : null}
+          <div className="name">{ee?.name || <span className="muted">(Stammdaten)</span>}</div>
+          {ee?.ahvNumber ? <div className="muted">AHV-Nr.: {ee.ahvNumber}</div> : null}
         </div>
       </div>
 
@@ -114,11 +120,37 @@ function Jahresuebersicht({ data, eintraege, jahr }: { data: AppState; eintraege
 }
 
 export function JahrTab() {
-  const { activeTab, data } = useApp();
+  const { activeTab, data, role, user } = useApp();
   const [yearStr, setYearStr] = useState(() => String(new Date().getFullYear()));
+  const [empSel, setEmpSel] = useState('');
 
   const jahr = Number(yearStr);
-  const eintraege = jahr ? data.shifts.filter(e => e.date.startsWith(String(jahr))) : [];
+  const ownId = data.employees.find(e => e.userId && e.userId === user?.id)?.id ?? null;
+  const scope = reportScope(data, role, ownId, empSel);
+
+  let doc = null;
+  if (jahr) {
+    if (scope.mode === 'one') {
+      doc = !scope.emp ? (
+        <div className="empty-state">Bitte zuerst unter „Mitarbeitende" eine Person anlegen.</div>
+      ) : (
+        <Jahresuebersicht data={data} eintraege={yearShiftsFor(data, scope.emp.id, jahr)} jahr={jahr} employee={scope.emp} />
+      );
+    } else {
+      const emps = scope.emps.filter(e => yearShiftsFor(data, e.id, jahr).length);
+      doc = !emps.length ? (
+        <div className="empty-state">Keine Einsätze im Jahr {jahr} erfasst.</div>
+      ) : (
+        <>
+          {emps.map(emp => (
+            <div className="employee-doc" key={emp.id}>
+              <Jahresuebersicht data={data} eintraege={yearShiftsFor(data, emp.id, jahr)} jahr={jahr} employee={emp} />
+            </div>
+          ))}
+        </>
+      );
+    }
+  }
 
   return (
     <section id="jahr" role="tabpanel" aria-labelledby="tab-jahr" tabIndex={0}
@@ -127,21 +159,21 @@ export function JahrTab() {
       <div className="section-sub">Monatszusammenfassung und Jahres-Lohndeklaration für die SVA Zürich.</div>
 
       <div className="card no-print">
-        <div className="grid-2">
+        <div className="grid-3">
           <div>
             <label htmlFor="j-jahr">Jahr</label>
             <input type="number" id="j-jahr" min="2020" max="2099" step="1"
               value={yearStr} onChange={e => setYearStr(e.target.value)} />
           </div>
+          <ReportEmployeeSelect wrapId="j-employee-wrap" selId="j-employee"
+            data={data} role={role} value={empSel} onChange={setEmpSel} />
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button className="btn" id="btn-print-jahr" onClick={() => printSection('jahr')}>Drucken / als PDF speichern</button>
+            <button className="btn" id="btn-print-jahr" onClick={() => window.print()}>Drucken / als PDF speichern</button>
           </div>
         </div>
       </div>
 
-      <div id="jahr-doc">
-        {jahr ? <Jahresuebersicht data={data} eintraege={eintraege} jahr={jahr} /> : null}
-      </div>
+      <div id="jahr-doc">{doc}</div>
     </section>
   );
 }
