@@ -12,9 +12,13 @@
     "dev:packliste": "npm -w packliste run dev",
     "build:packliste": "npm -w packliste run build",
     "test:kinderbetreuung": "npm test -w kinderbetreuung-lohn",
-    "test:kinderbetreuung:ui": "npm run test:ui -w kinderbetreuung-lohn"
+    "test:kinderbetreuung:ui": "npm run test:ui -w kinderbetreuung-lohn",
+    "hoko:demo": "node hoko-cli/demo-submit.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260520.1"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
   }
 }

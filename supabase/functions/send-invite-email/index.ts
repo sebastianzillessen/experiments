@@ -5,22 +5,30 @@
 // user if they don't exist yet), then sends a German invitation email via
 // Resend.
 //
-// Required env / Supabase secrets:
+// Only one secret is required:
 //   - RESEND_API_KEY       (required) Resend API key
-//   - INVITE_EMAIL_FROM    (recommended) sender, e.g.
-//                          'Lohnabrechnung Kinderbetreuung <noreply@zillessen.dev>'
-//   - APP_URL              (optional)  defaults to the production URL
+// The sender (INVITE_EMAIL_FROM) and the magic-link target (APP_URL) are now
+// code-defined constants below — edit them here and redeploy. They are
+// deliberately NOT read from env, so a stale Supabase secret can't override
+// them (which previously kept the old sender/redirect after a rebrand).
 //
-// The function expects a POST with JSON body { "invite_id": "<uuid>" }.
+// The expected POST body is JSON { "invite_id": "<uuid>" }.
 // Auth: standard Supabase JWT verification is enabled (default).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 
-const APP_URL = Deno.env.get('APP_URL') ?? 'https://zillessen.dev/kinderbetreuung-lohn/';
+// Magic-link target: must also be allowlisted under Supabase Auth → Redirect URLs.
+const APP_URL = 'https://salaerli.zillessen.dev/';
+// Sender: the address domain must stay verified in Resend (zillessen.dev).
+const INVITE_EMAIL_FROM = 'Salärli <noreply@zillessen.dev>';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const INVITE_EMAIL_FROM =
-  Deno.env.get('INVITE_EMAIL_FROM') ??
-  'Lohnabrechnung Kinderbetreuung <onboarding@resend.dev>';
+
+// German labels for the membership roles stored in the DB.
+const ROLE_LABELS: Record<string, string> = {
+  owner: 'Owner',
+  admin: 'Admin',
+  employee: 'Mitarbeitende/r',
+};
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -162,14 +170,23 @@ Deno.serve(async (req) => {
     );
   }
 
-  const actionLink =
-    (linkData as any)?.properties?.action_link ?? (linkData as any)?.action_link;
-  if (!actionLink) {
-    return jsonResponse({ error: 'generateLink returned no action_link' }, 500);
+  // Build a link to the app carrying the OTP token_hash (NOT the Supabase
+  // /verify URL). The app verifies it client-side via verifyOtp, so email
+  // prefetchers / Resend click-tracking that merely GET the page can't spend
+  // the single-use token (avoids "otp_expired" on the real click).
+  const props = (linkData as any)?.properties ?? {};
+  const hashedToken = props.hashed_token;
+  if (!hashedToken) {
+    return jsonResponse({ error: 'generateLink returned no hashed_token' }, 500);
   }
+  const verificationType = props.verification_type ?? 'magiclink';
+  const sep = APP_URL.includes('?') ? '&' : '?';
+  const actionLink =
+    `${APP_URL}${sep}token_hash=${encodeURIComponent(hashedToken)}&type=${encodeURIComponent(verificationType)}`;
 
   // 3. Send the email via Resend.
-  const subject = `Einladung zu „${householdName}" — Lohnabrechnung Kinderbetreuung`;
+  const roleLabel = ROLE_LABELS[invite.role] ?? invite.role;
+  const subject = `Einladung zu „${householdName}" — Salärli`;
   const html = `<!doctype html>
 <html lang="de"><body style="margin:0; padding:0; background:#f5f7fa; font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif; color:#1f2933;">
   <div style="max-width:560px; margin:0 auto; padding:32px 24px;">
@@ -177,7 +194,7 @@ Deno.serve(async (req) => {
     <p style="font-size:15px; line-height:1.5; margin:0 0 14px;">Hallo,</p>
     <p style="font-size:15px; line-height:1.5; margin:0 0 14px;">
       du wurdest in den Haushalt <strong>${escapeHtml(householdName)}</strong>
-      als <strong>${escapeHtml(invite.role)}</strong> in <em>Lohnabrechnung Kinderbetreuung</em> eingeladen.
+      als <strong>${escapeHtml(roleLabel)}</strong> in <em>Salärli</em> eingeladen.
     </p>
     <p style="font-size:15px; line-height:1.5; margin:0 0 24px;">
       Klick den Button — du wirst automatisch angemeldet und kannst die Einladung im Tool annehmen.
@@ -195,7 +212,7 @@ Deno.serve(async (req) => {
     </p>
     <hr style="border:none; border-top:1px solid #e1e6eb; margin:24px 0;">
     <p style="font-size:11px; color:#6b7480; line-height:1.5; margin:0;">
-      Diese Einladung wurde automatisch versandt, weil dich jemand zu einem Haushalt in <em>Lohnabrechnung Kinderbetreuung</em> hinzugefügt hat. Wenn du die Einladung nicht erwartet hast, kannst du diese E-Mail ignorieren.
+      Diese Einladung wurde automatisch versandt, weil dich jemand zu einem Haushalt in <em>Salärli</em> hinzugefügt hat. Wenn du die Einladung nicht erwartet hast, kannst du diese E-Mail ignorieren.
     </p>
   </div>
 </body></html>`;

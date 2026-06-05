@@ -76,6 +76,12 @@ main { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
   margin-bottom: 8px;
 }
 .grid-2:last-child { margin-bottom: 0; }
+/* Always two columns — used for the Stay dates so arrival/departure don't
+   stack on narrow phones (the default auto-fit collapses below ~440px). */
+.grid-tight {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 
 label {
   display: block;

@@ -10,10 +10,11 @@
  *                                 30-day TTL with sliding window)
  *
  * Anything else falls through to the static-asset binding (`env.ASSETS`),
- * which serves the per-app builds from ./_site/. When the request Host
- * header is `hoko.zillessen.dev`, the path is internally rewritten to
- * `/hoko<path>` so the guest mini-app served from _site/hoko/ appears
- * at the subdomain root.
+ * which serves the per-app builds from ./_site/. Host-based rewrites let a
+ * single app appear at a subdomain root:
+ *   * `hoko.zillessen.dev`      → /hoko<path>               (_site/hoko/)
+ *   * `salaerli.zillessen.dev`  → /kinderbetreuung-lohn<path> (Salärli app)
+ * Other hosts (e.g. zillessen.dev) keep serving the experiments overview.
  *
  * `run_worker_first: true` in wrangler.jsonc ensures THIS file runs on
  * every request — otherwise the assets binding short-circuits for paths
@@ -28,11 +29,15 @@
  *   npx wrangler secret put RESEND_API_KEY
  *   npx wrangler secret put HOST_NOTIFY_EMAIL
  *   npx wrangler secret put RESEND_FROM   # e.g. "HotelKontrolle <hoko@zillessen.dev>"
+ *   npx wrangler secret put AIRBNB_ICAL_URL  # optional — enables /api/hoko/airbnb-lookup/:code
  *
  * Without HOKO_KV bound, /api/hoko/* responds 503.
  * Without PACKLISTE_KV bound, /api/packliste/share* responds 503.
  * Static asset serving keeps working regardless.
  */
+
+import * as XLSX from "xlsx";
+import { TEMPLATE_XLT_BASE64 } from "./template";
 
 interface Env {
   ASSETS: Fetcher;
@@ -41,11 +46,21 @@ interface Env {
   RESEND_API_KEY?: string;
   HOST_NOTIFY_EMAIL?: string;
   RESEND_FROM?: string;
+  AIRBNB_ICAL_URL?: string;
 }
 
 const HOKO_HOST = "hoko.zillessen.dev";
 const HOKO_API_PREFIX = "/api/hoko";
 const PACKLISTE_PREFIX = "/api/packliste/share";
+
+// salaerli.zillessen.dev (and its umlaut/punycode form) serve the
+// kinderbetreuung-lohn ("Salärli") app from the subdomain root instead of
+// the experiments overview.
+const SALAERLI_HOSTS = new Set([
+  "salaerli.zillessen.dev",
+  "xn--salrli-dua.zillessen.dev", // salärli.zillessen.dev
+]);
+const SALAERLI_PREFIX = "/kinderbetreuung-lohn";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -70,12 +85,21 @@ export default {
 function serveAssets(request: Request, env: Env, url: URL): Promise<Response> {
   const host = (request.headers.get("host") || url.hostname || "").toLowerCase();
   if (host === HOKO_HOST && !url.pathname.startsWith("/hoko")) {
-    const rewritten = new URL(request.url);
-    rewritten.pathname = `/hoko${url.pathname === "/" ? "/" : url.pathname}`;
-    const rewrittenRequest = new Request(rewritten.toString(), request);
-    return env.ASSETS.fetch(rewrittenRequest);
+    return fetchWithPrefix(request, env, url, "/hoko");
+  }
+  if (SALAERLI_HOSTS.has(host) && !url.pathname.startsWith(SALAERLI_PREFIX)) {
+    return fetchWithPrefix(request, env, url, SALAERLI_PREFIX);
   }
   return env.ASSETS.fetch(request);
+}
+
+// Serve a subdomain's app from a sub-path of _site/ by internally rewriting
+// the request path (so the app appears at the subdomain root). Relative asset
+// requests (e.g. /app.js) are rewritten the same way on the next request.
+function fetchWithPrefix(request: Request, env: Env, url: URL, prefix: string): Promise<Response> {
+  const rewritten = new URL(request.url);
+  rewritten.pathname = `${prefix}${url.pathname === "/" ? "/" : url.pathname}`;
+  return env.ASSETS.fetch(new Request(rewritten.toString(), request));
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +276,26 @@ async function handleHokoApi(
     return jsonResponse({ code: stay.code }, 201);
   }
 
+  // GET /api/hoko/airbnb-lookup/:code — return {ankunft, abreise} for a
+  // reservation code listed in the host's Airbnb iCal feed.
+  const airbnbMatch = url.pathname.match(/^\/api\/hoko\/airbnb-lookup\/([A-Z0-9-]{4,64})$/i);
+  if (request.method === "GET" && airbnbMatch) {
+    if (!env.AIRBNB_ICAL_URL) {
+      return jsonResponse({ error: "Airbnb lookup not configured" }, 503);
+    }
+    const code = airbnbMatch[1].toUpperCase();
+    let map: Record<string, AirbnbStay>;
+    try {
+      map = await getAirbnbLookup(env);
+    } catch (err) {
+      console.error("airbnb lookup failed", err);
+      return jsonResponse({ error: "Airbnb feed fetch failed" }, 502);
+    }
+    const hit = map[code];
+    if (!hit) return jsonResponse({ error: "code not found in Airbnb feed" }, 404);
+    return jsonResponse(hit, 200);
+  }
+
   // GET /api/hoko/:code
   const match = url.pathname.match(/^\/api\/hoko\/([A-Z0-9-]{4,64})$/i);
   if (request.method === "GET" && match) {
@@ -278,6 +322,69 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// ---------------------------------------------------------------------------
+// Airbnb iCal lookup — fetches the host's per-listing calendar export, parses
+// out `<code> -> {ankunft, abreise}` (both DD.MM.YYYY), and caches the result
+// in HOKO_KV for 15 min. Each VEVENT looks like:
+//
+//   DTSTART;VALUE=DATE:20260528
+//   DTEND;VALUE=DATE:20260601
+//   DESCRIPTION:Reservation URL: https://www.airbnb.com/hosting/reservations/de
+//    tails/HMWARWKJDE\nPhone Number (Last 4 Digits): 7633
+//
+// DTEND is the checkout day for Airbnb all-day events, so we map it directly
+// to abreise. iCal line folding (RFC 5545) inserts CRLF+SP inside long lines —
+// we unfold first so the code stays whole.
+// ---------------------------------------------------------------------------
+
+interface AirbnbStay {
+  ankunft: string;
+  abreise: string;
+}
+
+const AIRBNB_CACHE_KEY = "airbnb:ical:v1";
+const AIRBNB_CACHE_TTL = 60 * 15; // 15 min
+
+function parseAirbnbIcal(text: string): Record<string, AirbnbStay> {
+  const unfolded = text.replace(/\r?\n[ \t]/g, "");
+  const out: Record<string, AirbnbStay> = {};
+  const blocks = unfolded.split(/BEGIN:VEVENT/);
+  for (const block of blocks.slice(1)) {
+    const end = block.indexOf("END:VEVENT");
+    if (end === -1) continue;
+    const body = block.slice(0, end);
+    const start = body.match(/DTSTART(?:;[^:\r\n]*)?:(\d{8})/);
+    const stop = body.match(/DTEND(?:;[^:\r\n]*)?:(\d{8})/);
+    const codeMatch = body.match(/\/details\/(HM[A-Z0-9]+)/i);
+    if (!start || !stop || !codeMatch) continue;
+    out[codeMatch[1].toUpperCase()] = {
+      ankunft: yyyymmddToGerman(start[1]),
+      abreise: yyyymmddToGerman(stop[1]),
+    };
+  }
+  return out;
+}
+
+function yyyymmddToGerman(s: string): string {
+  return `${s.slice(6, 8)}.${s.slice(4, 6)}.${s.slice(0, 4)}`;
+}
+
+async function getAirbnbLookup(env: Env): Promise<Record<string, AirbnbStay>> {
+  if (env.HOKO_KV) {
+    const cached = await env.HOKO_KV.get(AIRBNB_CACHE_KEY, "json");
+    if (cached) return cached as Record<string, AirbnbStay>;
+  }
+  const resp = await fetch(env.AIRBNB_ICAL_URL!, { cf: { cacheTtl: 60 } });
+  if (!resp.ok) throw new Error(`Airbnb iCal HTTP ${resp.status}`);
+  const parsed = parseAirbnbIcal(await resp.text());
+  if (env.HOKO_KV) {
+    await env.HOKO_KV.put(AIRBNB_CACHE_KEY, JSON.stringify(parsed), {
+      expirationTtl: AIRBNB_CACHE_TTL,
+    });
+  }
+  return parsed;
+}
+
 function buildNotificationText(stay: StoredStay): string {
   const lines: string[] = [
     "New HotelKontrolle data received.",
@@ -290,7 +397,10 @@ function buildNotificationText(stay: StoredStay): string {
     const iso = g.countryIso ? ` [${g.countryIso}]` : "";
     lines.push(`  ${i + 1}. ${g.lastname}, ${g.firstname} — ${g.country}${iso} — ${g.ausweisart}: ${g.ausweisnummer}`);
   });
-  lines.push("", `To upload locally:  cd hoko-cli && npx tsx upload.ts ${stay.code}`);
+  lines.push(
+    "",
+    `Attached: meldeschein-${stay.code}.xls — upload directly to the Hotelkontrolle portal (Meldescheine importieren).`,
+  );
   return lines.join("\n");
 }
 
@@ -307,9 +417,107 @@ function buildNotificationHtml(stay: StoredStay): string {
 <strong>Stay:</strong> ${escapeHtml(stay.ankunft)} – ${escapeHtml(stay.abreise)}</p>
 <p><strong>Guests (${stay.guests.length}):</strong></p>
 <ol>${rows}</ol>
-<p style="color:#6b7480;font-size:13px">To upload locally:<br>
-<code>cd hoko-cli &amp;&amp; npx tsx upload.ts ${escapeHtml(stay.code)}</code></p>
+<p style="color:#6b7480;font-size:13px">Attached: <code>meldeschein-${escapeHtml(stay.code)}.xls</code> — upload directly to the Hotelkontrolle portal's <em>Meldescheine importieren</em> page.</p>
 </body></html>`;
+}
+
+// Real binary .xls (OLE2/BIFF8) — the hotelkontrolle.zh.ch portal's importer
+// is Apache POI HSSF and is strict about structure: it expects the official
+// ImportFormular template (sheet name "HoKo", 12 columns including the typo
+// "Staatsanghörigkeit ISO" in column I, hidden CodeTable lookup sheet, named
+// ranges, etc.). Instead of building from scratch, we start from the embedded
+// template and only mutate the data rows.
+//
+// Birth-date columns are left blank (the guest form does not collect them).
+// Staatsangehörigkeit (column H) is set to the German country name resolved
+// from the template's CodeTable via the guest's ISO code, falling back to the
+// guest-typed country name so we never write null.
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+let cachedIsoToGerman: Record<string, string> | null = null;
+
+function buildIsoToGermanMap(wb: XLSX.WorkBook): Record<string, string> {
+  if (cachedIsoToGerman) return cachedIsoToGerman;
+  const sheet = wb.Sheets["CodeTable"];
+  const map: Record<string, string> = {};
+  if (sheet && sheet["!ref"]) {
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+    for (let r = 1; r <= range.e.r; r++) {
+      const nameCell = sheet[XLSX.utils.encode_cell({ c: 0, r })];
+      const isoCell = sheet[XLSX.utils.encode_cell({ c: 1, r })];
+      const name = nameCell && nameCell.v != null ? String(nameCell.v) : "";
+      const iso = isoCell && isoCell.v != null ? String(isoCell.v).toUpperCase() : "";
+      if (name && /^[A-Z]{2}$/.test(iso)) map[iso] = name;
+    }
+  }
+  cachedIsoToGerman = map;
+  return map;
+}
+
+function buildMeldescheinXlsBase64(stay: StoredStay): string {
+  const wb = XLSX.read(base64ToBytes(TEMPLATE_XLT_BASE64), { type: "array" });
+  const isoToGerman = buildIsoToGermanMap(wb);
+
+  const src = wb.Sheets["HoKo"];
+  if (!src) throw new Error("HoKo sheet missing from template");
+
+  // Start a fresh sheet keeping only the row-1 headers + sheet-level metadata
+  // (column widths, merges, etc.). Drops the 500+ pre-numbered placeholder
+  // rows so the portal stops at our data.
+  const sheet: XLSX.WorkSheet = {};
+  for (const key of Object.keys(src)) {
+    if (key.startsWith("!")) {
+      (sheet as Record<string, unknown>)[key] = (src as Record<string, unknown>)[key];
+    } else if (XLSX.utils.decode_cell(key).r === 0) {
+      (sheet as Record<string, unknown>)[key] = (src as Record<string, unknown>)[key];
+    }
+  }
+
+  const setStr = (c: number, r: number, v: string) => {
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = { t: "s", v };
+  };
+  const setNum = (c: number, r: number, v: number) => {
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = { t: "n", v };
+  };
+  const setDate = (c: number, r: number, german: string) => {
+    const m = german.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return;
+    const serial = Math.round(
+      (Date.UTC(+m[3], +m[2] - 1, +m[1]) - Date.UTC(1899, 11, 30)) / 86400000,
+    );
+    (sheet as Record<string, XLSX.CellObject>)[XLSX.utils.encode_cell({ c, r })] = {
+      t: "n",
+      v: serial,
+      z: "dd.mm.yyyy",
+    };
+  };
+
+  stay.guests.forEach((g, i) => {
+    const r = i + 1; // row 0 holds headers
+    const iso = (g.countryIso || "").toUpperCase();
+    const country = isoToGerman[iso] || g.country;
+    setNum(0, r, i + 1);            // A Meldeschein Nr.
+    setStr(1, r, "Studio");         // B Zimmernummer
+    setStr(2, r, g.lastname);       // C Familienname
+    setStr(3, r, g.firstname);      // D Vornamen
+    // E/F/G Geboren Tag/Monat/Jahr — left empty (guest form doesn't ask)
+    setStr(7, r, country);          // H Staatsangehörigkeit
+    if (iso) setStr(8, r, iso);     // I Staatsanghörigkeit ISO (template typo preserved)
+    setStr(9, r, g.ausweisnummer);  // J Ausweisnummer
+    setDate(10, r, stay.ankunft);   // K Ankunft  — real date cell, not string
+    setDate(11, r, stay.abreise);   // L Abreise — real date cell, not string
+  });
+
+  sheet["!ref"] = `A1:L${stay.guests.length + 1}`;
+  wb.Sheets["HoKo"] = sheet;
+
+  return XLSX.write(wb, { bookType: "biff8", type: "base64" }) as string;
 }
 
 async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
@@ -328,6 +536,13 @@ async function sendHostNotification(env: Env, stay: StoredStay): Promise<void> {
     subject: `New guest registration — code ${stay.code}`,
     text: buildNotificationText(stay),
     html: buildNotificationHtml(stay),
+    attachments: [
+      {
+        filename: `meldeschein-${stay.code}.xls`,
+        content: buildMeldescheinXlsBase64(stay),
+        content_type: "application/vnd.ms-excel",
+      },
+    ],
   };
 
   const resp = await fetch("https://api.resend.com/emails", {

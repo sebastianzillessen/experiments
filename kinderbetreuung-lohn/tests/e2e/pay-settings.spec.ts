@@ -18,7 +18,9 @@ test.describe('Pay settings versions', () => {
 
     await page.locator('#btn-add-pay-settings').click();
     await page.locator('#ps-month').fill(thisMonth());
-    await page.locator('#ps-hourly-rate').fill('32.50');
+    // The hourly wage is per-employee now; the household-wide version carries the
+    // statutory/cantonal rates. Use the holiday allowance as the distinctive field.
+    await page.locator('#ps-holiday-percent').fill('4.00');
     await page.locator('#btn-save-pay-settings').click();
 
     await expect.poll(async () => {
@@ -35,7 +37,7 @@ test.describe('Pay settings versions', () => {
       .eq('household_id', householdId)
       .single();
     expect(data?.effective_month).toBe(firstOfMonth(thisMonth()));
-    expect(Number(data?.data?.hourlyRate)).toBe(32.5);
+    expect(Number(data?.data?.holidayPercent)).toBe(4);
   });
 
   test('existing shift locks the corresponding pay-settings version', async ({ signedInUser }) => {
@@ -49,22 +51,32 @@ test.describe('Pay settings versions', () => {
         household_id: householdId,
         effective_month: firstOfMonth(month),
         data: {
-          hourlyRate: 30, vacationPercent: 8.33,
+          holidayPercent: 3.59,
           ahvIvEoEmployee: 5.3, ahvIvEoEmployer: 5.3,
           alvEmployee: 1.1, alvEmployer: 1.1,
-          fakEmployer: 1, withholdingTax: 5,
-          adminFeeEmployer: 0.4,
-          uvgEnabled: true, uvgBuEmployer: 0.505, uvgNbuEmployee: 1.47
+          fakEmployer: 1.025, withholdingTax: 5,
+          adminFeeEmployer: 5,
+          uvgEnabled: true, uvgBuEmployer: 0.505, uvgNbuEmployee: 1.432
         }
       })
       .select()
       .single();
     expect(psErr).toBeNull();
 
+    // Every shift now belongs to an employee (shifts.employee_id is NOT NULL),
+    // so seed one and attribute the shift to it.
+    const { data: emp, error: empErr } = await adminClient()
+      .from('employees')
+      .insert({ household_id: householdId, data: { name: 'Test-Mitarbeiter/in' } })
+      .select('id')
+      .single();
+    expect(empErr).toBeNull();
+
     const { error: shiftErr } = await adminClient()
       .from('shifts')
       .insert({
         household_id: householdId,
+        employee_id: emp!.id,
         date: `${month}-15`,
         hours: 4,
         note: 'lock-trigger',
@@ -77,14 +89,13 @@ test.describe('Pay settings versions', () => {
     await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
     await page.locator('#tab-einstellungen').click();
 
-    // List renders the month in locale-formatted form (e.g. "Mai 2026"), so we
-    // check on a stable marker that's also a lock indicator.
-    await expect(page.locator('#pay-settings-list')).toContainText(/Stundenlohn|gesperrt/i, { timeout: 8_000 });
+    // The list shows a lock indicator once a shift falls into the version's period.
+    await expect(page.locator('#pay-settings-list')).toContainText(/gesperrt/i, { timeout: 8_000 });
 
     // Open the edit form for the seeded version.
-    await page.locator(`#pay-settings-list button`).first().click();
+    await page.locator('#pay-settings-list button[data-edit-ps]').first().click();
 
     await expect(page.locator('#ps-locked-warn')).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator('#ps-hourly-rate')).toBeDisabled();
+    await expect(page.locator('#ps-holiday-percent')).toBeDisabled();
   });
 });

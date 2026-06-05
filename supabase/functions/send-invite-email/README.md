@@ -18,29 +18,30 @@ You need a Resend account and a verified sender domain.
 
 1. **Resend account**: <https://resend.com> → API Keys → create one (e.g. `re_xxx`).
 2. **Verify sender domain**: Resend → Domains → add `zillessen.dev` (or any domain you control), copy the SPF / DKIM / DMARC records into your DNS provider, wait for verification.
-3. **Set Supabase function secrets** (one time, from a machine with the Supabase CLI):
+3. **Set the Supabase function secret** (one time, from a machine with the Supabase CLI):
    ```bash
    supabase login   # opens browser
-   supabase secrets set \
-     RESEND_API_KEY=re_xxx \
-     INVITE_EMAIL_FROM='Lohnabrechnung Kinderbetreuung <noreply@zillessen.dev>' \
-     APP_URL=https://zillessen.dev/kinderbetreuung-lohn/ \
-     --project-ref tbknudbcgaarqixweizj
+   supabase secrets set RESEND_API_KEY=re_xxx --project-ref tbknudbcgaarqixweizj
    ```
-   Or set the same three keys in the dashboard: Project → Settings → Edge Functions → Secrets.
+   Or set it in the dashboard: Project → Settings → Edge Functions → Secrets.
+
+   The sender (`INVITE_EMAIL_FROM`) and magic-link target (`APP_URL`) are **code
+   constants** at the top of `index.ts` — change them there and redeploy, not via
+   secrets. (Any leftover `INVITE_EMAIL_FROM` / `APP_URL` secret is ignored and can
+   be removed with `supabase secrets unset INVITE_EMAIL_FROM APP_URL`.)
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are auto-provided by the runtime — don't set them yourself.
 
 ## Deployment
 
-Pushing to `main` triggers `.github/workflows/supabase-functions.yml`, which runs `supabase functions deploy send-invite-email`. No manual step needed once the secrets above are set.
+Pushing to `main` triggers `.github/workflows/supabase-functions.yml`, which runs `supabase functions deploy send-invite-email`. No manual step needed once the `RESEND_API_KEY` secret is set.
 
 ## Troubleshooting
 
 - **400 "RESEND_API_KEY not configured"** — secret missing. Re-run `supabase secrets set ...`.
-- **502 "Resend send failed" with `validation_error`** — sender domain not verified, or `INVITE_EMAIL_FROM` doesn't match a verified domain. Use `onboarding@resend.dev` (Resend's sandbox) only sends to addresses on your Resend account.
+- **502 "Resend send failed" with `validation_error`** — the `INVITE_EMAIL_FROM` constant's domain isn't verified in Resend. (`onboarding@resend.dev` is Resend's sandbox and only delivers to addresses on your own Resend account.)
 - **404 "Invite not found or no access"** — the caller's JWT doesn't include them in the household. RLS rejected the read.
-- **Magic link goes to wrong origin** — set `APP_URL` secret AND make sure the URL is in Supabase Auth → URL Configuration → Redirect URLs.
+- **Magic link goes to wrong origin** — update the `APP_URL` constant in `index.ts` AND make sure the URL is in Supabase Auth → URL Configuration → Redirect URLs.
 
 ## Local invocation
 

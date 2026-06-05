@@ -34,9 +34,14 @@ section h2 .emoji { margin-right:6px; }
 /* FORM */
 .grid-2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
 .grid-3 { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; }
+/* Grid items default to min-width:auto, so a child with a large intrinsic size
+   (notably iOS Safari's native <input type=date>) refuses to shrink and
+   overflows its column. min-width:0 lets the track — and the width:100% input —
+   actually constrain it. */
+.grid-2 > *, .grid-3 > * { min-width:0; }
 label { display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.03em; }
 input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], select, textarea {
-  width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; color:var(--text);
+  width:100%; min-width:0; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; color:var(--text);
 }
 input:focus, select:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(46,110,166,0.15); }
 .checkbox-row { display:flex; align-items:center; gap:8px; margin:10px 0; }
@@ -94,6 +99,14 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .muted { color:var(--muted); }
 .tag { display:inline-block; background:var(--soft); color:var(--primary-dark); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
 
+/* BUILD VERSION FOOTER */
+.app-version { text-align:center; color:var(--muted); font-size:11px; padding:18px 16px 28px; opacity:0.8; }
+
+/* QR-BILL (Swiss QR-Rechnung for the net wage payout) */
+.qr-bill-section { margin-top:24px; border-top:1px solid var(--border); padding-top:16px; }
+.qr-bill-section h4 { color:var(--primary-dark); }
+.qr-bill-section svg, .qr-bill-section img { width:100%; height:auto; max-width:100%; display:block; }
+
 /* AUTH SCREEN */
 .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
 .auth-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:32px; max-width:420px; width:100%; box-shadow:0 4px 12px rgba(0,0,0,0.06); text-align:center; }
@@ -148,19 +161,65 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
   .print-doc .signatures { grid-template-columns: 1fr; gap: 18px; margin-top: 24px; }
   .print-doc .summary-row.netto { font-size: 14px; padding: 6px 10px; }
 
-  /* iOS Safari renders empty/centered text inside <input type=date>;
-     keep alignment consistent with the other inputs. */
-  input[type="date"], input[type="month"] { text-align: left; }
+  /* Stack all form grids into a single column on phones. Two narrow columns
+     were cramped and, worse, iOS Safari's native <input type=date> overflowed
+     its column and overlapped the next field. One column per row avoids any
+     adjacency to overlap. */
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+
+  /* iOS Safari's native date/month control ignores width:100% and renders with
+     centered text; reset the appearance so it behaves like the other inputs. */
+  input[type="date"], input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: left;
+  }
 }
 
-/* PRINT */
+/* PRINT
+   Print the active tab's document in place: hide the app chrome and every other
+   tab via static rules (no DOM moving, no JS class). This works for the browser's
+   native Print and the in-app button alike. Crucially the printed node is never
+   display-flipped (it stays the already-visible active tab) and overflow is
+   forced visible — both are what iOS Safari needs to not print a blank page. */
 @media print {
-  nav, header, .no-print, .user-strip, .sync-status, .invite-banner, button { display:none !important; }
   body, html { background:#fff; }
-  main { max-width:none; padding:0; }
-  section { display:none !important; }
-  section.printing { display:block !important; }
+  body > *:not(main) { display:none !important; }
+  main { max-width:none; margin:0; padding:0; }
+  main > section:not(.active) { display:none !important; }
+  /* Within the active printable tab, keep only the document (drop heading + controls). */
+  #monat > *:not(#monat-doc), #jahr > *:not(#jahr-doc) { display:none !important; }
+  .no-print { display:none !important; }
+  /* iOS Safari: never let a scroll/overflow ancestor clip printed content. */
+  * { overflow:visible !important; }
   .card { border:none; box-shadow:none; padding:0; margin:0; }
   .print-doc { border:none; padding:0; max-width:none; }
-  @page { margin:18mm; }
+  /* Print the QR-bill on its own page, like a real invoice's payment part. */
+  .qr-bill-section { break-before:page; border-top:none; padding-top:0; }
+  /* In the combined "Alle" export, start each *subsequent* employee's payslip on
+     a new page (no leading blank page before the first one). */
+  .employee-doc + .employee-doc { break-before:page; }
+
+  /* Condense the payslip so it usually fits on a single page. iOS prints the
+     mobile layout, so these override the narrow-viewport rules above. */
+  .print-doc { font-size:11px; line-height:1.35; }
+  .print-doc .doc-header { margin-bottom:12px; }
+  .print-doc .doc-title { margin:4px 0 10px; }
+  .print-doc .doc-title h1 { font-size:16px; }
+  .print-doc h4 { margin:9px 0 3px; font-size:12px; }
+  .print-doc table { font-size:10.5px; margin:4px 0; }
+  .print-doc table th, .print-doc table td { padding:2px 6px; }
+  .print-doc .summary-row { padding:1px 0; }
+  .print-doc .summary-row.total { padding-top:4px; margin-top:4px; }
+  .print-doc .summary-row.netto { font-size:13px; padding:5px 10px; margin:5px 0; }
+  .print-doc .footnote { margin-top:12px; }
+  /* Signatures always side by side (left = Arbeitgeber, right = Arbeitnehmer),
+     even on the mobile layout that iOS prints. */
+  .print-doc .signatures { grid-template-columns:1fr 1fr !important; gap:28px; margin-top:22px; }
+  .print-doc .signatures .sig { padding-top:6px; }
+  @page { margin:14mm; }
 }
+
+/* On screen, separate the stacked documents of the combined "Alle" export. */
+.employee-doc + .employee-doc,
+.print-doc + .employee-doc { margin-top:24px; }
