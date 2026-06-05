@@ -47,12 +47,9 @@ build_hoko() {
 
 build_kinderbetreuung() {
   mkdir -p _site/kinderbetreuung-lohn
-  # Whitelist the deployed assets only — the subfolder also holds tests,
-  # package.json, supabase/, node_modules/ etc. that must not ship.
-  cp kinderbetreuung-lohn/index.html \
-     kinderbetreuung-lohn/app.js \
-     kinderbetreuung-lohn/styles.css \
-     _site/kinderbetreuung-lohn/
+  # Build the React app (npm ci is expected to have run at repo root already).
+  npm -w kinderbetreuung-lohn run build
+  cp -r kinderbetreuung-lohn/dist/. _site/kinderbetreuung-lohn/
   # Build version for the footer: short commit hash + UTC build time. Prefer
   # git; fall back to the Cloudflare Workers CI commit env var, then "unknown".
   local commit build_time

@@ -3,3 +3,7 @@ playwright-report/
 test-results/
 config.js
 .env.test
+dist/
+*.tsbuildinfo
+supabase/.branches/
+supabase/.temp/

@@ -1,0 +1,180 @@
+import { useCallback, useEffect, useState } from 'react';
+import { supabase } from '../supabaseClient';
+import { useApp } from '../context/AppContext';
+import type { Member, OpenInvite } from '../context/AppContext';
+import { employeeById, employeeName } from '../lib/payroll';
+import { fmtDate, roleLabel } from '../lib/format';
+
+export function MitgliederTab() {
+  const {
+    activeTab, user, role, data, householdId, setSyncStatus,
+    loadMembersList, reloadInvites, createInvite
+  } = useApp();
+  const [members, setMembers] = useState<Member[] | null>(null); // null = loading
+  const [invites, setInvites] = useState<OpenInvite[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [invEmail, setInvEmail] = useState('');
+  const [invRole, setInvRole] = useState<'employee' | 'admin'>('employee');
+
+  const isOwner = role === 'owner';
+  const active = activeTab === 'mitglieder';
+
+  const reload = useCallback(async () => {
+    setMembers(null);
+    setInvites(null);
+    setLoadError(false);
+    try {
+      const [m, i] = await Promise.all([loadMembersList(), reloadInvites()]);
+      setMembers(m);
+      setInvites(i);
+    } catch (e) {
+      setSyncStatus('error', e);
+      setLoadError(true);
+      setMembers([]);
+      setInvites([]);
+    }
+  }, [loadMembersList, reloadInvites, setSyncStatus]);
+
+  // Mirrors renderMitglieder(): refetch every time the tab is opened.
+  useEffect(() => {
+    if (active && isOwner) reload();
+  }, [active, isOwner, reload]);
+
+  async function removeMember(userId: string) {
+    if (!confirm('Mitglied wirklich entfernen?')) return;
+    setSyncStatus('pending');
+    try {
+      // Privileged delete via security-definer RPC. A direct
+      // delete().select() can't confirm the removal: the memberships
+      // SELECT policy only exposes the caller's own row, so DELETE …
+      // RETURNING comes back empty for another member and looks like a
+      // failure. The RPC enforces owner-only and returns the row count.
+      const { data: count, error } = await supabase.rpc('remove_member', {
+        p_household_id: householdId,
+        p_user_id: userId
+      });
+      if (error) throw error;
+      if (!count) {
+        throw new Error(
+          'Mitglied wurde nicht entfernt — evtl. bereits entfernt oder fehlende Rechte (nur Owner darf Mitglieder entfernen).'
+        );
+      }
+      setSyncStatus('ok');
+      reload();
+    } catch (e) { setSyncStatus('error', e); }
+  }
+
+  async function revokeInvite(id: string) {
+    if (!confirm('Einladung zurückziehen?')) return;
+    setSyncStatus('pending');
+    try {
+      const { error } = await supabase.from('invites').delete().eq('id', id);
+      if (error) throw error;
+      setSyncStatus('ok');
+      reload();
+    } catch (e) { setSyncStatus('error', e); }
+  }
+
+  async function sendInvite() {
+    const email = invEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) { alert('Bitte gültige E-Mail-Adresse eingeben.'); return; }
+    const ok = await createInvite({ email, role: invRole });
+    if (ok) { setInvEmail(''); reload(); }
+  }
+
+  return (
+    <section id="mitglieder" role="tabpanel" aria-labelledby="tab-mitglieder" tabIndex={0}
+      className={activeTab === 'mitglieder' ? 'active' : undefined}>
+      <h2>Mitglieder &amp; Einladungen</h2>
+      <div className="section-sub">Verwalte, wer auf diesen Haushalt Zugriff hat. Nur Owner.</div>
+
+      <div className="card">
+        <h3>Aktive Mitglieder</h3>
+        <div id="members-list">
+          {!isOwner ? (
+            <div className="empty-state">Nur für Owner.</div>
+          ) : loadError ? (
+            <div className="empty-state">Fehler beim Laden.</div>
+          ) : members === null ? (
+            <div className="empty-state">Lade …</div>
+          ) : !members.length ? (
+            <div className="empty-state">Keine Mitglieder.</div>
+          ) : (
+            members.map(m => {
+              const isSelf = m.user_id === user?.id;
+              const showRemove = m.role !== 'owner' && !isSelf;
+              const linkedEmp = data.employees.find(e => e.userId === m.user_id);
+              const empNote = linkedEmp ? ` · Mitarbeiter/in: ${employeeName(linkedEmp)}` : '';
+              return (
+                <div className="member-row" key={m.user_id}>
+                  <div className="info-block">
+                    <div className="name">{m.full_name || m.email}</div>
+                    <div className="meta">{m.email}{isSelf ? ' · du' : ''}{empNote}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className={`role-badge ${m.role}`}>{roleLabel(m.role)}</span>
+                    {showRemove && (
+                      <button className="btn btn-small btn-danger" data-remove={m.user_id}
+                        onClick={() => removeMember(m.user_id)}>Entfernen</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Offene Einladungen</h3>
+        <div id="invites-list">
+          {!isOwner || loadError ? null : invites === null ? (
+            <div className="empty-state">Lade …</div>
+          ) : !invites.length ? (
+            <div className="empty-state">Keine offenen Einladungen.</div>
+          ) : (
+            invites.map(i => {
+              const inviteEmp = i.employeeId ? employeeById(data, i.employeeId) : null;
+              const empNote = inviteEmp ? ` · verknüpft mit ${employeeName(inviteEmp)}` : '';
+              return (
+                <div className="member-row" key={i.id}>
+                  <div className="info-block">
+                    <div className="name">{i.email}</div>
+                    <div className="meta">eingeladen am {fmtDate(i.createdAt.slice(0, 10))}{empNote}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className={`role-badge ${i.role}`}>{roleLabel(i.role)}</span>
+                    <button className="btn btn-small btn-danger" data-revoke={i.id}
+                      onClick={() => revokeInvite(i.id)}>Zurückziehen</button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Person einladen</h3>
+        <div className="info">Die eingeladene Person erhält automatisch eine E-Mail mit einem Anmelde-Link. Nach dem Klick wird sie angemeldet und kann den Haushalt im Tool annehmen. (Klappt das nicht, kannst du den Tool-Link auch manuell teilen.)</div>
+        <div className="grid-2">
+          <div>
+            <label htmlFor="inv-email">E-Mail-Adresse</label>
+            <input type="email" id="inv-email" placeholder="person@example.com"
+              value={invEmail} onChange={e => setInvEmail(e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="inv-role">Rolle</label>
+            <select id="inv-role" value={invRole} onChange={e => setInvRole(e.target.value as 'employee' | 'admin')}>
+              <option value="employee">Mitarbeitende/r — sieht nur Stundenerfassung, nur eigene Einsätze</option>
+              <option value="admin">Admin — sieht und bearbeitet alles, ausser Mitglieder</option>
+            </select>
+          </div>
+        </div>
+        <div className="btn-row">
+          <button className="btn" id="btn-invite" onClick={sendInvite}>Einladen</button>
+        </div>
+      </div>
+    </section>
+  );
+}
