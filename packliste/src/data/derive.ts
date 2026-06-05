@@ -15,11 +15,16 @@ export function calculateQuantity(
   trip: Pick<Trip, "durationDays" | "hasWasher" | "washIntervalDays">,
 ): number {
   if (item.unit === "per_trip") return Math.max(1, item.baseQuantity);
+  // Kleidung wird pro Übernachtung gerechnet, nicht pro Kalendertag: am
+  // Anreisetag trägt man die Sachen von zuhause, daher zählt die Anzahl der
+  // Nächte (durationDays − 1), mindestens 1. So ergibt ein Übernacht-Trip
+  // (20.–21. Juni = 1 Nacht) genau 1 Boxershort statt 2.
+  const nights = Math.max(1, trip.durationDays - 1);
   const canWash =
     trip.hasWasher && item.washable && trip.washIntervalDays != null && trip.washIntervalDays > 0;
   const effectiveDays = canWash
-    ? Math.min(trip.durationDays, trip.washIntervalDays! + 1)
-    : trip.durationDays;
+    ? Math.min(nights, trip.washIntervalDays! + 1)
+    : nights;
   // Frequenz: 1 = täglich, 3 = alle 3 Tage. Wir runden immer auf —
   // 7 Tage / 3 Tage Intervall = 3 Stück (ceil), nicht 2.
   const interval = Math.max(1, item.perDays ?? 1);
