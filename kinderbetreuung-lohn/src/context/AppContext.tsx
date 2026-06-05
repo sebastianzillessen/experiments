@@ -7,7 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { supabase } from '../supabaseClient';
+import { supabase, initialAuthError } from '../supabaseClient';
 import { sanitizeState } from '../lib/state';
 import type { AppState, Employer, Employee, PaySettingsData } from '../lib/state';
 
@@ -292,6 +292,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (async function bootstrap() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
+        // Surface an auth error delivered via the URL hash (expired/used
+        // magic link) — only when no stored session could be restored.
+        if (initialAuthError) setAuthError(initialAuthError);
         showLogin();
         return;
       }
