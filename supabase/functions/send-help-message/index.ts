@@ -24,7 +24,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 
 // Where help requests land. A recipient address does NOT need to be on the
 // Resend-verified domain — only the sender does.
-const SUPPORT_EMAIL = 'salaerli@zillessen.info';
+const SUPPORT_EMAIL = 'salaerli@zillessen.dev';
 // Sender: the address domain must stay verified in Resend (zillessen.dev).
 const HELP_EMAIL_FROM = 'Salärli <noreply@zillessen.dev>';
 const APP_URL = 'https://salaerli.zillessen.dev/';

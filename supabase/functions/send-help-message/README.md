@@ -22,8 +22,7 @@ can return an answer string there and the frontend renders it inline (see
 These are **code constants** at the top of `index.ts` — change them there and
 redeploy (not via secrets):
 
-- `SUPPORT_EMAIL` — recipient of help requests (`salaerli@zillessen.info`). A
-  recipient does **not** need to be on the Resend-verified domain.
+- `SUPPORT_EMAIL` — recipient of help requests (`salaerli@zillessen.dev`).
 - `HELP_EMAIL_FROM` — sender; its domain must stay verified in Resend (`zillessen.dev`).
 - `APP_URL` — used as a fallback "page" link in the email.
 
