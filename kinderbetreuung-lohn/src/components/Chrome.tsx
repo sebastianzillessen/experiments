@@ -12,7 +12,7 @@ export function Header() {
   return (
     <header>
       <h1>Salärli</h1>
-      <div className="sub">Lohnabrechnung für Angestellte im Privathaushalt · Vereinfachte Abrechnung Kanton Zürich · Stand 1.1.2026</div>
+      <div className="sub">Lohnabrechnung für Angestellte im Privathaushalt · Vereinfachte Abrechnung (VAV/VAVplus) · Stand 1.1.2026</div>
     </header>
   );
 }

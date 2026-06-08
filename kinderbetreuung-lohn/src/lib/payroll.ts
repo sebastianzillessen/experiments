@@ -30,6 +30,17 @@ export function activeWageFor(state: AppState, employeeId: string, date: string)
   return rate;
 }
 
+// Newest monthly salary effective on or before `date` (Monatslohn employees); 0 if none.
+export function activeMonthlySalaryFor(state: AppState, employeeId: string, date: string): number {
+  const list = state.wages[employeeId] || [];
+  let salary = 0;
+  for (const w of list) {
+    if (w.effectiveMonth <= date) salary = w.monthlySalary;
+    else break;
+  }
+  return salary;
+}
+
 // True iff a wage version of this employee has shifts inside its effective
 // period (i.e. up to the next version) — then it is locked, like pay_settings.
 export function wageVersionHasShifts(state: AppState, employeeId: string, version: WageVersion): boolean {
@@ -115,32 +126,51 @@ export type Abrechnung = {
 export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: Employee | null): Abrechnung {
   const empData = (employee && employee.data) ? employee.data : null;
   const empId = (employee && employee.id) ? employee.id : null;
-  let stundenTotal = 0, bruttoStundenRaw = 0;
+  const isMonthly = empData?.employmentType === 'monthly';
+
+  let stundenTotal = 0;
+  let bruttoStunden = 0, ferienzulage = 0, feiertagszulage = 0, bruttoTotal = 0;
   let nbuApplicable = false;
   let uvgAktivAny = false;
-  // Active rate set for the month. Defaults cover the empty-shift case; the
-  // loop overwrites it with the (single) version that applies to these shifts.
+  // Active rate set for the month. Defaults cover the empty-entry case; it is
+  // overwritten with the (single) version that applies to these entries.
   let e = defaultPaySettingsData();
 
-  for (const x of shifts) {
-    e = activePaySettingsFor(state, x.date);
-    const hours = Number(x.hours) || 0;
-    const rate = empId ? activeWageFor(state, empId, x.date) : 0;
-    stundenTotal += hours;
-    bruttoStundenRaw += hours * rate;
+  if (isMonthly) {
+    // Monatslohn: the fixed monthly salary IS the gross. Vacation and public
+    // holidays are already included (paid time off), so no Ferien-/Feiertags-
+    // zulage is added. Entries are month markers (hours = null) — there is
+    // normally exactly one per month.
+    const dates = shifts.map(x => x.date).sort((a, b) => a.localeCompare(b));
+    const refDate = dates.length ? dates[dates.length - 1] : null;
+    if (refDate) e = activePaySettingsFor(state, refDate);
+    const salary = (empId && refDate) ? activeMonthlySalaryFor(state, empId, refDate) : 0;
     if (e.uvgEnabled) uvgAktivAny = true;
     if (e.uvgEnabled && empData?.weeklyHoursThreshold8h) nbuApplicable = true;
+    bruttoStunden = round5(salary);
+    bruttoTotal   = round5(salary);
+  } else {
+    let bruttoStundenRaw = 0;
+    for (const x of shifts) {
+      e = activePaySettingsFor(state, x.date);
+      const hours = Number(x.hours) || 0;
+      const rate = empId ? activeWageFor(state, empId, x.date) : 0;
+      stundenTotal += hours;
+      bruttoStundenRaw += hours * rate;
+      if (e.uvgEnabled) uvgAktivAny = true;
+      if (e.uvgEnabled && empData?.weeklyHoursThreshold8h) nbuApplicable = true;
+    }
+
+    // Ferienzulage is driven by the employee's Ferienanspruch (4/5/6 weeks),
+    // not by the versioned pay_settings.
+    const vacationPercent = vacationPercentForWeeks(empData?.vacationWeeks ?? 4);
+
+    stundenTotal     = round2(stundenTotal);
+    bruttoStunden    = round5(bruttoStundenRaw);
+    ferienzulage     = round5(bruttoStundenRaw * vacationPercent / 100);
+    feiertagszulage  = round5(bruttoStundenRaw * e.holidayPercent / 100);
+    bruttoTotal      = round5(bruttoStunden + ferienzulage + feiertagszulage);
   }
-
-  // Ferienzulage is driven by the employee's Ferienanspruch (4/5/6 weeks),
-  // not by the versioned pay_settings.
-  const vacationPercent = vacationPercentForWeeks(empData?.vacationWeeks ?? 4);
-
-  stundenTotal = round2(stundenTotal);
-  const bruttoStunden   = round5(bruttoStundenRaw);
-  const ferienzulage    = round5(bruttoStundenRaw * vacationPercent / 100);
-  const feiertagszulage = round5(bruttoStundenRaw * e.holidayPercent / 100);
-  const bruttoTotal     = round5(bruttoStunden + ferienzulage + feiertagszulage);
 
   const an = {
     ahvIvEo:   round2(bruttoTotal * e.ahvIvEoEmployee / 100),

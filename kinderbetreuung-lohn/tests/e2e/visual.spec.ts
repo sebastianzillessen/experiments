@@ -96,7 +96,7 @@ test.describe('Visual parity', () => {
 
     const { error: profErr } = await admin.from('household_profile').upsert({
       household_id: hh,
-      employer: { name: 'Familie Visual', address: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich', country: 'CH', billingNumber: '123.456' },
+      employer: { name: 'Familie Visual', address: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich', country: 'CH', canton: 'ZH', billingNumber: '123.456' },
       updated_at: new Date().toISOString()
     });
     if (profErr) throw profErr;

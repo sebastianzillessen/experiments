@@ -1,4 +1,5 @@
 import { useApp } from '../context/AppContext';
+import { CANTON_PRESETS, ausgleichskasseLabel } from '../lib/cantons';
 
 export function StammdatenTab() {
   const { activeTab, data, updateHouseholdName, updateEmployer } = useApp();
@@ -46,11 +47,26 @@ export function StammdatenTab() {
               value={er.city} onChange={e => updateEmployer({ city: e.target.value })} />
           </div>
           <div>
-            <label htmlFor="ag-abrechnungsnr">SVA Abrechnungs-Nr. (optional)</label>
-            <input type="text" id="ag-abrechnungsnr" placeholder="von SVA Zürich nach Anmeldung"
+            <label htmlFor="ag-kanton">Kanton</label>
+            <select id="ag-kanton" value={er.canton}
+              onChange={e => updateEmployer({ canton: e.target.value })}>
+              <option value="">– bitte wählen –</option>
+              {CANTON_PRESETS.map(c => (
+                <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ag-abrechnungsnr">Abrechnungs-Nr. (optional)</label>
+            <input type="text" id="ag-abrechnungsnr"
+              placeholder={`von ${ausgleichskasseLabel(er.canton)} nach Anmeldung`}
               value={er.billingNumber} onChange={e => updateEmployer({ billingNumber: e.target.value })} />
           </div>
         </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          Der Kanton bestimmt die zuständige Ausgleichskasse{er.canton ? ` (${ausgleichskasseLabel(er.canton)})` : ''} und liefert
+          Richtwerte für FAK- und Feiertagssatz, die du beim Anlegen einer neuen Beitragssatz-Version übernehmen kannst.
+        </p>
       </div>
 
       <div className="info">Die Stammdaten und der Stundenlohn der einzelnen Mitarbeitenden werden im Bereich <strong>Mitarbeitende</strong> verwaltet.</div>

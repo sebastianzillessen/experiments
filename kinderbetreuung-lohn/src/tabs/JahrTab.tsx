@@ -4,6 +4,7 @@ import { activePaySettingsFor, berechneAbrechnung } from '../lib/payroll';
 import { fmtChf, fmtNum, monthLabel, round2 } from '../lib/format';
 import { LIMIT_VEREINFACHT } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
+import { ausgleichskasseLabel, cantonName } from '../lib/cantons';
 import { ReportEmployeeSelect, reportScope } from './MonatTab';
 
 export function yearShiftsFor(state: AppState, empId: string | null, jahr: number): Shift[] {
@@ -73,7 +74,7 @@ function Jahresuebersicht({ data, eintraege, jahr, employee }: {
 
       <div className="doc-title">
         <h1>Jahresübersicht {jahr}</h1>
-        <div className="period">Vereinfachte Abrechnung Kanton Zürich</div>
+        <div className="period">Vereinfachte Abrechnung{er.canton ? ` Kanton ${cantonName(er.canton)}` : ''}</div>
       </div>
 
       {warnung}
@@ -107,13 +108,13 @@ function Jahresuebersicht({ data, eintraege, jahr, employee }: {
         </tfoot>
       </table>
 
-      <h4>Lohndeklaration SVA Zürich</h4>
+      <h4>Lohndeklaration {ausgleichskasseLabel(er.canton)}</h4>
       <div className="summary-row"><span>Bruttolohnsumme {jahr}</span><span>CHF {fmtChf(yJahresBrutto)}</span></div>
       <div className="summary-row"><span>Total Arbeitgeberbeiträge</span><span>CHF {fmtChf(yJahresAG)}</span></div>
       <div className="summary-row total"><span>Total Arbeitgeberkosten</span><span>CHF {fmtChf(agKostenTotal)}</span></div>
 
       <div className="info" style={{ marginTop: 14 }}>
-        Den Bruttolohn von <strong>CHF {fmtChf(yJahresBrutto)}</strong> bei der SVA Zürich als Lohndeklaration {jahr} einreichen (Frist üblicherweise Ende Januar {jahr + 1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge{uvgUsedAnywhere ? ', UVG-Prämien' : ''} und Quellensteuer.
+        Den Bruttolohn von <strong>CHF {fmtChf(yJahresBrutto)}</strong> bei der {ausgleichskasseLabel(er.canton)} als Lohndeklaration {jahr} einreichen (Frist üblicherweise Ende Januar {jahr + 1}). Die Ausgleichskasse stellt anschliessend die Schlussrechnung über Sozialversicherungsbeiträge{uvgUsedAnywhere ? ', UVG-Prämien' : ''} und Quellensteuer.
       </div>
     </div>
   );
@@ -156,7 +157,7 @@ export function JahrTab() {
     <section id="jahr" role="tabpanel" aria-labelledby="tab-jahr" tabIndex={0}
       className={activeTab === 'jahr' ? 'active' : undefined}>
       <h2>Jahresübersicht</h2>
-      <div className="section-sub">Monatszusammenfassung und Jahres-Lohndeklaration für die SVA Zürich.</div>
+      <div className="section-sub">Monatszusammenfassung und Jahres-Lohndeklaration für die {ausgleichskasseLabel(data.employer.canton)}.</div>
 
       <div className="card no-print">
         <div className="grid-3">
