@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { useApp } from '../context/AppContext';
 import { currentStepIndex, isAdminRole, onboardingSteps } from '../lib/onboarding';
+import { useDevFlags } from '../lib/devtools';
 
 // Per-user, per-tutorial dismissal flag persisted in localStorage. Keyed by the
 // user id so a shared device shows each person their own tutorial state.
@@ -33,13 +34,18 @@ function useDismissed(user: User | null, kind: string): [boolean, () => void] {
 
 export function OnboardingBanner() {
   const { role, data, user, activeTab, showTab } = useApp();
+  const { forceAdminOnboarding } = useDevFlags();
   const [dismissed, dismiss] = useDismissed(user, 'admin-setup');
-
-  if (!isAdminRole(role) || dismissed) return null;
 
   const steps = onboardingSteps(data);
   const currentIdx = currentStepIndex(steps);
-  if (currentIdx === -1) return null; // all steps complete — nothing to show
+
+  // Normal gating: only admins, only until dismissed or all steps done. The
+  // developer menu can force the banner on for testing on existing accounts.
+  if (!forceAdminOnboarding) {
+    if (!isAdminRole(role) || dismissed) return null;
+    if (currentIdx === -1) return null; // all steps complete — nothing to show
+  }
 
   const doneCount = steps.filter(s => s.done).length;
 
@@ -48,9 +54,13 @@ export function OnboardingBanner() {
       <div className="onboarding" role="region" aria-label="Erste Schritte">
         <div className="onboarding-head">
           <h3>👋 Willkommen bei Salärli — so richtest du deinen Haushalt ein</h3>
-          <button type="button" className="onboarding-dismiss" onClick={dismiss}>
-            Tutorial ausblenden
-          </button>
+          {forceAdminOnboarding ? (
+            <span className="onboarding-preview-badge">Developer-Vorschau</span>
+          ) : (
+            <button type="button" className="onboarding-dismiss" onClick={dismiss}>
+              Tutorial ausblenden
+            </button>
+          )}
         </div>
         <p className="onboarding-intro">
           Du hast deinen Haushalt angelegt. In {steps.length} Schritten ist alles startklar
@@ -95,18 +105,25 @@ export function OnboardingBanner() {
 // explaining how to log their hours. Disappears once dismissed.
 export function EmployeeTutorial() {
   const { role, user } = useApp();
+  const { forceEmployeeTutorial } = useDevFlags();
   const [dismissed, dismiss] = useDismissed(user, 'employee-shifts');
 
-  if (role !== 'employee' || dismissed) return null;
+  // Normal gating: only employees, only until dismissed. The developer menu can
+  // force it on so any account can preview it.
+  if (!forceEmployeeTutorial && (role !== 'employee' || dismissed)) return null;
 
   return (
     <div className="onboarding no-print" role="region" aria-label="Tutorial Stundenerfassung"
       style={{ marginTop: 0 }}>
       <div className="onboarding-head">
         <h3>👋 Willkommen! So erfasst du deine Stunden</h3>
-        <button type="button" className="onboarding-dismiss" onClick={dismiss}>
-          Verstanden
-        </button>
+        {forceEmployeeTutorial ? (
+          <span className="onboarding-preview-badge">Developer-Vorschau</span>
+        ) : (
+          <button type="button" className="onboarding-dismiss" onClick={dismiss}>
+            Verstanden
+          </button>
+        )}
       </div>
       <p className="onboarding-intro">
         Du gehörst jetzt zum Haushalt. Erfasse jeden Einsatz mit wenigen Klicks im Feld
