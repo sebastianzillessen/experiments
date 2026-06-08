@@ -44,8 +44,8 @@ input[type="text"], input[type="number"], input[type="date"], input[type="month"
   width:100%; min-width:0; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; color:var(--text);
 }
 input:focus, select:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(46,110,166,0.15); }
-.checkbox-row { display:flex; align-items:center; gap:8px; margin:10px 0; }
-.checkbox-row input { width:auto; }
+.checkbox-row { display:flex; align-items:flex-start; gap:10px; margin:10px 0; }
+.checkbox-row input { width:20px; height:20px; flex:0 0 auto; margin-top:1px; accent-color:var(--primary); cursor:pointer; }
 .checkbox-row label { margin:0; text-transform:none; font-size:14px; color:var(--text); font-weight:400; letter-spacing:0; }
 
 /* BUTTONS */
@@ -221,6 +221,9 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
     appearance: none;
     text-align: left;
   }
+
+  /* Bigger, easier-to-tap checkboxes on phones. */
+  .checkbox-row input { width:22px; height:22px; }
 }
 
 /* PRINT
