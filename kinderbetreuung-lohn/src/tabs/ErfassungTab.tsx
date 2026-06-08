@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { activeEmployees, activeWageFor, employeeById, employeeName, ownEmployee } from '../lib/payroll';
-import { fmtChf, fmtDate, fmtNum, round2 } from '../lib/format';
+import { activeEmployees, activeMonthlySalaryFor, activeWageFor, employeeById, employeeName, ownEmployee } from '../lib/payroll';
+import { fmtChf, fmtDate, fmtNum, monthLabel, round2 } from '../lib/format';
+import { normalizeEffectiveMonth } from '../lib/state';
 import { EmployeeTutorial } from '../components/Onboarding';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function currentMonth(): string {
+  return new Date().toISOString().slice(0, 7);
 }
 
 export function ErfassungTab() {
@@ -16,6 +21,7 @@ export function ErfassungTab() {
   const [date, setDate] = useState(todayIso);
   const [hoursStr, setHoursStr] = useState('');
   const [note, setNote] = useState('');
+  const [monthStr, setMonthStr] = useState(currentMonth);
 
   const userId = user ? user.id : null;
   const own = ownEmployee(data, userId);
@@ -24,6 +30,12 @@ export function ErfassungTab() {
   // Employee chooser for the "new shift" form. Hidden when an employee role is
   // logged in (pinned to themselves) or the household has only one employee.
   const showChooser = role !== 'employee' && actives.length > 1;
+
+  // The employee the entry form currently targets (drives hourly vs. Monatslohn UI).
+  const formEmp = role === 'employee'
+    ? own
+    : (employeeById(data, selectedEmployeeId) || (actives.length === 1 ? actives[0] : null));
+  const formMonthly = formEmp?.data.employmentType === 'monthly';
 
   // Employee role: only their own shifts (by linked employee, or self-entered).
   const visible = role === 'employee'
@@ -61,8 +73,28 @@ export function ErfassungTab() {
     setNote('');
   }
 
-  const totalH = visible.reduce((s, e) => s + e.hours, 0);
-  const totalB = round2(visible.reduce((s, e) => s + e.hours * (e.employeeId ? activeWageFor(data, e.employeeId, e.date) : 0), 0));
+  // Monatslohn: confirm a month (a NULL-hours marker shift). No hours entry.
+  async function onAddMonth() {
+    if (!householdId) { alert('Nicht angemeldet.'); return; }
+    const month = normalizeEffectiveMonth(monthStr);
+    if (!month) { alert('Bitte einen gültigen Monat wählen.'); return; }
+    const employeeId = formEmp?.id ?? null;
+    if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
+    if (data.shifts.some(s => s.employeeId === employeeId && s.date === month)) {
+      alert('Dieser Monat wurde für diese Person bereits erfasst.');
+      return;
+    }
+    await addShift({ date: month, hours: null, note: note.trim(), employeeId });
+    setNote('');
+  }
+
+  // Hours sum ignores Monatslohn markers (hours === null); Betrag includes both
+  // hourly amounts and monthly salaries.
+  const totalH = visible.reduce((s, e) => s + (e.hours ?? 0), 0);
+  const totalB = round2(visible.reduce((s, e) => {
+    if (e.hours == null) return s + (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0);
+    return s + e.hours * (e.employeeId ? activeWageFor(data, e.employeeId, e.date) : 0);
+  }, 0));
   const totalColspan = showEmployee ? 3 : 2;
 
   return (
@@ -74,7 +106,7 @@ export function ErfassungTab() {
       <EmployeeTutorial />
 
       <div className="card">
-        <h3>Neuer Einsatz</h3>
+        <h3>{formMonthly ? 'Monat erfassen' : 'Neuer Einsatz'}</h3>
         <div id="e-employee-wrap" hidden={!showChooser} style={{ marginBottom: 12 }}>
           <label htmlFor="e-employee">Mitarbeiter/in</label>
           <select id="e-employee" value={selectedEmployeeId || ''}
@@ -84,25 +116,47 @@ export function ErfassungTab() {
             ))}
           </select>
         </div>
-        <div className="grid-3">
-          <div>
-            <label htmlFor="e-datum">Datum</label>
-            <input type="date" id="e-datum" value={date} onChange={e => setDate(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="e-stunden">Stunden</label>
-            <input type="number" id="e-stunden" step="0.25" min="0" placeholder="z.B. 4.5"
-              value={hoursStr} onChange={e => setHoursStr(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="e-notiz">Notiz (optional)</label>
-            <input type="text" id="e-notiz" placeholder="z.B. Reinigung 14–17 Uhr"
-              value={note} onChange={e => setNote(e.target.value)} />
-          </div>
-        </div>
-        <div className="btn-row">
-          <button className="btn" id="btn-add" onClick={onAdd}>Einsatz hinzufügen</button>
-        </div>
+        {formMonthly ? (
+          <>
+            <div className="info" style={{ marginBottom: 12 }}>Monatslohn-Anstellung: bestätige den Monat, der abgerechnet werden soll. Es werden keine Stunden erfasst.</div>
+            <div className="grid-3">
+              <div>
+                <label htmlFor="e-monat">Monat</label>
+                <input type="month" id="e-monat" value={monthStr} onChange={e => setMonthStr(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="e-notiz-m">Notiz (optional)</label>
+                <input type="text" id="e-notiz-m" placeholder="z.B. Vollzeit"
+                  value={note} onChange={e => setNote(e.target.value)} />
+              </div>
+            </div>
+            <div className="btn-row">
+              <button className="btn" id="btn-add-month" onClick={onAddMonth}>Monat bestätigen</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid-3">
+              <div>
+                <label htmlFor="e-datum">Datum</label>
+                <input type="date" id="e-datum" value={date} onChange={e => setDate(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="e-stunden">Stunden</label>
+                <input type="number" id="e-stunden" step="0.25" min="0" placeholder="z.B. 4.5"
+                  value={hoursStr} onChange={e => setHoursStr(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="e-notiz">Notiz (optional)</label>
+                <input type="text" id="e-notiz" placeholder="z.B. Reinigung 14–17 Uhr"
+                  value={note} onChange={e => setNote(e.target.value)} />
+              </div>
+            </div>
+            <div className="btn-row">
+              <button className="btn" id="btn-add" onClick={onAdd}>Einsatz hinzufügen</button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="card">
@@ -125,16 +179,19 @@ export function ErfassungTab() {
               </thead>
               <tbody>
                 {visible.map(e => {
-                  const lohn = e.employeeId ? activeWageFor(data, e.employeeId, e.date) : 0;
-                  const betrag = round2(e.hours * lohn);
+                  const isMonth = e.hours == null;
+                  const lohn = (!isMonth && e.employeeId) ? activeWageFor(data, e.employeeId, e.date) : 0;
+                  const betrag = isMonth
+                    ? (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0)
+                    : round2((e.hours ?? 0) * lohn);
                   const canDelete = role !== 'employee' || (own && e.employeeId === own.id) || e.entered_by === userId;
                   return (
                     <tr key={e.id}>
-                      <td>{fmtDate(e.date)}</td>
+                      <td>{isMonth ? monthLabel(e.date.slice(0, 7)) : fmtDate(e.date)}</td>
                       {showEmployee && <td>{empLabel(e.employeeId)}</td>}
                       <td>{e.note ? e.note : <span className="muted">–</span>}</td>
-                      <td className="num">{fmtNum(e.hours)}</td>
-                      <td className="num">CHF {fmtChf(lohn)}</td>
+                      <td className="num">{isMonth ? 'Monat' : fmtNum(e.hours ?? 0)}</td>
+                      <td className="num">{isMonth ? '–' : `CHF ${fmtChf(lohn)}`}</td>
                       <td className="num">CHF {fmtChf(betrag)}</td>
                       <td className="actions">
                         {canDelete && (

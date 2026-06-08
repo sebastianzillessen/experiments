@@ -1,5 +1,7 @@
 // Verbatim port of the defaults + sanitization from the vanilla app.js.
 
+import { cantonPreset } from './cantons';
+
 export type PaySettingsData = {
   holidayPercent: number;
   ahvIvEoEmployee: number;
@@ -23,7 +25,9 @@ export type PaySettingsVersion = {
 export type Shift = {
   id: string;
   date: string; // ISO "YYYY-MM-DD"
-  hours: number;
+  // Hours worked for an hourly employee. NULL marks a Monatslohn month entry
+  // (the month "to be paid"), which carries no hours of its own.
+  hours: number | null;
   note: string;
   entered_by: string;
   employeeId: string | null;
@@ -35,8 +39,13 @@ export type Employer = {
   zip: string;
   city: string;
   country: string;
+  canton: string; // 2-letter canton code (e.g. "ZH"); '' when not yet chosen
   billingNumber: string;
 };
+
+// Employment model: paid by the hour (shifts × hourly rate) or a fixed monthly
+// salary (no hours; vacation/holidays included in the salary).
+export type EmploymentType = 'hourly' | 'monthly';
 
 // Stammdaten of a single employee (same shape as the old household_profile.employee).
 export type EmployeeData = {
@@ -50,6 +59,7 @@ export type EmployeeData = {
   iban: string;
   weeklyHoursThreshold8h: boolean;
   vacationWeeks: number; // 4 | 5 | 6
+  employmentType: EmploymentType;
 };
 
 export type Employee = {
@@ -59,11 +69,14 @@ export type Employee = {
   archivedAt: string | null;
 };
 
-// Versioned hourly wage of one employee (newest effective_month wins per date).
+// Versioned wage of one employee (newest effective_month wins per date). An
+// hourly employee carries `hourlyRate`; a Monatslohn employee carries
+// `monthlySalary`. Exactly one is meaningful per the employee's employmentType.
 export type WageVersion = {
   id: string | null;
   effectiveMonth: string; // "YYYY-MM-01"
   hourlyRate: number;
+  monthlySalary: number;
 };
 
 export type AppState = {
@@ -85,12 +98,16 @@ export function vacationPercentForWeeks(weeks: number): number {
   return VACATION_WEEKS_PERCENT[weeks] ?? VACATION_WEEKS_PERCENT[4];
 }
 
-export function defaultPaySettingsData(): PaySettingsData {
+// Federal base rates (uniform across all cantons). The two canton-dependent
+// inputs (holidayPercent, fakEmployer) carry the Zürich defaults so callers that
+// pass no canton keep the historical ZH behaviour exactly.
+export function defaultPaySettingsData(canton?: string): PaySettingsData {
+  const preset = cantonPreset(canton);
   return {
-    holidayPercent: 3.59,    // Feiertagsentschädigung: 3.59 % entspricht 9 ZH-Feiertagen (NAV Hauswirtschaft)
+    holidayPercent: preset ? preset.holidayPercent : 3.59, // Feiertagsentschädigung; 3.59 % = 9 ZH-Feiertage (NAV Hauswirtschaft)
     ahvIvEoEmployee: 5.30, ahvIvEoEmployer: 5.30,
     alvEmployee: 1.10,     alvEmployer: 1.10,
-    fakEmployer: 1.025,
+    fakEmployer: preset ? preset.fakEmployer : 1.025, // kantonal — Richtwert, editierbar
     withholdingTax: 5.00,
     adminFeeEmployer: 5.00,  // Verwaltungskosten: % der AHV/IV/EO-Beiträge (AN + AG)
     uvgEnabled: true,
@@ -132,7 +149,8 @@ export function sanitizeEmployeeData(eeRaw: unknown): EmployeeData {
     ahvNumber:      asString(ee.ahvNumber),
     iban:           asString(ee.iban),
     weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
-    vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4
+    vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4,
+    employmentType: ee.employmentType === 'monthly' ? 'monthly' : 'hourly'
   };
 }
 
@@ -143,7 +161,12 @@ export function sanitizeWageList(arr: unknown): WageVersion[] {
         const ww = w as Record<string, unknown>;
         const effectiveMonth = normalizeEffectiveMonth(ww.effectiveMonth);
         if (!effectiveMonth) return null;
-        return { id: asString(ww.id) || null, effectiveMonth, hourlyRate: asNumber(ww.hourlyRate, 0) };
+        return {
+          id: asString(ww.id) || null,
+          effectiveMonth,
+          hourlyRate: asNumber(ww.hourlyRate, 0),
+          monthlySalary: asNumber(ww.monthlySalary, 0)
+        };
       }).filter((w): w is WageVersion => w !== null)
         .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
     : [];
@@ -210,6 +233,7 @@ export function sanitizeState(rawInput: unknown): AppState {
       zip:            asString(er.zip),
       city:           asString(er.city),
       country:        asString(er.country) || 'CH',
+      canton:         asString(er.canton),
       billingNumber:  asString(er.billingNumber)
     },
     employees,
@@ -219,9 +243,19 @@ export function sanitizeState(rawInput: unknown): AppState {
       ? (raw.shifts as unknown[]).map((x): Shift | null => {
           if (!x || typeof x !== 'object') return null;
           const xx = x as Record<string, unknown>;
-          const hours = asNumber(xx.hours, NaN);
           const date = asString(xx.date);
-          if (!date || !Number.isFinite(hours) || hours <= 0) return null;
+          if (!date) return null;
+          // A Monatslohn month entry carries no hours (null). Hourly shifts must
+          // have a positive number of hours; anything else is dropped.
+          const isMonthMarker = xx.hours === null || xx.hours === undefined || xx.hours === '';
+          let hours: number | null;
+          if (isMonthMarker) {
+            hours = null;
+          } else {
+            const h = asNumber(xx.hours, NaN);
+            if (!Number.isFinite(h) || h <= 0) return null;
+            hours = h;
+          }
           return {
             id: asString(xx.id),
             date, hours,

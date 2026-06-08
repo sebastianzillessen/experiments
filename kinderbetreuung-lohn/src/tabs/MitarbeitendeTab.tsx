@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import { employeeById, employeeName, wageVersionHasShifts } from '../lib/payroll';
 import { fmtChf, monthLabel } from '../lib/format';
 import { normalizeEffectiveMonth, sanitizeEmployeeData } from '../lib/state';
-import type { Employee, EmployeeData } from '../lib/state';
+import type { Employee, EmployeeData, EmploymentType } from '../lib/state';
+import { cantonPreset } from '../lib/cantons';
 
 type MitUi = { mode: 'list'; empId: null } | { mode: 'add'; empId: null } | { mode: 'edit'; empId: string };
 
@@ -12,13 +13,15 @@ type FormFields = {
   name: string; address: string; zip: string; city: string;
   birthDate: string; ahvNumber: string; iban: string;
   vacationWeeks: number; weeklyHoursThreshold8h: boolean;
+  employmentType: EmploymentType;
 };
 
 function fieldsFrom(d: EmployeeData): FormFields {
   return {
     name: d.name, address: d.address, zip: d.zip, city: d.city,
     birthDate: d.birthDate, ahvNumber: d.ahvNumber, iban: d.iban,
-    vacationWeeks: d.vacationWeeks, weeklyHoursThreshold8h: d.weeklyHoursThreshold8h
+    vacationWeeks: d.vacationWeeks, weeklyHoursThreshold8h: d.weeklyHoursThreshold8h,
+    employmentType: d.employmentType
   };
 }
 
@@ -78,18 +81,19 @@ export function MitarbeitendeTab() {
     await updateEmployee(emp.id!, { archived_at: archive ? new Date().toISOString() : null });
   }
 
-  async function onWageAdd(empId: string) {
+  async function onWageAdd(empId: string, kind: EmploymentType) {
     setWageError(null);
+    const monthly = kind === 'monthly';
     const month = normalizeEffectiveMonth(wageMonth);
     const rate = Number(wageRate);
     if (!month) { setWageError('Bitte einen gültigen Monat wählen.'); return; }
-    if (!Number.isFinite(rate) || rate < 0) { setWageError('Bitte einen gültigen Stundenlohn eingeben.'); return; }
+    if (!Number.isFinite(rate) || rate < 0) { setWageError(monthly ? 'Bitte einen gültigen Monatslohn eingeben.' : 'Bitte einen gültigen Stundenlohn eingeben.'); return; }
     if ((data.wages[empId] || []).some(w => w.effectiveMonth === month)) { setWageError('Für diesen Monat existiert bereits eine Lohn-Version.'); return; }
     if (data.shifts.some(s => s.employeeId === empId && s.date >= month)) {
       setWageError('Es existieren bereits Einsätze am oder nach diesem Monat — der Lohn würde rückwirkend gelten. Bitte späteren Monat wählen.');
       return;
     }
-    const ok = await addWage(empId, month, rate);
+    const ok = await addWage(empId, month, rate, kind);
     if (ok) { setWageMonth(''); setWageRate(''); }
   }
 
@@ -118,6 +122,9 @@ export function MitarbeitendeTab() {
   const showForm = mitUi.mode === 'add' || (mitUi.mode === 'edit' && !!editingEmp);
   const linked = !!(editingEmp && editingEmp.userId);
   const wages = editingEmp?.id ? (data.wages[editingEmp.id] || []) : [];
+  const editingMonthly = editingEmp?.data.employmentType === 'monthly';
+  const wageKind: EmploymentType = editingMonthly ? 'monthly' : 'hourly';
+  const minWage = cantonPreset(data.employer.canton)?.minWageChf ?? 0;
   const pendingInvite = editingEmp?.id ? openInvites.find(i => i.employeeId === editingEmp.id) : null;
 
   return (
@@ -175,6 +182,14 @@ export function MitarbeitendeTab() {
                     <div><label htmlFor="emp-f-ahv">AHV-Nr.</label><input type="text" id="emp-f-ahv" placeholder="756.0000.0000.00" value={fields.ahvNumber} onChange={e => setFields(f => ({ ...f, ahvNumber: e.target.value }))} /></div>
                     <div><label htmlFor="emp-f-iban">IBAN für Lohnzahlung</label><input type="text" id="emp-f-iban" placeholder="CH00 0000 0000 0000 0000 0" value={fields.iban} onChange={e => setFields(f => ({ ...f, iban: e.target.value }))} /></div>
                     <div>
+                      <label htmlFor="emp-f-employment">Anstellungsart</label>
+                      <select id="emp-f-employment" value={fields.employmentType}
+                        onChange={e => setFields(f => ({ ...f, employmentType: e.target.value === 'monthly' ? 'monthly' : 'hourly' }))}>
+                        <option value="hourly">Stundenlohn</option>
+                        <option value="monthly">Monatslohn</option>
+                      </select>
+                    </div>
+                    <div>
                       <label htmlFor="emp-f-vacation">Ferienanspruch</label>
                       <select id="emp-f-vacation" value={String(fields.vacationWeeks)}
                         onChange={e => setFields(f => ({ ...f, vacationWeeks: Number(e.target.value) || 4 }))}>
@@ -184,6 +199,11 @@ export function MitarbeitendeTab() {
                       </select>
                     </div>
                   </div>
+                  {fields.employmentType === 'monthly' && (
+                    <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                      Monatslohn: feste monatliche Auszahlung. Ferien und Feiertage sind im Lohn enthalten (keine separate Zulage). Die Person erfasst keine Stunden — die Monate werden unter „Stundenerfassung" bestätigt.
+                    </p>
+                  )}
                   <div className="checkbox-row">
                     <input type="checkbox" id="emp-f-8h" checked={fields.weeklyHoursThreshold8h}
                       onChange={e => setFields(f => ({ ...f, weeklyHoursThreshold8h: e.target.checked }))} />
@@ -197,32 +217,33 @@ export function MitarbeitendeTab() {
 
                 {mitUi.mode === 'edit' && editingEmp?.id && (
                   <div className="card">
-                    <h3>Stundenlohn (versioniert)</h3>
-                    <div className="section-sub">Eine Lohnerhöhung legst du als neue Version „gültig ab" an. Frühere Versionen sind gesperrt, sobald Einsätze in deren Periode liegen.</div>
+                    <h3>{editingMonthly ? 'Monatslohn (versioniert)' : 'Stundenlohn (versioniert)'}</h3>
+                    <div className="section-sub">Eine Lohnerhöhung legst du als neue Version „gültig ab" an. Frühere Versionen sind gesperrt, sobald {editingMonthly ? 'erfasste Monate' : 'Einsätze'} in deren Periode liegen.</div>
                     {!wages.length ? (
-                      <div className="empty-state">Noch kein Stundenlohn hinterlegt.</div>
+                      <div className="empty-state">{editingMonthly ? 'Noch kein Monatslohn hinterlegt.' : 'Noch kein Stundenlohn hinterlegt.'}</div>
                     ) : (
                       wages.map(w => {
                         const locked = wageVersionHasShifts(data, editingEmp.id!, w);
+                        const amount = editingMonthly ? w.monthlySalary : w.hourlyRate;
                         return (
                           <div className="member-row" key={w.id}>
                             <div className="info-block">
                               <div className="name">ab {monthLabel(w.effectiveMonth.slice(0, 7))}</div>
-                              <div className="meta">CHF {fmtChf(w.hourlyRate)} / Stunde {locked ? '· 🔒 gesperrt (Einsätze vorhanden)' : ''}</div>
+                              <div className="meta">CHF {fmtChf(amount)} {editingMonthly ? '/ Monat' : '/ Stunde'} {locked ? '· 🔒 gesperrt (Einträge vorhanden)' : ''}</div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               {!locked && (
                                 <>
                                   <input type="number" step="0.01" min="0"
-                                    value={wageEdits[w.id!] ?? String(w.hourlyRate)}
+                                    value={wageEdits[w.id!] ?? String(amount)}
                                     data-wage-rate={w.id!}
                                     style={{ width: 90 }}
                                     onChange={e => setWageEdits(prev => ({ ...prev, [w.id!]: e.target.value }))} />
                                   <button className="btn btn-small" data-wage-save={w.id!}
                                     onClick={async () => {
-                                      const rate = Number(wageEdits[w.id!] ?? w.hourlyRate);
-                                      if (!Number.isFinite(rate) || rate < 0) { setWageError('Bitte einen gültigen Stundenlohn eingeben.'); return; }
-                                      await updateWage(editingEmp.id!, w.id!, rate);
+                                      const rate = Number(wageEdits[w.id!] ?? amount);
+                                      if (!Number.isFinite(rate) || rate < 0) { setWageError(editingMonthly ? 'Bitte einen gültigen Monatslohn eingeben.' : 'Bitte einen gültigen Stundenlohn eingeben.'); return; }
+                                      await updateWage(editingEmp.id!, w.id!, rate, wageKind);
                                     }}>Speichern</button>
                                   <button className="btn btn-small btn-danger" data-wage-del={w.id!}
                                     onClick={async () => {
@@ -238,9 +259,12 @@ export function MitarbeitendeTab() {
                     )}
                     <div className="grid-3" style={{ marginTop: 10 }}>
                       <div><label htmlFor="wage-new-month">Gültig ab Monat</label><input type="month" id="wage-new-month" value={wageMonth} onChange={e => setWageMonth(e.target.value)} /></div>
-                      <div><label htmlFor="wage-new-rate">Stundenlohn (CHF)</label><input type="number" id="wage-new-rate" step="0.01" min="0" placeholder="z.B. 30.00" value={wageRate} onChange={e => setWageRate(e.target.value)} /></div>
-                      <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="btn" id="wage-add" onClick={() => onWageAdd(editingEmp.id!)}>Lohn-Version hinzufügen</button></div>
+                      <div><label htmlFor="wage-new-rate">{editingMonthly ? 'Monatslohn (CHF)' : 'Stundenlohn (CHF)'}</label><input type="number" id="wage-new-rate" step="0.01" min="0" placeholder={editingMonthly ? 'z.B. 2000.00' : 'z.B. 30.00'} value={wageRate} onChange={e => setWageRate(e.target.value)} /></div>
+                      <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="btn" id="wage-add" onClick={() => onWageAdd(editingEmp.id!, wageKind)}>Lohn-Version hinzufügen</button></div>
                     </div>
+                    {!editingMonthly && minWage > 0 && Number(wageRate) > 0 && Number(wageRate) < minWage && (
+                      <div className="warn" style={{ marginTop: 8 }}>Hinweis: CHF {fmtChf(Number(wageRate))} liegt unter dem Richtwert-Mindestlohn (CHF {fmtChf(minWage)}/Std.) für diesen Kanton.</div>
+                    )}
                     <div id="wage-form-error" className="auth-error" hidden={!wageError} style={{ marginTop: 8 }}>{wageError}</div>
                   </div>
                 )}
