@@ -6,18 +6,19 @@ import { versionHasShifts } from '../lib/payroll';
 import { monthLabel } from '../lib/format';
 import { defaultPaySettingsData, normalizeEffectiveMonth } from '../lib/state';
 import type { PaySettingsData } from '../lib/state';
+import { ausgleichskasseLabel, cantonName, cantonPreset } from '../lib/cantons';
 
 type NumericKey = Exclude<keyof PaySettingsData, 'uvgEnabled'>;
 
 const PS_NUMERIC_FIELDS: { domId: string; key: NumericKey; step: number; label: string }[] = [
   // hourlyRate moved to per-employee employee_wages — only household-wide
   // statutory/cantonal rates live here now.
-  { domId: 'ps-holiday-percent',   key: 'holidayPercent',   step: 0.01,  label: 'Feiertagszulage (% auf Bruttostunden, ZH üblich 3.59 %)' },
+  { domId: 'ps-holiday-percent',   key: 'holidayPercent',   step: 0.01,  label: 'Feiertagszulage (% auf Bruttostunden)' },
   { domId: 'ps-ahv-employee',      key: 'ahvIvEoEmployee',  step: 0.01,  label: 'AHV/IV/EO Arbeitnehmer' },
   { domId: 'ps-ahv-employer',      key: 'ahvIvEoEmployer',  step: 0.01,  label: 'AHV/IV/EO Arbeitgeber' },
   { domId: 'ps-alv-employee',      key: 'alvEmployee',      step: 0.01,  label: 'ALV Arbeitnehmer' },
   { domId: 'ps-alv-employer',      key: 'alvEmployer',      step: 0.01,  label: 'ALV Arbeitgeber' },
-  { domId: 'ps-fak-employer',      key: 'fakEmployer',      step: 0.01,  label: 'FAK Arbeitgeber (Kt. ZH)' },
+  { domId: 'ps-fak-employer',      key: 'fakEmployer',      step: 0.01,  label: 'FAK Arbeitgeber (% — kantonal)' },
   { domId: 'ps-admin-fee-employer',key: 'adminFeeEmployer', step: 0.01,  label: 'Verwaltungskosten (% der AHV/IV/EO-Beiträge)' },
   { domId: 'ps-withholding-tax',   key: 'withholdingTax',   step: 0.01,  label: 'Quellensteuer (VAV, einheitlich 5 %)' },
   { domId: 'ps-uvg-bu-employer',   key: 'uvgBuEmployer',    step: 0.001, label: 'UVG-BU Arbeitgeber (%)' },
@@ -133,9 +134,10 @@ export function EinstellungenTab() {
       const now = new Date();
       defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     }
-    // Prefill data from latest version, otherwise defaults.
+    // Prefill data from latest version, otherwise from the household canton's
+    // defaults (federal base + canton Richtwerte for FAK/Feiertage).
     const latest = data.paySettings[data.paySettings.length - 1];
-    const psData = latest ? { ...latest.data } : defaultPaySettingsData();
+    const psData = latest ? { ...latest.data } : defaultPaySettingsData(data.employer.canton);
     setPsUi({ mode: 'add', locked: false });
     setDraft({ month: defaultMonth.slice(0, 7), fields: fieldsFromData(psData), uvgEnabled: !!psData.uvgEnabled });
     setFormError(null);
@@ -146,6 +148,20 @@ export function EinstellungenTab() {
     setDraft(null);
     setFormError(null);
   }
+
+  // Overwrite the two canton-dependent fields (Feiertags-%, FAK) in the draft
+  // with the household canton's Richtwerte. Federal rates are left untouched.
+  function applyCantonRichtwerte() {
+    const preset = cantonPreset(data.employer.canton);
+    if (!preset) return;
+    setDraft(d => d ? {
+      ...d,
+      fields: { ...d.fields, holidayPercent: String(preset.holidayPercent), fakEmployer: String(preset.fakEmployer) }
+    } : d);
+  }
+
+  const canton = data.employer.canton;
+  const cantonPre = cantonPreset(canton);
 
   // Read all form fields back into a data object (mirrors collectDraftFromForm).
   function collectDraft(): { error: string } | { effectiveMonth: string; data: PaySettingsData } {
@@ -303,6 +319,18 @@ export function EinstellungenTab() {
           <div id="ps-locked-warn" className="warn" hidden={!locked} style={{ marginTop: 10 }}>
             In dieser Periode existieren bereits Einsätze. Die Sätze sind gesperrt, damit bestehende Lohnabrechnungen nicht rückwirkend geändert werden. Lösche zuerst die Einsätze in dieser Periode, oder lege eine neue Version für einen späteren Monat an.
           </div>
+          {!locked && cantonPre && (
+            <div className="info" style={{ marginTop: 10 }}>
+              Richtwerte für <strong>{cantonName(canton)}</strong>: Feiertagszulage {cantonPre.holidayPercent} %, FAK {cantonPre.fakEmployer} %.
+              {' '}<button type="button" className="btn btn-small" id="btn-apply-canton" onClick={applyCantonRichtwerte}>Übernehmen</button>
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Richtwerte – bitte mit der zuständigen Ausgleichskasse prüfen. Die übrigen Sätze (AHV, ALV, Quellensteuer) sind eidgenössisch einheitlich.</div>
+            </div>
+          )}
+          {!locked && !canton && (
+            <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              Tipp: Wähle unter <strong>Stammdaten</strong> deinen Kanton, um Richtwerte für FAK und Feiertagszulage zu erhalten.
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -343,7 +371,7 @@ export function EinstellungenTab() {
               checked={draft?.uvgEnabled ?? false}
               disabled={locked}
               onChange={e => setDraft(d => d ? { ...d, uvgEnabled: e.target.checked } : d)} />
-            <label htmlFor="ps-uvg-enabled">UVG via SVA Zürich abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
+            <label htmlFor="ps-uvg-enabled">UVG via {ausgleichskasseLabel(canton)} abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
           </div>
           <div className="grid-2">
             {PS_NUMERIC_FIELDS.slice(8).map(f => (

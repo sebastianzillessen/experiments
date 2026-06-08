@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase, hadAuthErrorInUrl } from '../supabaseClient';
 import { sanitizeState, sanitizeEmployeeData } from '../lib/state';
-import type { AppState, Employer, EmployeeData, PaySettingsData } from '../lib/state';
+import type { AppState, Employer, EmployeeData, EmploymentType, PaySettingsData } from '../lib/state';
 import { activeEmployees, ownEmployee as ownEmployeeOf } from '../lib/payroll';
 
 export type Role = 'owner' | 'admin' | 'employee';
@@ -83,12 +83,12 @@ type AppContextValue = {
   hideInviteBanner: () => void;
   updateHouseholdName: (name: string) => void;
   updateEmployer: (patch: Partial<Employer>) => void;
-  addShift: (s: { date: string; hours: number; note: string; employeeId: string }) => Promise<void>;
+  addShift: (s: { date: string; hours: number | null; note: string; employeeId: string }) => Promise<void>;
   deleteShift: (id: string) => Promise<void>;
   addEmployee: (data: EmployeeData) => Promise<string | null>;
   updateEmployee: (id: string, patch: { data?: EmployeeData; archived_at?: string | null }) => Promise<boolean>;
-  addWage: (employeeId: string, effectiveMonth: string, hourlyRate: number) => Promise<boolean>;
-  updateWage: (employeeId: string, id: string, hourlyRate: number) => Promise<boolean>;
+  addWage: (employeeId: string, effectiveMonth: string, amount: number, kind?: EmploymentType) => Promise<boolean>;
+  updateWage: (employeeId: string, id: string, amount: number, kind?: EmploymentType) => Promise<boolean>;
   deleteWage: (employeeId: string, id: string) => Promise<boolean>;
   addPaySettings: (effectiveMonth: string, data: PaySettingsData) => Promise<boolean>;
   updatePaySettings: (id: string, data: PaySettingsData) => Promise<boolean>;
@@ -232,7 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from('households').select('name').eq('id', hh).maybeSingle(),
       supabase.from('employees').select('id, data, user_id, archived_at').eq('household_id', hh).order('created_at'),
       // employee_wages has no household_id; RLS already scopes rows to this household.
-      supabase.from('employee_wages').select('id, employee_id, effective_month, hourly_rate').order('effective_month')
+      supabase.from('employee_wages').select('id, employee_id, effective_month, hourly_rate, monthly_salary').order('effective_month')
     ]);
     if (profileRes.error) throw profileRes.error;
     if (shiftsRes.error) throw shiftsRes.error;
@@ -245,7 +245,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const wages: Record<string, unknown[]> = {};
     for (const w of (wagesRes.data || [])) {
       (wages[w.employee_id] = wages[w.employee_id] || []).push({
-        id: w.id, effectiveMonth: w.effective_month, hourlyRate: Number(w.hourly_rate)
+        id: w.id, effectiveMonth: w.effective_month,
+        hourlyRate: w.hourly_rate == null ? 0 : Number(w.hourly_rate),
+        monthlySalary: w.monthly_salary == null ? 0 : Number(w.monthly_salary)
       });
     }
     setData(sanitizeState({
@@ -261,7 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         data: r.data
       })),
       shifts: (shiftsRes.data || []).map(r => ({
-        id: r.id, date: r.date, hours: Number(r.hours),
+        id: r.id, date: r.date, hours: r.hours == null ? null : Number(r.hours),
         note: r.note || '', entered_by: r.entered_by, employeeId: r.employee_id
       }))
     }));
@@ -499,7 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [persistHouseholdProfile, setData]);
 
   /* ---- CLOUD SAVE: shifts ---- */
-  const addShift = useCallback(async ({ date, hours, note, employeeId }: { date: string; hours: number; note: string; employeeId: string }) => {
+  const addShift = useCallback(async ({ date, hours, note, employeeId }: { date: string; hours: number | null; note: string; employeeId: string }) => {
     setSyncStatus('pending');
     try {
       const insert: Record<string, unknown> = {
@@ -519,7 +521,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setData(prev => ({
         ...prev,
         shifts: [...prev.shifts, {
-          id: row.id, date: row.date, hours: Number(row.hours),
+          id: row.id, date: row.date, hours: row.hours == null ? null : Number(row.hours),
           note: row.note || '', entered_by: row.entered_by, employeeId: row.employee_id
         }].sort((a, b) => a.date.localeCompare(b.date))
       }));
@@ -581,13 +583,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [ensureSelectedEmployee, setData, setSyncStatus]);
 
   /* ---- CLOUD SAVE: employee_wages ---- */
-  const addWage = useCallback(async (employeeId: string, effectiveMonth: string, hourlyRate: number): Promise<boolean> => {
+  // `kind` decides whether `amount` is an hourly rate or a monthly salary; the
+  // other column stays NULL. The employee's employmentType picks the kind.
+  const addWage = useCallback(async (employeeId: string, effectiveMonth: string, amount: number, kind: EmploymentType = 'hourly'): Promise<boolean> => {
     setSyncStatus('pending');
     try {
+      const insert: Record<string, unknown> = { employee_id: employeeId, effective_month: effectiveMonth };
+      if (kind === 'monthly') insert.monthly_salary = amount; else insert.hourly_rate = amount;
       const { data: row, error } = await supabase
         .from('employee_wages')
-        .insert({ employee_id: employeeId, effective_month: effectiveMonth, hourly_rate: hourlyRate })
-        .select('id, employee_id, effective_month, hourly_rate')
+        .insert(insert)
+        .select('id, employee_id, effective_month, hourly_rate, monthly_salary')
         .single();
       if (error) throw error;
       setData(prev => ({
@@ -595,7 +601,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         wages: {
           ...prev.wages,
           [employeeId]: [...(prev.wages[employeeId] || []), {
-            id: row.id, effectiveMonth: row.effective_month, hourlyRate: Number(row.hourly_rate)
+            id: row.id, effectiveMonth: row.effective_month,
+            hourlyRate: row.hourly_rate == null ? 0 : Number(row.hourly_rate),
+            monthlySalary: row.monthly_salary == null ? 0 : Number(row.monthly_salary)
           }].sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
         }
       }));
@@ -604,21 +612,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) { setSyncStatus('error', e); return false; }
   }, [setData, setSyncStatus]);
 
-  const updateWage = useCallback(async (employeeId: string, id: string, hourlyRate: number): Promise<boolean> => {
+  const updateWage = useCallback(async (employeeId: string, id: string, amount: number, kind: EmploymentType = 'hourly'): Promise<boolean> => {
     setSyncStatus('pending');
     try {
+      const patch: Record<string, unknown> = kind === 'monthly' ? { monthly_salary: amount } : { hourly_rate: amount };
       const { data: row, error } = await supabase
         .from('employee_wages')
-        .update({ hourly_rate: hourlyRate })
+        .update(patch)
         .eq('id', id)
-        .select('hourly_rate')
+        .select('hourly_rate, monthly_salary')
         .single();
       if (error) throw error;
       setData(prev => ({
         ...prev,
         wages: {
           ...prev.wages,
-          [employeeId]: (prev.wages[employeeId] || []).map(w => w.id === id ? { ...w, hourlyRate: Number(row.hourly_rate) } : w)
+          [employeeId]: (prev.wages[employeeId] || []).map(w => w.id === id ? {
+            ...w,
+            hourlyRate: row.hourly_rate == null ? 0 : Number(row.hourly_rate),
+            monthlySalary: row.monthly_salary == null ? 0 : Number(row.monthly_salary)
+          } : w)
         }
       }));
       setSyncStatus('ok');
@@ -746,12 +759,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })));
       if (error) throw error;
     }
-    // employee_wages, remapped to the new employee ids.
-    const wageRows: { employee_id: string; effective_month: string; hourly_rate: number }[] = [];
+    // employee_wages, remapped to the new employee ids. A version is either an
+    // hourly rate or a monthly salary — set the column that carries a value.
+    const wageRows: Record<string, unknown>[] = [];
     for (const oldId of Object.keys(fresh.wages)) {
       const newId = idMap[oldId];
       if (!newId) continue;
-      for (const w of fresh.wages[oldId]) wageRows.push({ employee_id: newId, effective_month: w.effectiveMonth, hourly_rate: w.hourlyRate });
+      for (const w of fresh.wages[oldId]) {
+        const isMonthly = w.monthlySalary > 0 && !(w.hourlyRate > 0);
+        wageRows.push(isMonthly
+          ? { employee_id: newId, effective_month: w.effectiveMonth, monthly_salary: w.monthlySalary }
+          : { employee_id: newId, effective_month: w.effectiveMonth, hourly_rate: w.hourlyRate });
+      }
     }
     if (wageRows.length) {
       const { error } = await supabase.from('employee_wages').insert(wageRows);

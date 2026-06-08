@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  activePaySettingsFor, activeWageFor, berechneAbrechnung, employeeById, employeeName
+  activeMonthlySalaryFor, activePaySettingsFor, activeWageFor, berechneAbrechnung, employeeById, employeeName
 } from '../lib/payroll';
 import { fmtChf, fmtDate, fmtNum, monthLabel, round2 } from '../lib/format';
+import { ausgleichskasseLabel } from '../lib/cantons';
 import { vacationPercentForWeeks } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
 import { QrBillSection } from '../lib/qrbill';
@@ -31,20 +32,23 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
   const er = data.employer;
   const ee = employee?.data ?? null;
   const empId = (employee && employee.id) ? employee.id : null;
+  const isMonthly = ee?.employmentType === 'monthly';
   const calc = berechneAbrechnung(data, eintraege, employee);
 
   if (!eintraege.length) {
     return (
       <div className="empty-state">
-        Keine Einsätze in {monthLabel(yyyymm)}{employee ? ` für ${employeeName(employee)}` : ''} erfasst.
+        {isMonthly ? 'Monat noch nicht erfasst' : 'Keine Einsätze'} in {monthLabel(yyyymm)}{employee ? ` für ${employeeName(employee)}` : ''}.
       </div>
     );
   }
 
-  // Use the rates of the latest shift in the period for label percentages.
-  // Per-shift amounts in `calc` are correct even if rates vary within a month.
+  // Use the rates of the latest entry in the period for label percentages.
+  // Per-entry amounts in `calc` are correct even if rates vary within a month.
   const sorted = [...eintraege].sort((a, b) => a.date.localeCompare(b.date));
-  const e = activePaySettingsFor(data, sorted[sorted.length - 1].date);
+  const refDate = sorted[sorted.length - 1].date;
+  const e = activePaySettingsFor(data, refDate);
+  const monthlySalary = (isMonthly && empId) ? activeMonthlySalaryFor(data, empId, refDate) : 0;
 
   return (
     <div className="print-doc">
@@ -70,35 +74,60 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
         <div className="period">{monthLabel(yyyymm)}</div>
       </div>
 
-      <h4>Geleistete Stunden</h4>
-      <table>
-        <thead>
-          <tr><th>Datum</th><th>Notiz</th><th className="num">Stunden</th><th className="num">Stundenlohn</th><th className="num">Betrag</th></tr>
-        </thead>
-        <tbody>
-          {sorted.map(x => {
-            const rate = empId ? activeWageFor(data, empId, x.date) : 0;
-            return (
-              <tr key={x.id}>
-                <td>{fmtDate(x.date)}</td>
-                <td>{x.note ? x.note : ''}</td>
-                <td className="num">{fmtNum(x.hours)}</td>
-                <td className="num">CHF {fmtChf(rate)}</td>
-                <td className="num">CHF {fmtChf(round2(x.hours * rate))}</td>
+      {isMonthly ? (
+        <>
+          <h4>Monatslohn</h4>
+          <table>
+            <thead>
+              <tr><th>Periode</th><th>Notiz</th><th className="num">Monatslohn</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{monthLabel(yyyymm)}</td>
+                <td>{sorted.find(x => x.note)?.note ?? ''}</td>
+                <td className="num">CHF {fmtChf(monthlySalary)}</td>
               </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="total-row"><td colSpan={2}>Total</td><td className="num">{fmtNum(calc.stundenTotal)}</td><td></td><td className="num">CHF {fmtChf(calc.bruttoStunden)}</td></tr>
-        </tfoot>
-      </table>
+            </tbody>
+          </table>
 
-      <h4>Bruttolohn</h4>
-      <div className="summary-row"><span>Stundenlohn-Summe</span><span>CHF {fmtChf(calc.bruttoStunden)}</span></div>
-      <div className="summary-row"><span>+ Ferienzulage ({ee?.vacationWeeks} Wochen, {vacationPercentForWeeks(ee?.vacationWeeks ?? 4)} %)</span><span>CHF {fmtChf(calc.ferienzulage)}</span></div>
-      <div className="summary-row"><span>+ Feiertagszulage ({e.holidayPercent} %)</span><span>CHF {fmtChf(calc.feiertagszulage)}</span></div>
-      <div className="summary-row total"><span>Bruttolohn</span><span>CHF {fmtChf(calc.bruttoTotal)}</span></div>
+          <h4>Bruttolohn</h4>
+          <div className="summary-row"><span>Monatslohn (Ferien &amp; Feiertage inbegriffen)</span><span>CHF {fmtChf(calc.bruttoStunden)}</span></div>
+          <div className="summary-row total"><span>Bruttolohn</span><span>CHF {fmtChf(calc.bruttoTotal)}</span></div>
+        </>
+      ) : (
+        <>
+          <h4>Geleistete Stunden</h4>
+          <table>
+            <thead>
+              <tr><th>Datum</th><th>Notiz</th><th className="num">Stunden</th><th className="num">Stundenlohn</th><th className="num">Betrag</th></tr>
+            </thead>
+            <tbody>
+              {sorted.map(x => {
+                const rate = empId ? activeWageFor(data, empId, x.date) : 0;
+                const hrs = x.hours ?? 0;
+                return (
+                  <tr key={x.id}>
+                    <td>{fmtDate(x.date)}</td>
+                    <td>{x.note ? x.note : ''}</td>
+                    <td className="num">{fmtNum(hrs)}</td>
+                    <td className="num">CHF {fmtChf(rate)}</td>
+                    <td className="num">CHF {fmtChf(round2(hrs * rate))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="total-row"><td colSpan={2}>Total</td><td className="num">{fmtNum(calc.stundenTotal)}</td><td></td><td className="num">CHF {fmtChf(calc.bruttoStunden)}</td></tr>
+            </tfoot>
+          </table>
+
+          <h4>Bruttolohn</h4>
+          <div className="summary-row"><span>Stundenlohn-Summe</span><span>CHF {fmtChf(calc.bruttoStunden)}</span></div>
+          <div className="summary-row"><span>+ Ferienzulage ({ee?.vacationWeeks} Wochen, {vacationPercentForWeeks(ee?.vacationWeeks ?? 4)} %)</span><span>CHF {fmtChf(calc.ferienzulage)}</span></div>
+          <div className="summary-row"><span>+ Feiertagszulage ({e.holidayPercent} %)</span><span>CHF {fmtChf(calc.feiertagszulage)}</span></div>
+          <div className="summary-row total"><span>Bruttolohn</span><span>CHF {fmtChf(calc.bruttoTotal)}</span></div>
+        </>
+      )}
 
       <h4>Abzüge Arbeitnehmer/in</h4>
       <div className="summary-row"><span>– AHV/IV/EO ({e.ahvIvEoEmployee} %)</span><span>CHF {fmtChf(calc.an.ahvIvEo)}</span></div>
@@ -123,7 +152,7 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
       <div className="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF {fmtChf(calc.agKostenTotal)}</span></div>
 
       <div className="footnote">
-        Vereinfachtes Abrechnungsverfahren der SVA Zürich ({e.uvgEnabled ? 'VAVplus' : 'VAV'}). Quellensteuer und Sozialversicherungsbeiträge werden direkt mit der Ausgleichskasse abgerechnet. {e.uvgEnabled ? 'Unfallversicherung über SVA Zürich.' : 'Unfallversicherung separat über privaten Versicherer.'}
+        Vereinfachtes Abrechnungsverfahren der {ausgleichskasseLabel(er.canton)} ({e.uvgEnabled ? 'VAVplus' : 'VAV'}). Quellensteuer und Sozialversicherungsbeiträge werden direkt mit der Ausgleichskasse abgerechnet. {e.uvgEnabled ? `Unfallversicherung über ${ausgleichskasseLabel(er.canton)}.` : 'Unfallversicherung separat über privaten Versicherer.'}
       </div>
 
       <div className="signatures">

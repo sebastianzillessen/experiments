@@ -44,7 +44,7 @@ test.describe('Onboarding tutorial', () => {
     // Complete all three steps: employer master data, a pay-settings version and an employee.
     const { error: profErr } = await admin.from('household_profile').upsert({
       household_id: householdId,
-      employer: { name: 'Familie Muster', address: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich', country: 'CH', billingNumber: '' },
+      employer: { name: 'Familie Muster', address: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich', country: 'CH', canton: 'ZH', billingNumber: '' },
       updated_at: new Date().toISOString()
     });
     expect(profErr).toBeNull();
