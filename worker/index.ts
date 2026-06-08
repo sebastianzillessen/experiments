@@ -30,6 +30,7 @@
  *   npx wrangler secret put HOST_NOTIFY_EMAIL
  *   npx wrangler secret put RESEND_FROM   # e.g. "HotelKontrolle <hoko@zillessen.dev>"
  *   npx wrangler secret put AIRBNB_ICAL_URL  # optional — enables /api/hoko/airbnb-lookup/:code
+ *   npx wrangler secret put HOKO_PULLER_TOKEN  # optional — gates /api/hoko/list for the Pi puller
  *
  * Without HOKO_KV bound, /api/hoko/* responds 503.
  * Without PACKLISTE_KV bound, /api/packliste/share* responds 503.
@@ -47,6 +48,7 @@ interface Env {
   HOST_NOTIFY_EMAIL?: string;
   RESEND_FROM?: string;
   AIRBNB_ICAL_URL?: string;
+  HOKO_PULLER_TOKEN?: string;
 }
 
 const HOKO_HOST = "hoko.zillessen.dev";
@@ -266,8 +268,11 @@ async function handleHokoApi(
       stay.code = code;
     }
 
+    // submittedAt also lives in the JSON value, but stashing it in KV
+    // metadata lets /api/hoko/list filter by time without fetching every entry.
     await env.HOKO_KV.put(`hoko:${stay.code}`, JSON.stringify(stay), {
       expirationTtl: HOKO_TTL_SECONDS,
+      metadata: { submittedAt: stay.submittedAt },
     });
 
     // Send notification — don't block the response on email success.
@@ -294,6 +299,60 @@ async function handleHokoApi(
     const hit = map[code];
     if (!hit) return jsonResponse({ error: "code not found in Airbnb feed" }, 404);
     return jsonResponse(hit, 200);
+  }
+
+  // GET /api/hoko/list?since=<unix-ms> — used by the Pi puller to discover
+  // new submissions. Bearer-auth via HOKO_PULLER_TOKEN so the full code list
+  // isn't world-readable (individual codes still need their token to read).
+  if (request.method === "GET" && url.pathname === `${HOKO_API_PREFIX}/list`) {
+    if (!env.HOKO_PULLER_TOKEN) {
+      return jsonResponse({ error: "Puller list not configured" }, 503);
+    }
+    const auth = request.headers.get("authorization") || "";
+    if (auth !== `Bearer ${env.HOKO_PULLER_TOKEN}`) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+    const sinceMs = Number(url.searchParams.get("since") || "0") || 0;
+    const items: { code: string; submittedAt: string }[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await env.HOKO_KV.list<{ submittedAt?: string }>({
+        prefix: "hoko:",
+        cursor,
+      });
+      for (const k of page.keys) {
+        const submittedAt = k.metadata?.submittedAt;
+        if (!submittedAt) continue;
+        if (Date.parse(submittedAt) > sinceMs) {
+          items.push({ code: k.name.slice("hoko:".length), submittedAt });
+        }
+      }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    items.sort((a, b) => Date.parse(a.submittedAt) - Date.parse(b.submittedAt));
+    return jsonResponse(items, 200);
+  }
+
+  // GET /api/hoko/:code.xls — binary BIFF8, same bytes as the host email
+  // attachment. The code itself is the auth (matches the existing JSON GET).
+  const xlsMatch = url.pathname.match(/^\/api\/hoko\/([A-Z0-9-]{4,64})\.xls$/i);
+  if (request.method === "GET" && xlsMatch) {
+    const code = xlsMatch[1].toUpperCase();
+    const value = await env.HOKO_KV.get<StoredStay>(`hoko:${code}`, "json");
+    if (!value) {
+      return jsonResponse({ error: "Code not found or expired (90-day TTL)" }, 404);
+    }
+    const bin = atob(buildMeldescheinXlsBase64(value));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        "content-type": "application/vnd.ms-excel",
+        "content-disposition": `attachment; filename="meldeschein-${code}.xls"`,
+        ...corsHeaders(),
+      },
+    });
   }
 
   // GET /api/hoko/:code

@@ -1,0 +1,43 @@
+# Hoko Pi stack — runs the Unisys DTS SiDAP daemon and a small puller next to
+# Home Assistant on the Raspberry Pi.
+#
+#   puller          polls the worker every POLL_INTERVAL_SEC and drops new
+#                   meldeschein-<code>.xls files into the shared upload volume
+#   dts-client      Java daemon that watches the same volume and ships files
+#                   to https://sidap.hotelkontrolle.zh.ch via SOAP+TLS
+#
+# Quick start:
+#   cp .env.example .env && $EDITOR .env       # fill in SIDAP_* + HOKO_PULLER_TOKEN
+#   docker compose up -d --build
+#   docker compose logs -f
+
+services:
+  puller:
+    build:
+      context: ..
+      dockerfile: hoko-pi/puller/Dockerfile
+    container_name: hoko-puller
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      UPLOAD_DIR: /upload
+      STATE_DIR: /state
+    volumes:
+      - upload:/upload
+      - puller-state:/state
+
+  dts-client:
+    build:
+      context: ..
+      dockerfile: hoko-pi/dts-client/Dockerfile
+    container_name: hoko-dts-client
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - upload:/opt/dts-client/Upload
+      - dts-logs:/var/log/SiDAP
+
+volumes:
+  upload:          # written by puller, read by dts-client
+  puller-state:    # last-seen timestamp etc.
+  dts-logs:        # daemon logback output
