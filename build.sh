@@ -52,10 +52,16 @@ build_kinderbetreuung() {
   cp -r kinderbetreuung-lohn/dist/. _site/kinderbetreuung-lohn/
   # Build version for the footer: short commit hash + UTC build time. Prefer
   # git; fall back to the Cloudflare Workers CI commit env var, then "unknown".
-  local commit build_time
+  local commit build_time branch app_env
   commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
   if [ -z "$commit" ]; then commit="${WORKERS_CI_COMMIT_SHA:-${CF_PAGES_COMMIT_SHA:-unknown}}"; commit="${commit:0:7}"; fi
   build_time="$(date -u +'%Y-%m-%d %H:%M UTC')"
+
+  # Environment flag for the in-app developer menu: 'production' only on the main
+  # branch, 'preview' for every other (branch/commit preview) deploy. Prefer the
+  # Cloudflare CI branch env vars, fall back to the local git branch.
+  branch="${WORKERS_CI_BRANCH:-${CF_PAGES_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}}"
+  if [ "$branch" = "main" ]; then app_env="production"; else app_env="preview"; fi
 
   # Generate config.js with env-var values (JSON-escaped via Python).
   cat > _site/kinderbetreuung-lohn/config.js <<EOF
@@ -64,6 +70,7 @@ window.__APP_CONFIG = {
   key: $(printf '%s' "$SUPABASE_PUBLISHABLE_KEY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 };
 window.__APP_VERSION = { commit: $(printf '%s' "$commit" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'), builtAt: $(printf '%s' "$build_time" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))') };
+window.__APP_ENV = $(printf '%s' "$app_env" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))');
 EOF
 }
 

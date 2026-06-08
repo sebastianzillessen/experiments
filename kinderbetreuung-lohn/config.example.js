@@ -4,3 +4,7 @@ window.__APP_CONFIG = {
   url: 'https://YOUR-PROJECT.supabase.co',
   key: 'sb_publishable_YOUR_KEY'
 };
+// Optional. build.sh sets this to 'production' on the main branch and 'preview'
+// otherwise. Leave unset for local dev — anything other than 'production' shows
+// the in-app developer menu.
+// window.__APP_ENV = 'preview';
