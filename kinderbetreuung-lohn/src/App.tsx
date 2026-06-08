@@ -6,6 +6,7 @@ import { SetPasswordScreen } from './components/SetPasswordScreen';
 import { Header, UserStrip, TabNav, SyncWarn, SyncStatus, AppVersionFooter } from './components/Chrome';
 import { OnboardingBanner } from './components/Onboarding';
 import { DevMenu } from './components/DevMenu';
+import { HelpAssistant } from './components/HelpAssistant';
 import { ErfassungTab } from './tabs/ErfassungTab';
 import { MonatTab } from './tabs/MonatTab';
 import { JahrTab } from './tabs/JahrTab';
@@ -43,6 +44,7 @@ export default function App() {
       </main>
       <SyncStatus />
       <AppVersionFooter />
+      <HelpAssistant />
       <DevMenu />
     </AppProvider>
   );
