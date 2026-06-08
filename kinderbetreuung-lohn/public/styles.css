@@ -125,6 +125,28 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .invite-banner .text { font-size:13px; color:var(--text); }
 .invite-banner .actions { display:flex; gap:8px; }
 
+/* ONBOARDING / TUTORIAL */
+.onboarding-wrap { max-width:960px; margin:0 auto; padding:16px 16px 0; }
+.onboarding { background:linear-gradient(135deg, #eef5fb 0%, #e4eefa 100%); border:1px solid var(--border); border-left:4px solid var(--primary); border-radius:0 10px 10px 0; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+.onboarding-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.onboarding-head h3 { color:var(--primary-dark); font-size:16px; font-weight:700; margin:0; }
+.onboarding-dismiss { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:14px; padding:3px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
+.onboarding-dismiss:hover { background:#fff; color:var(--text); }
+.onboarding-intro { font-size:13px; color:var(--text); margin:8px 0 14px; }
+.onboarding-steps { list-style:none; display:flex; flex-direction:column; gap:8px; margin:0; padding:0; }
+.onboarding-step { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.onboarding-step.current { border-color:var(--primary); box-shadow:0 0 0 2px rgba(46,110,166,0.12); }
+.onboarding-step.upcoming { opacity:0.7; }
+.onboarding-step-marker { flex:0 0 auto; width:24px; height:24px; border-radius:50%; background:var(--soft); color:var(--muted); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+.onboarding-step.current .onboarding-step-marker { background:var(--primary); color:#fff; }
+.onboarding-step.done .onboarding-step-marker { background:var(--green); color:#fff; }
+.onboarding-step-body { flex:1 1 auto; min-width:0; }
+.onboarding-step-title { font-size:14px; font-weight:600; color:var(--text); }
+.onboarding-step.done .onboarding-step-title { color:var(--muted); text-decoration:line-through; }
+.onboarding-step-desc { font-size:12.5px; color:var(--muted); margin-top:3px; }
+.onboarding-step .btn { flex:0 0 auto; }
+.onboarding-here { flex:0 0 auto; font-size:12px; font-weight:600; color:var(--primary); }
+
 /* SYNC STATUS */
 .sync-status { position:fixed; bottom:12px; right:12px; background:var(--card); border:1px solid var(--border); border-radius:18px; padding:5px 12px; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.06); z-index:50; }
 .sync-status .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }

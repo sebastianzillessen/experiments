@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { activeEmployees, activeWageFor, employeeById, employeeName, ownEmployee } from '../lib/payroll';
 import { fmtChf, fmtDate, fmtNum, round2 } from '../lib/format';
+import { EmployeeTutorial } from '../components/Onboarding';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -69,6 +70,8 @@ export function ErfassungTab() {
       className={activeTab === 'erfassung' ? 'active' : undefined}>
       <h2>Stundenerfassung</h2>
       <div className="section-sub">Trage hier jeden Einsatz mit Datum und geleisteten Stunden ein.</div>
+
+      <EmployeeTutorial />
 
       <div className="card">
         <h3>Neuer Einsatz</h3>
