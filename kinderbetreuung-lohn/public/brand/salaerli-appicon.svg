@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 84 84" role="img" aria-label="Salärli app icon">
+  <rect x="8" y="8" width="68" height="68" rx="20" fill="#2E7D32"/>
+  <path d="M54 30 C54 22 44 19 38 23 C30 28 33 37 43 40 C53 43 56 52 49 57 C44 61 35 59 32 53" fill="none" stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M40 38 C31 34 25 37 27 45 C36 48 41 42 40 38 Z" fill="#9CCC65"/>
+  <path d="M48 32 C57 27 63 30 61 38 C52 41 47 36 48 32 Z" fill="#F2A03D"/>
+</svg>
