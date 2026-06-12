@@ -789,6 +789,9 @@ export class LocalStorageProvider implements DataProvider {
     const idx = items.findIndex((i) => i.id === id);
     if (idx < 0) return;
     const merged = { ...items[idx], ...patch };
+    // Soll-Menge kann manuell unter den gepackten Stand gesenkt werden —
+    // dann den gepackten Stand mitkappen, damit kein "3/2" entsteht.
+    merged.packedQty = Math.min(merged.packedQty, merged.quantity);
     merged.isPacked = merged.packedQty >= merged.quantity;
     items[idx] = merged;
     write(K.tripItems(trip.id), items);
