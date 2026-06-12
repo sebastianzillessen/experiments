@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil } from "lucide-react";
 import {
   Card,
   Stack,
@@ -32,6 +32,7 @@ import { QuickAdd } from "./QuickAdd";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
+import { EditTripItemModal } from "./EditTripItemModal";
 
 const Page = styled.div`
   max-width: 480px;
@@ -199,6 +200,7 @@ export function TripDetail() {
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
   const [sortMode, setSortMode] = useState<"default" | "open-first">("open-first");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [editItem, setEditItem] = useState<TripItem | null>(null);
   const toast = useToast();
 
   // Default filter: link the current user's linked person + unassigned
@@ -314,7 +316,12 @@ export function TripDetail() {
                       total={it.quantity}
                       onChange={(n) => provider.setTripItemPacked(it.id, n)}
                     />
-                    <Stack $gap={2} style={{ flex: 1, minWidth: 0 }}>
+                    <Stack
+                      $gap={2}
+                      style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                      onClick={() => setEditItem(it)}
+                      title="Anzahl anpassen"
+                    >
                       <Row $gap={6}>
                         <CategoryChip
                           icon={
@@ -332,6 +339,13 @@ export function TripDetail() {
                     </Stack>
                     {p && <InitialsBadge person={p} />}
                     <DesktopOnly>
+                      <IconButton
+                        aria-label={`Anzahl von "${it.name}" anpassen`}
+                        title="Anzahl anpassen"
+                        onClick={() => setEditItem(it)}
+                      >
+                        <Pencil size={14} />
+                      </IconButton>
                       <IconButton
                         aria-label={`"${it.name}" von diesem Trip entfernen`}
                         title="Von diesem Trip entfernen"
@@ -563,6 +577,10 @@ export function TripDetail() {
 
       {duplicateOpen && (
         <TripCreateModal duplicateSource={trip} onClose={() => setDuplicateOpen(false)} />
+      )}
+
+      {editItem && (
+        <EditTripItemModal item={editItem} trip={trip} onClose={() => setEditItem(null)} />
       )}
     </Page>
   );
