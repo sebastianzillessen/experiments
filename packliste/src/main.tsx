@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./App";
+import { PWAUpdatePrompt } from "./components/PWAUpdatePrompt";
 import { LocalStorageProvider } from "./data/LocalStorageProvider";
 import { DataProviderRoot } from "./data/DataProviderContext";
 
@@ -12,5 +13,6 @@ createRoot(document.getElementById("root")!).render(
     <DataProviderRoot provider={provider}>
       <App />
     </DataProviderRoot>
+    <PWAUpdatePrompt />
   </StrictMode>,
 );
