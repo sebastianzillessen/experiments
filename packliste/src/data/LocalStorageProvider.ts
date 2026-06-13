@@ -559,6 +559,7 @@ export class LocalStorageProvider implements DataProvider {
       startDate: params.startDate,
       endDate: params.endDate,
       durationDays: Math.max(1, Math.round(params.durationDays)),
+      destination: params.destination?.trim() || undefined,
       conditions: [...params.conditions],
       hasWasher: params.hasWasher,
       washIntervalDays: params.hasWasher ? params.washIntervalDays ?? 3 : undefined,
@@ -610,6 +611,7 @@ export class LocalStorageProvider implements DataProvider {
       startDate: newStartDate,
       endDate: newEndDate,
       durationDays: days,
+      destination: source.destination,
       conditions: [...source.conditions],
       hasWasher: source.hasWasher,
       washIntervalDays: source.washIntervalDays,
@@ -658,6 +660,7 @@ export class LocalStorageProvider implements DataProvider {
         | "startDate"
         | "endDate"
         | "durationDays"
+        | "destination"
         | "conditions"
         | "hasWasher"
         | "washIntervalDays"

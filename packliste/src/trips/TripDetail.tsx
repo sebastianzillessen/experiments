@@ -28,6 +28,8 @@ import { usePersons } from "../hooks/usePersons";
 import { useConditions } from "../hooks/useConditions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { QtyStepper } from "./QtyStepper";
+import { useTripWeather } from "../weather/useTripWeather";
+import { WeatherHint } from "../weather/WeatherHint";
 import { QuickAdd } from "./QuickAdd";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
@@ -202,6 +204,7 @@ export function TripDetail() {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [editItem, setEditItem] = useState<TripItem | null>(null);
   const toast = useToast();
+  const weather = useTripWeather(trip?.destination, trip?.startDate, trip?.endDate);
 
   // Default filter: link the current user's linked person + unassigned
   const linkedPersonId = useMemo(() => {
@@ -404,6 +407,21 @@ export function TripDetail() {
             <Badge $tone="success">🧺 Waschmaschine · alle {trip.washIntervalDays} Tage</Badge>
           )}
         </Row>
+
+        <WeatherHint
+          weather={weather}
+          activeConditions={trip.conditions}
+          onApplyCondition={(key) => {
+            if (trip.conditions.includes(key)) return;
+            provider.updateTrip(trip.id, { conditions: [...trip.conditions, key] });
+            const added = provider.mergeTemplatesIntoTrip(trip.id);
+            toast.show({
+              message:
+                `${conditionLabel(key, conditions)} aktiviert` +
+                (added > 0 ? ` · ${added} Item${added === 1 ? "" : "s"} hinzugefügt` : ""),
+            });
+          }}
+        />
 
         <div>
           <Row style={{ justifyContent: "space-between", marginBottom: 4 }}>
