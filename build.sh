@@ -81,6 +81,32 @@ build_packliste() {
   cp -r packliste/dist/. _site/packliste/
 }
 
+build_workout() {
+  mkdir -p _site/seven-minutes-workout
+  # Build the React PWA (npm ci is expected to have run at repo root already).
+  npm -w seven-minutes-workout run build
+  cp -r seven-minutes-workout/dist/. _site/seven-minutes-workout/
+
+  # config.js exposes the VAPID *public* key (safe to embed) to the frontend so
+  # PushManager.subscribe can use it. Set WORKOUT_VAPID_PUBLIC_KEY in Cloudflare
+  # Pages env settings; if unset, push stays disabled (the app degrades cleanly).
+  local vapid commit build_time
+  vapid="${WORKOUT_VAPID_PUBLIC_KEY:-}"
+  if [ -z "$vapid" ]; then
+    echo "WARN: WORKOUT_VAPID_PUBLIC_KEY not set — workout push reminders disabled in this build." >&2
+  fi
+  commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+  if [ -z "$commit" ]; then commit="${WORKERS_CI_COMMIT_SHA:-${CF_PAGES_COMMIT_SHA:-unknown}}"; commit="${commit:0:7}"; fi
+  build_time="$(date -u +'%Y-%m-%d %H:%M UTC')"
+
+  cat > _site/seven-minutes-workout/config.js <<EOF
+window.__APP_CONFIG = {
+  vapidPublicKey: $(printf '%s' "$vapid" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+};
+window.__APP_VERSION = { commit: $(printf '%s' "$commit" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'), builtAt: $(printf '%s' "$build_time" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))') };
+EOF
+}
+
 write_root_index() {
   cat > _site/index.html <<'HTML'
 <!DOCTYPE html>
@@ -94,6 +120,7 @@ ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.
   <li><a href="packliste/">Packliste</a><div class="muted">Familien-Packliste mit Bedingungen und Waschmaschinen-Logik</div></li>
   <li><a href="palermo/">Palermo Urlaubshandbuch</a><div class="muted">Reisefuehrer Palermo (April 2026)</div></li>
   <li><a href="kinderbetreuung-lohn/">Lohnabrechnung Kinderbetreuung</a><div class="muted">Vereinfachte Abrechnung Kanton Zuerich</div></li>
+  <li><a href="seven-minutes-workout/">7-Minuten Workout</a><div class="muted">PWA mit Timer, Streak und Push-Erinnerungen</div></li>
 </ul>
 </body></html>
 HTML
@@ -103,19 +130,21 @@ rm -rf _site
 mkdir -p _site
 
 case "$TARGET" in
-  kinderbetreuung-lohn) build_kinderbetreuung ;;
-  palermo)              build_palermo ;;
-  hoko)                 build_hoko ;;
-  packliste)            build_packliste ;;
+  kinderbetreuung-lohn)  build_kinderbetreuung ;;
+  palermo)               build_palermo ;;
+  hoko)                  build_hoko ;;
+  packliste)             build_packliste ;;
+  seven-minutes-workout) build_workout ;;
   all)
     build_palermo
     build_hoko
     build_kinderbetreuung
     build_packliste
+    build_workout
     write_root_index
     ;;
   *)
-    echo "Unknown build target: $TARGET (expected: all | kinderbetreuung-lohn | palermo | hoko | packliste)" >&2
+    echo "Unknown build target: $TARGET (expected: all | kinderbetreuung-lohn | palermo | hoko | packliste | seven-minutes-workout)" >&2
     exit 1
     ;;
 esac

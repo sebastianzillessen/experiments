@@ -4,13 +4,16 @@
   "private": true,
   "workspaces": [
     "packliste",
-    "kinderbetreuung-lohn"
+    "kinderbetreuung-lohn",
+    "seven-minutes-workout"
   ],
   "scripts": {
     "build": "bash build.sh",
     "dev": "npm -w packliste run dev",
     "dev:packliste": "npm -w packliste run dev",
+    "dev:workout": "npm -w seven-minutes-workout run dev",
     "build:packliste": "npm -w packliste run build",
+    "build:workout": "npm -w seven-minutes-workout run build",
     "test:kinderbetreuung": "npm test -w kinderbetreuung-lohn",
     "test:kinderbetreuung:ui": "npm run test:ui -w kinderbetreuung-lohn",
     "hoko:demo": "node hoko-cli/demo-submit.mjs"

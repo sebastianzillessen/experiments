@@ -1,0 +1,60 @@
+name: E2E Seven-Minutes-Workout
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'seven-minutes-workout/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/e2e-workout.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-workout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: seven-minutes-workout
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (workspaces)
+        run: npm ci
+        working-directory: .
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright suite
+        run: npm test
+        env:
+          CI: 'true'
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-workout
+          path: seven-minutes-workout/playwright-report/
+          retention-days: 7
