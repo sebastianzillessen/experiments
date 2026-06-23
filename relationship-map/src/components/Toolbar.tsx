@@ -13,6 +13,8 @@ interface Props {
 export function Toolbar({ selfName, categories, liveMode, onChanged }: Props) {
   const [name, setName] = useState(selfName);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   useEffect(() => setName(selfName), [selfName]);
 
@@ -21,6 +23,20 @@ export function Toolbar({ selfName, categories, liveMode, onChanged }: Props) {
     if (trimmed && trimmed !== selfName) {
       await api.updateSettings({ self_name: trimmed });
       onChanged();
+    }
+  };
+
+  const runImport = async () => {
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const s = await api.runImport();
+      setImportMsg(`Imported ${s.contactsImported} contacts · placed ${s.placed} · ${s.archivedHidden} hidden`);
+      onChanged();
+    } catch (e) {
+      setImportMsg(`Import failed: ${(e as Error).message}`);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -39,18 +55,29 @@ export function Toolbar({ selfName, categories, liveMode, onChanged }: Props) {
 
       <h1>Relationship Map</h1>
 
-      <button
-        className="primary"
-        disabled={!liveMode || categories.length === 0}
-        title={
-          liveMode
-            ? "Add a person"
-            : "Switch to the live map to add people"
-        }
-        onClick={() => setAdding(true)}
-      >
-        + Add person
-      </button>
+      <div className="toolbar-actions">
+        {importMsg && <span className="import-msg">{importMsg}</span>}
+        <button
+          className="ghost"
+          disabled={!liveMode || importing}
+          title={
+            liveMode
+              ? "Import contacts and interaction history from WhatsApp, iMessage, Mail and Contacts"
+              : "Switch to the live map to import"
+          }
+          onClick={runImport}
+        >
+          {importing ? "Importing…" : "Import contacts"}
+        </button>
+        <button
+          className="primary"
+          disabled={!liveMode || categories.length === 0}
+          title={liveMode ? "Add a person" : "Switch to the live map to add people"}
+          onClick={() => setAdding(true)}
+        >
+          + Add person
+        </button>
+      </div>
 
       {adding && (
         <AddPersonDialog

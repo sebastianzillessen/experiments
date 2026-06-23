@@ -89,4 +89,15 @@ export const api = {
   getMap: (at?: string | null) =>
     request<MapResponse>(`/api/map${at ? `?at=${encodeURIComponent(at)}` : ""}`),
   getTimeline: () => request<TimelineResponse>("/api/timeline"),
+
+  // Import contacts + interaction history from local sources.
+  runImport: () => request<ImportSummary>("/api/import", { method: "POST" }),
 };
+
+export interface ImportSummary {
+  contactsImported: number;
+  placed: number;
+  updated: number;
+  archivedHidden: number;
+  unmatchedHandles: number;
+}

@@ -6,13 +6,18 @@ at work — then rate each relationship **1–10** (10 = extremely deep and stro
 Unlike the paper version, this one **remembers**: every rating change is logged,
 so you can scrub a time slider and watch your relationships evolve.
 
-![concept](public/concept.svg)
+![concept](./public/concept.svg)
 
 ## Features
 
 - **Radial map** — you at the centre; each person is a node whose **distance**
-  encodes closeness (10 = closest), **colour** encodes their group, and people
-  are clustered into arcs by group.
+  encodes closeness (10 = closest) and **colour** encodes their group. Each group
+  owns a fixed angular **wedge**; uncategorised people fan out around the circle.
+- **Drag to edit** — drag a node toward/away from the centre to set its closeness,
+  and into a group's wedge to recategorise it. Rating changes are logged, so they
+  show up on the time slider. (Live map only; historical views are read-only.)
+- **Import from your devices** — bootstrap the map from WhatsApp, iMessage, Apple
+  Mail and Contacts; see [Import](#import-from-your-devices) below.
 - **Living map + change log** — there's one current map; every closeness change
   is appended to an immutable log with a timestamp and optional note.
 - **Time travel** — a slider reconstructs the whole map at any past date from the
@@ -60,7 +65,53 @@ npm start
 # open http://localhost:8787
 ```
 
-Other scripts: `npm run typecheck`, `npm test` (Playwright), `npm run test:ui`.
+Other scripts: `npm run typecheck`, `npm test` (Playwright), `npm run test:unit`
+(import-pipeline unit tests), `npm run test:ui`.
+
+## Import from your devices
+
+Instead of adding everyone by hand, import your real relationships and let
+**interaction frequency** place them. The importer reads four local sources
+**read-only** and writes into the app database:
+
+| Source | Where it reads |
+|--------|----------------|
+| WhatsApp | the local `whatsapp-mcp` bridge store (`messages.db`) |
+| iMessage | `~/Library/Messages/chat.db` |
+| Apple Mail | `~/Library/Mail/.../Envelope Index` (all accounts configured in Mail.app) |
+| Contacts | `~/Library/Application Support/AddressBook` (names, phones, emails) |
+
+Run it from the toolbar (**Import contacts**) or the CLI:
+
+```bash
+npm run import
+```
+
+**Requires Full Disk Access** for your terminal/app (System Settings → Privacy &
+Security → Full Disk Access) so it can read `chat.db` and the Mail index.
+
+How it works:
+
+- **Recency-weighted scoring** — every message contributes a weight that halves
+  every ~180 days, so recent, frequent contact ranks highest.
+- **Backfilled history** — a rating per person is reconstructed month by month
+  from your message history, so the time slider scrubs real relationship history.
+- **Top relationships placed** — the strongest ~50 are placed (uncategorised,
+  spread around the circle); everyone else is imported but **archived/hidden** and
+  can be un-hidden or dragged in later. Drag nodes to fine-tune.
+- **Identity matching** — a contact is matched across channels by phone (last 9
+  digits) and email; unknown messaging numbers become their own nodes, but unknown
+  email senders (newsletters, notifications) are ignored.
+- **Self-exclusion** — your own "me" card (and duplicates of it) are filtered out.
+- **Re-runnable** — re-importing updates in place (no duplicates) and **preserves
+  your manual drag edits**; only import-generated history is recomputed.
+
+Everything stays local — nothing is uploaded. Tune behaviour with env vars:
+`IMPORT_PLACE_LIMIT`, `IMPORT_HALF_LIFE_DAYS`, `IMPORT_MIN_UNKNOWN_EVENTS`,
+`IMPORT_SELF_HANDLES`, and `IMPORT_*_DB`/`IMPORT_CONTACTS_DIR` path overrides.
+
+**Threema is not supported** — it's end-to-end encrypted with no readable local
+store, so interaction frequency can't be extracted. Add Threema contacts by hand.
 
 ## Data, backup & restore
 
@@ -82,9 +133,11 @@ Or stop the app and copy `relationship-map.db` together with its `-wal` and
 
 ## Data model
 
-- `people` — name, group, contact frequency, cached `current_rating`, archived.
+- `people` — name, group, contact frequency, cached `current_rating`, archived,
+  plus `source` (`manual`/`import`) and a unique `external_key` for import dedup.
 - `rating_log` — append-only; every closeness change (including the initial one)
-  with a timestamp and optional note.
+  with a timestamp, optional note, and `source` so re-import can replace only its
+  own backfilled history while keeping your manual edits.
 - `categories` — groups with a colour. `settings` — your name (the centre).
 
 The map's live state is a cache; the log is the source of truth, so any past map

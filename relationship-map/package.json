@@ -11,6 +11,8 @@
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "preview": "npm run build && npm start",
     "typecheck": "tsc -b --noEmit",
+    "import": "tsx import/cli.ts",
+    "test:unit": "tsx --test \"import/**/*.test.ts\" \"src/**/*.test.ts\"",
     "test": "playwright test",
     "test:chromium": "playwright test --project=chromium",
     "test:ui": "playwright test --ui"

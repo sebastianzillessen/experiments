@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { categoriesRouter } from "./routes/categories.ts";
+import { importRouter } from "./routes/import.ts";
 import { mapRouter } from "./routes/map.ts";
 import { peopleRouter } from "./routes/people.ts";
 import { settingsRouter } from "./routes/settings.ts";
@@ -18,6 +19,7 @@ const api = express.Router();
 api.use("/settings", settingsRouter);
 api.use("/categories", categoriesRouter);
 api.use("/people", peopleRouter);
+api.use("/import", importRouter);
 api.use("/", mapRouter);
 app.use("/api", api);
 

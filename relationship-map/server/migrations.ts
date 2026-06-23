@@ -47,7 +47,31 @@ export function migrate(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_ratinglog_time ON rating_log(changed_at);
   `);
 
+  // Incremental columns for the contact-import feature. migrate() runs on every
+  // boot, so each addition is guarded against already existing.
+  addColumnIfMissing(db, "people", "external_key", "TEXT");
+  addColumnIfMissing(db, "people", "source", "TEXT NOT NULL DEFAULT 'manual'");
+  addColumnIfMissing(db, "rating_log", "source", "TEXT NOT NULL DEFAULT 'manual'");
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_people_external_key " +
+      "ON people(external_key) WHERE external_key IS NOT NULL;",
+  );
+
   seed(db);
+}
+
+function addColumnIfMissing(
+  db: Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 function seed(db: Database): void {

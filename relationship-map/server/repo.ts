@@ -180,6 +180,111 @@ export function changeRating(
   return getPerson(id);
 }
 
+// ---- Import -----------------------------------------------------------------
+
+export interface ImportedPersonInput {
+  external_key: string;
+  name: string;
+  category_id: number;
+  contact_frequency: ContactFrequency;
+  /** Backfilled rating history, ascending by changed_at. Empty = no interaction. */
+  history: Array<{ changed_at: string; rating: number }>;
+  archived: boolean;
+}
+
+export interface ImportPersonResult {
+  created: boolean;
+}
+
+/** Find or create a category by name, returning its id. */
+export function ensureCategory(name: string, color: string): number {
+  const existing = db
+    .prepare("SELECT id FROM categories WHERE name = ?")
+    .get(name) as { id: number } | undefined;
+  if (existing) return existing.id;
+  return createCategory(name, color).id;
+}
+
+function getPersonByExternalKey(externalKey: string): PersonRow | undefined {
+  return db.prepare("SELECT * FROM people WHERE external_key = ?").get(externalKey) as
+    | PersonRow
+    | undefined;
+}
+
+function latestRating(personId: number): number | undefined {
+  const row = db
+    .prepare(
+      "SELECT new_rating FROM rating_log WHERE person_id = ? ORDER BY changed_at DESC, id DESC LIMIT 1",
+    )
+    .get(personId) as { new_rating: number } | undefined;
+  return row?.new_rating;
+}
+
+/**
+ * Insert or update an imported person, keyed by external_key. Backfilled history
+ * is written with source='import'; on re-import only those rows are replaced, so
+ * manual drag edits (source='manual') survive. The cached current_rating is
+ * recomputed from the latest entry in the *full* log.
+ */
+export function upsertImportedPerson(input: ImportedPersonInput): ImportPersonResult {
+  const ts = now();
+  const insertLog = db.prepare(
+    "INSERT INTO rating_log (person_id, old_rating, new_rating, changed_at, note, source) " +
+      "VALUES (?, ?, ?, ?, NULL, 'import')",
+  );
+  const writeHistory = (personId: number) => {
+    let prev: number | null = null;
+    for (const h of input.history) {
+      insertLog.run(personId, prev, h.rating, h.changed_at);
+      prev = h.rating;
+    }
+  };
+
+  const existing = getPersonByExternalKey(input.external_key);
+
+  const tx = db.transaction((): boolean => {
+    if (existing) {
+      db.prepare("DELETE FROM rating_log WHERE person_id = ? AND source = 'import'").run(
+        existing.id,
+      );
+      writeHistory(existing.id);
+      // Preserve a manually-set category; only refresh name/frequency/archived.
+      db.prepare(
+        "UPDATE people SET name = ?, contact_frequency = ?, archived = ?, current_rating = ?, updated_at = ? WHERE id = ?",
+      ).run(
+        input.name,
+        input.contact_frequency,
+        input.archived ? 1 : 0,
+        latestRating(existing.id) ?? existing.current_rating,
+        ts,
+        existing.id,
+      );
+      return false;
+    }
+    const initialRating =
+      input.history.length > 0 ? input.history[input.history.length - 1]!.rating : 1;
+    const info = db
+      .prepare(
+        "INSERT INTO people (name, category_id, contact_frequency, current_rating, archived, source, external_key, created_at, updated_at) " +
+          "VALUES (?, ?, ?, ?, ?, 'import', ?, ?, ?)",
+      )
+      .run(
+        input.name,
+        input.category_id,
+        input.contact_frequency,
+        initialRating,
+        input.archived ? 1 : 0,
+        input.external_key,
+        ts,
+        ts,
+      );
+    writeHistory(Number(info.lastInsertRowid));
+    return true;
+  });
+
+  return { created: tx() };
+}
+
 export function getHistory(personId: number): RatingLogEntry[] {
   return db
     .prepare(

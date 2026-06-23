@@ -5,6 +5,10 @@ import type { Category } from "../types.ts";
 interface Props {
   categories: Category[];
   onChange: () => void;
+  /** Category ids currently hidden from the map. */
+  hiddenGroups: number[];
+  /** Toggle a group's visibility on the map. */
+  onToggleVisibility: (id: number) => void;
 }
 
 const PALETTE = [
@@ -18,7 +22,12 @@ const PALETTE = [
   "#64748b",
 ];
 
-export function CategoryLegend({ categories, onChange }: Props) {
+export function CategoryLegend({
+  categories,
+  onChange,
+  hiddenGroups,
+  onToggleVisibility,
+}: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState(PALETTE[0]);
@@ -56,19 +65,30 @@ export function CategoryLegend({ categories, onChange }: Props) {
       </div>
 
       <ul className="legend-list">
-        {categories.map((c) => (
-          <li key={c.id}>
-            <span className="swatch" style={{ background: c.color }} />
-            <span className="legend-name">{c.name}</span>
-            <button
-              className="legend-del"
-              title="Delete group"
-              onClick={() => remove(c.id)}
-            >
-              ×
-            </button>
-          </li>
-        ))}
+        {categories.map((c) => {
+          const hidden = hiddenGroups.includes(c.id);
+          return (
+            <li key={c.id} className={hidden ? "is-hidden" : undefined}>
+              <button
+                className="legend-eye"
+                title={hidden ? "Show on map" : "Hide from map"}
+                aria-pressed={!hidden}
+                onClick={() => onToggleVisibility(c.id)}
+              >
+                {hidden ? "🙈" : "👁"}
+              </button>
+              <span className="swatch" style={{ background: c.color }} />
+              <span className="legend-name">{c.name}</span>
+              <button
+                className="legend-del"
+                title="Delete group"
+                onClick={() => remove(c.id)}
+              >
+                ×
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
       {adding && (

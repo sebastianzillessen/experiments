@@ -28,9 +28,38 @@ test.describe.serial("relationship map", () => {
     await expect(node).toHaveCount(1);
   });
 
+  test("drag a node toward the centre to raise closeness", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "+ Add person" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add person" });
+    await dialog.getByLabel("Name").fill("Dragme");
+    await dialog.getByRole("button", { name: "Add" }).click();
+
+    const node = page.locator(".map-node", { hasText: "Dragme" });
+    await expect(node).toHaveCount(1);
+    const box = (await node.locator("circle").boundingBox())!;
+    const svgBox = (await page.locator("svg.relationship-map").boundingBox())!;
+    const cx = svgBox.x + svgBox.width / 2;
+    const cy = svgBox.y + svgBox.height / 2;
+
+    // Drag from the node to just above the centre (closest ring, top wedge).
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy - 18, { steps: 12 });
+    await page.mouse.up();
+
+    await node.locator("circle").click();
+    const panel = page.locator(".person-panel");
+    await expect(panel.locator(".rating-editor input[type=range]")).toHaveValue(/9|10/);
+
+    // Clean up so the dragged node doesn't overlap others in later tests.
+    await panel.getByRole("button", { name: "Archive person" }).click();
+    await expect(node).toHaveCount(0);
+  });
+
   test("change closeness and record history", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".map-node", { hasText: "Alex" }).click();
+    await page.locator(".map-node", { hasText: "Alex" }).locator("circle").click();
     const panel = page.locator(".person-panel");
     await expect(panel.getByRole("heading", { name: "Alex" })).toBeVisible();
 
@@ -62,7 +91,7 @@ test.describe.serial("relationship map", () => {
 
   test("archive removes the person from the live map", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".map-node", { hasText: "Alex" }).click();
+    await page.locator(".map-node", { hasText: "Alex" }).locator("circle").click();
     await page
       .locator(".person-panel")
       .getByRole("button", { name: "Archive person" })
