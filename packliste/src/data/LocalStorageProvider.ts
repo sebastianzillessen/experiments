@@ -664,6 +664,7 @@ export class LocalStorageProvider implements DataProvider {
         | "conditions"
         | "hasWasher"
         | "washIntervalDays"
+        | "reminderDaysBefore"
       >
     >,
   ): void {

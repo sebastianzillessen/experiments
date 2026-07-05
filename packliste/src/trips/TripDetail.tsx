@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus, Bell } from "lucide-react";
 import {
   Card,
   Stack,
@@ -31,6 +31,7 @@ import { QtyStepper } from "./QtyStepper";
 import { useTripWeather } from "../weather/useTripWeather";
 import { WeatherHint } from "../weather/WeatherHint";
 import { WEATHER_ITEMS } from "../weather/suggest";
+import { requestNotificationPermission, notificationPermission } from "../reminders";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
@@ -57,6 +58,15 @@ const SearchBar = styled.div`
   position: relative;
   display: flex;
   align-items: center;
+`;
+
+const ReminderSelect = styled.select`
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid ${colors.line2};
+  background: ${colors.surface};
+  font-size: 13px;
+  color: ${colors.ink};
 `;
 
 const SearchInput = styled.input`
@@ -730,6 +740,36 @@ export function TripDetail() {
             <Badge $tone="success">🧺 Waschmaschine · alle {trip.washIntervalDays} Tage</Badge>
           )}
         </Row>
+
+        {trip.startDate && (
+          <Row $gap={8} $align="center" $wrap>
+            <Muted style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Bell size={13} /> Erinnerung
+            </Muted>
+            <ReminderSelect
+              value={trip.reminderDaysBefore ?? 0}
+              aria-label="Erinnerung vor Reisebeginn"
+              onChange={async (e) => {
+                const v = Number(e.target.value);
+                if (v > 0) await requestNotificationPermission();
+                provider.updateTrip(trip.id, { reminderDaysBefore: v || undefined });
+              }}
+            >
+              <option value={0}>Aus</option>
+              <option value={1}>1 Tag vorher</option>
+              <option value={2}>2 Tage vorher</option>
+              <option value={3}>3 Tage vorher</option>
+              <option value={7}>1 Woche vorher</option>
+            </ReminderSelect>
+            {trip.reminderDaysBefore ? (
+              notificationPermission() === "denied" ? (
+                <Muted>Benachrichtigungen blockiert — nur In-App-Hinweis.</Muted>
+              ) : notificationPermission() === "unsupported" ? (
+                <Muted>Gerät ohne Benachrichtigungen — nur In-App-Hinweis.</Muted>
+              ) : null
+            ) : null}
+          </Row>
+        )}
 
         <WeatherHint
           weather={weather}

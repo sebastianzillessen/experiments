@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { SyncIndicator } from "./components/SyncIndicator";
+import { ReminderRunner } from "./components/ReminderRunner";
 import { ToastProvider } from "./components/ui/Toast";
 import { SyncProvider } from "./data/SyncContext";
 import { useCurrentUser } from "./hooks/useCurrentUser";
@@ -24,6 +25,7 @@ export function App() {
   return (
     <ToastProvider>
       <SyncProvider>
+        <ReminderRunner />
         <HashRouter>
           <Routes>
             <Route path="/trip/:id" element={<TripDetail />} />

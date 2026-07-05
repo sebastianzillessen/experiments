@@ -107,6 +107,7 @@ export interface DataProvider {
         | "conditions"
         | "hasWasher"
         | "washIntervalDays"
+        | "reminderDaysBefore"
       >
     >,
   ): void;
