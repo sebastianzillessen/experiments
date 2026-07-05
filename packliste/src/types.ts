@@ -89,6 +89,12 @@ export interface Trip {
   startDate?: string;
   endDate?: string;
   durationDays: number;
+  /**
+   * Freitext-Reiseziel (z.B. "Sardinien", "Berlin"). Wird beim Anlegen aus
+   * dem Trip-Namen vorgeschlagen und dient als Grundlage für die
+   * Wetter-Vorhersage. undefined/leer = kein Wetter-Hinweis.
+   */
+  destination?: string;
   conditions: string[];
   hasWasher: boolean;
   washIntervalDays?: number;

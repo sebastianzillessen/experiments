@@ -17,6 +17,8 @@ export interface CreateTripParams {
   startDate?: string;
   endDate?: string;
   durationDays: number;
+  /** Reiseziel (Freitext) für die Wetter-Vorhersage. */
+  destination?: string;
   conditions: string[];
   hasWasher: boolean;
   washIntervalDays?: number;
@@ -101,6 +103,7 @@ export interface DataProvider {
         | "startDate"
         | "endDate"
         | "durationDays"
+        | "destination"
         | "conditions"
         | "hasWasher"
         | "washIntervalDays"

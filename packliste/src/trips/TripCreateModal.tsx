@@ -17,6 +17,9 @@ import { useDataProvider } from "../data/DataProviderContext";
 import type { Trip } from "../types";
 import { conditionEmoji } from "../labels";
 import { daysBetween, generateTripItems } from "../data/derive";
+import { useTripWeather } from "../weather/useTripWeather";
+import { WeatherHint } from "../weather/WeatherHint";
+import { detectPlaceFromName } from "../weather/suggest";
 import { colors, radii, shadows } from "../theme.yak";
 
 const Overlay = styled(Dialog.Overlay)`
@@ -102,6 +105,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
         startDate: "",
         endDate: "",
         days: seed.durationDays,
+        destination: seed.destination ?? "",
         conds: [...seed.conditions],
         washer: seed.hasWasher,
         washInterval: seed.washIntervalDays ?? 3,
@@ -113,6 +117,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
       startDate: d.start,
       endDate: d.end,
       days: 7,
+      destination: "",
       // "default" ist vorausgewählt — Standard-Items kommen automatisch
       // mit. Spezial-Conditions (Regen, Schwimmen, …) wählt der User
       // gezielt zusätzlich.
@@ -134,6 +139,10 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
   const [startDate, setStartDate] = useState(initial.startDate);
   const [endDate, setEndDate] = useState(initial.endDate);
   const [days, setDays] = useState(initial.days);
+  const [destination, setDestination] = useState(initial.destination);
+  // Solange der Nutzer das Reiseziel nicht manuell angefasst hat, wird es aus
+  // dem Trip-Namen abgeleitet. Beim Duplizieren bleibt das Quell-Ziel stehen.
+  const [destinationTouched, setDestinationTouched] = useState(!!seed);
   const [activeConds, setActiveConds] = useState<string[]>(initial.conds);
   const [hasWasher, setHasWasher] = useState(initial.washer);
   const [washInterval, setWashInterval] = useState(initial.washInterval);
@@ -147,6 +156,14 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
     const computed = daysBetween(startDate, endDate);
     if (computed !== undefined && computed > 0) setDays(computed);
   }, [startDate, endDate]);
+
+  // Reiseziel automatisch aus dem Namen ableiten, bis der Nutzer es editiert.
+  useEffect(() => {
+    if (destinationTouched) return;
+    setDestination(detectPlaceFromName(name));
+  }, [name, destinationTouched]);
+
+  const weather = useTripWeather(destination, startDate, endDate);
 
   const tripPreview: Trip = {
     id: "preview",
@@ -197,6 +214,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
       );
       // Apply the new conditions / washer settings via updateTrip
       provider.updateTrip(newId, {
+        destination: destination.trim() || undefined,
         conditions: activeConds,
         hasWasher,
         washIntervalDays: hasWasher ? washInterval : undefined,
@@ -208,6 +226,7 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         durationDays: days,
+        destination: destination.trim() || undefined,
         conditions: activeConds,
         hasWasher,
         washIntervalDays: hasWasher ? washInterval : undefined,
@@ -242,6 +261,17 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
               <Field>
                 <FieldLabel>Trip-Name</FieldLabel>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Italien · Sommerferien" autoFocus />
+              </Field>
+              <Field>
+                <FieldLabel>Reiseziel (optional)</FieldLabel>
+                <Input
+                  value={destination}
+                  onChange={(e) => {
+                    setDestination(e.target.value);
+                    setDestinationTouched(true);
+                  }}
+                  placeholder="z.B. Sardinien — für die Wettervorhersage"
+                />
               </Field>
               <Row $gap={8}>
                 <Field style={{ flex: 1 }}>
@@ -306,6 +336,14 @@ export function TripCreateModal({ duplicateSource, onClose }: Props) {
                   Items ohne Bedingung sind immer auf jedem Trip.
                 </Muted>
               </div>
+
+              <WeatherHint
+                weather={weather}
+                activeConditions={activeConds}
+                onApplyCondition={(key) => {
+                  if (!activeConds.includes(key)) toggle(key);
+                }}
+              />
 
               <Checkbox
                 checked={hasWasher}
