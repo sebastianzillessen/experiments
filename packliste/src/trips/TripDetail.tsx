@@ -361,16 +361,23 @@ export function TripDetail() {
   // Person (@Initialen) und den Item-Namen. Gesucht wird nach dem Namen.
   const parsed = parseOmni(search, tripPersons, trip.durationDays);
   const query = parsed.name.toLowerCase();
+  // @Person schränkt Suche UND Add-Prüfung auf diese Person ein: so wird
+  // „@Li Regenjacke" als „hat Lilly das?" gewertet — auch wenn jemand
+  // anderes das Item schon hat.
+  const personScope = parsed.personId;
   const matchesSearch = (it: TripItem) =>
     !query ||
     it.name.toLowerCase().includes(query) ||
     (it.category || "").toLowerCase().includes(query);
-  // Board (Desktop) bekommt die suchgefilterten Items; Zähler/Spalten
-  // spiegeln dann die Treffer.
-  const searchedItems = query ? items.filter(matchesSearch) : items;
+  const inScope = (it: TripItem) =>
+    matchesSearch(it) && (!personScope || (it.personId ?? undefined) === personScope);
+  // Board (Desktop) bekommt die gefilterten Items (Name + ggf. @Person);
+  // Zähler/Spalten spiegeln dann die Treffer.
+  const searchedItems = query || personScope ? items.filter(inScope) : items;
   const matchCount = query ? searchedItems.length : 0;
-  // „Hinzufügen" bieten wir nur an, wenn ein Name getippt wurde und es KEINE
-  // (ähnlichen) Treffer in der Packliste gibt — sonst ist es ein Suchvorgang.
+  // „Hinzufügen" bieten wir nur an, wenn ein Name getippt wurde und es für
+  // das Ziel (die @Person, falls angegeben — sonst trip-weit) KEINEN Treffer
+  // gibt — sonst ist es ein Suchvorgang.
   const canAdd = query.length > 0 && searchedItems.length === 0;
 
   function addParsed() {
@@ -435,7 +442,7 @@ export function TripDetail() {
   }
 
   const visibleItems = items.filter((it) => {
-    if (!matchesSearch(it)) return false;
+    if (!inScope(it)) return false;
     if (filterPerson === "all") return true;
     if (filterPerson === "none") return !it.personId;
     return it.personId === filterPerson;
