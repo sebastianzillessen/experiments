@@ -38,7 +38,7 @@ import { TripBoard } from "./TripBoard";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePackingItems } from "../hooks/usePackingItems";
 import { calculateQuantity, fuzzyIncludes } from "../data/derive";
-import { parseOmni } from "./parseOmni";
+import { parseOmni, type OmniParsed } from "./parseOmni";
 
 const Page = styled.div`
   max-width: 480px;
@@ -137,6 +137,30 @@ const AddHint = styled.span`
   border-radius: 6px;
   padding: 1px 6px;
   flex-shrink: 0;
+`;
+
+/** Vorschau + Bestätigung für den mehrzeiligen Listen-Import. */
+const ImportPanel = styled.div`
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid ${colors.line2};
+  border-radius: ${radii.sm};
+  background: ${colors.surface};
+`;
+
+const ImportList = styled.ul`
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: ${colors.ink2};
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
 `;
 
 /**
@@ -306,6 +330,7 @@ export function TripDetail() {
   // der mobilen Ein-Spalten-Liste mit Personen-Filter.
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [search, setSearch] = useState("");
+  const [importLines, setImportLines] = useState<string[] | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Cmd+F (Mac) / Ctrl+F (Win/Linux) fokussiert die App-Suche statt der
@@ -381,17 +406,30 @@ export function TripDetail() {
   // gibt — sonst ist es ein Suchvorgang.
   const canAdd = query.length > 0 && searchedItems.length === 0;
 
-  function addParsed() {
-    if (!trip) return;
-    const name = parsed.name.trim();
-    if (!name) return;
+  /**
+   * Legt ein Item aus einem geparsten Omnibox-Ausdruck an. Nutzt ein
+   * bestehendes Template (kein Duplikat) oder legt Sonderbedarf an.
+   * `skipIfExists` überspringt Zeilen, deren Item es (für dieselbe Person)
+   * schon gibt — für den Listen-Import. Liefert true, wenn etwas angelegt
+   * wurde.
+   */
+  function buildAndAdd(p: OmniParsed, skipIfExists = false): boolean {
+    if (!trip) return false;
+    const name = p.name.trim();
+    if (!name) return false;
+    if (skipIfExists) {
+      const exists = items.some(
+        (it) =>
+          (it.personId ?? undefined) === p.personId &&
+          it.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      if (exists) return false;
+    }
     const tpl = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
     if (tpl) {
-      // Bestehendes Template wiederverwenden (kein Duplikat), aber der
-      // getippten Person + Menge zuordnen.
-      const userQty = parsed.qty != null;
-      const baseQ = userQty ? parsed.baseQty : tpl.baseQuantity;
-      const unit = userQty ? parsed.unit : tpl.unit;
+      const userQty = p.qty != null;
+      const baseQ = userQty ? p.baseQty : tpl.baseQuantity;
+      const unit = userQty ? p.unit : tpl.unit;
       const perDays = userQty ? undefined : tpl.perDays;
       const total = calculateQuantity(
         { baseQuantity: baseQ, unit, washable: tpl.washable, perDays },
@@ -400,7 +438,7 @@ export function TripDetail() {
       provider.addAdhocTripItem({
         tripId: trip.id,
         familyId: trip.familyId,
-        personId: parsed.personId,
+        personId: p.personId,
         name: tpl.name,
         category: tpl.category,
         baseQuantity: baseQ,
@@ -411,14 +449,13 @@ export function TripDetail() {
         sortOrder: 9999,
       });
     } else {
-      // Neu → als Sonderbedarf-Template + Trip-Item anlegen.
       provider.createPackingItem({
         familyId: trip.familyId,
-        personIds: parsed.personId ? [parsed.personId] : [],
+        personIds: p.personId ? [p.personId] : [],
         name,
         category: "",
-        baseQuantity: parsed.baseQty,
-        unit: parsed.unit,
+        baseQuantity: p.baseQty,
+        unit: p.unit,
         washable: false,
         conditions: [],
         sortOrder: templates.length,
@@ -426,19 +463,38 @@ export function TripDetail() {
       provider.addAdhocTripItem({
         tripId: trip.id,
         familyId: trip.familyId,
-        personId: parsed.personId,
+        personId: p.personId,
         name,
         category: "",
-        baseQuantity: parsed.baseQty,
-        unit: parsed.unit,
+        baseQuantity: p.baseQty,
+        unit: p.unit,
         washable: false,
-        quantity: parsed.totalQty,
+        quantity: p.totalQty,
         sortOrder: 9999,
       });
     }
-    toast.show({
-      message: `„${name}" hinzugefügt${parsed.personLabel ? " · " + parsed.personLabel : ""}`,
-    });
+    return true;
+  }
+
+  function addParsed() {
+    if (buildAndAdd(parsed)) {
+      toast.show({
+        message: `„${parsed.name.trim()}" hinzugefügt${parsed.personLabel ? " · " + parsed.personLabel : ""}`,
+      });
+      setSearch("");
+    }
+  }
+
+  // Mehrzeiliges Einfügen → Listen-Import (eine Zeile = ein Item).
+  function importList() {
+    if (!trip || !importLines) return;
+    let n = 0;
+    for (const line of importLines) {
+      const p = parseOmni(line, tripPersons, trip.durationDays);
+      if (buildAndAdd(p, true)) n++;
+    }
+    toast.show({ message: `${n} Item${n === 1 ? "" : "s"} importiert` });
+    setImportLines(null);
     setSearch("");
   }
 
@@ -652,13 +708,26 @@ export function TripDetail() {
                 onKeyDown={(e) => {
                   if (e.key === "Escape") {
                     setSearch("");
+                    setImportLines(null);
                     e.currentTarget.blur();
                   } else if (e.key === "Enter" && canAdd) {
                     e.preventDefault();
                     addParsed();
                   }
                 }}
-                placeholder="Suchen oder hinzufügen …  z.B. 3 @Li Regenjacke"
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  const lines = text
+                    .split(/\r?\n/)
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  // Mehrzeilig eingefügt → als Liste importieren.
+                  if (lines.length > 1) {
+                    e.preventDefault();
+                    setImportLines(lines);
+                  }
+                }}
+                placeholder="Suchen · hinzufügen · Liste einfügen …  z.B. 3 @Li Regenjacke"
                 aria-label="Suchen oder hinzufügen"
               />
               {search && (
@@ -675,7 +744,47 @@ export function TripDetail() {
               )}
             </SearchBar>
 
-            {canAdd ? (
+            {importLines ? (
+              <ImportPanel>
+                <Row style={{ justifyContent: "space-between" }}>
+                  <strong style={{ fontSize: 13 }}>
+                    {importLines.length} Zeilen einfügen
+                  </strong>
+                  <SearchClear
+                    type="button"
+                    aria-label="Import abbrechen"
+                    style={{ position: "static" }}
+                    onClick={() => setImportLines(null)}
+                  >
+                    <X size={14} />
+                  </SearchClear>
+                </Row>
+                <ImportList>
+                  {importLines.slice(0, 8).map((line, i) => {
+                    const p = parseOmni(line, tripPersons, trip.durationDays);
+                    return (
+                      <li key={i}>
+                        {p.name || <em>(kein Name)</em>}
+                        {p.totalQty > 1 && ` · ${p.totalQty}×`}
+                        {p.personLabel && ` · ${p.personLabel}`}
+                      </li>
+                    );
+                  })}
+                  {importLines.length > 8 && (
+                    <li>
+                      <Muted>… und {importLines.length - 8} weitere</Muted>
+                    </li>
+                  )}
+                </ImportList>
+                <Button $size="sm" onClick={importList}>
+                  <Plus size={14} /> {importLines.length} Items importieren
+                </Button>
+                <Muted style={{ fontSize: 11 }}>
+                  Eine Zeile = ein Item. Zahl = Menge, @Initialen = Person.
+                  Bereits vorhandene werden übersprungen.
+                </Muted>
+              </ImportPanel>
+            ) : canAdd ? (
               <AddOption type="button" onClick={addParsed}>
                 <Plus size={15} />
                 <span>
