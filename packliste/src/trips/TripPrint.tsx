@@ -157,12 +157,20 @@ const Columns = styled.div<{ $cols: number }>`
   gap: 6mm 8mm;
 `;
 
+/**
+ * Personen-Karte. `break-inside: auto` erlaubt bewusst, dass eine sehr
+ * lange Karte (mehr Einträge als auf eine Seite passen) über den
+ * Seitenumbruch fließt — statt sie mit `avoid` komplett auf die nächste
+ * Seite zu schieben (was die vorige Seite halb leer ließe). Der Umbruch
+ * passiert dabei nie mitten in einem Eintrag (siehe ItemLine) und nie
+ * direkt nach einer Überschrift (PersonHead / CatLabel: break-after:
+ * avoid). Kein `overflow: hidden` — das würde den Inhalt an der
+ * Umbruchkante abschneiden.
+ */
 const PersonCard = styled.div<{ $color: string; $mono: boolean }>`
-  break-inside: avoid;
-  page-break-inside: avoid;
+  break-inside: auto;
   border: 1px solid ${INK};
   border-radius: 6px;
-  overflow: hidden;
   /* Im S/W-Modus tragen die Personen ihre Farbe nur als dezenter
      linker Balken — verschwindet auf S/W-Druckern zwar zu Grau, stört
      aber nicht; die Struktur kommt von Rand + fettem Namen. */
@@ -179,6 +187,10 @@ const PersonHead = styled.div<{ $color: string; $mono: boolean }>`
   color: ${({ $mono }) => ($mono ? INK : "#fff")};
   border-bottom: ${({ $mono }) =>
     $mono ? `2px solid ${INK}` : "1px solid rgba(0, 0, 0, 0.12)"};
+  /* Name nie als letzte Zeile einer Seite lassen — mind. der Kartenanfang
+     folgt auf derselben Seite. */
+  break-after: avoid;
+  break-inside: avoid;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 
