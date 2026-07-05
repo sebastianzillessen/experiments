@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X } from "lucide-react";
 import {
   Card,
   Stack,
@@ -35,12 +35,69 @@ import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
 import { EditTripItemModal } from "./EditTripItemModal";
+import { TripBoard } from "./TripBoard";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 const Page = styled.div`
   max-width: 480px;
   margin: 0 auto;
   padding: 16px;
   padding-bottom: 80px;
+  /* Auf großen Screens: volle Breite fürs Personen-Board (Kanban-Ansicht). */
+  @media (min-width: 1024px) {
+    max-width: min(1680px, 100%);
+    padding: 20px 24px 40px;
+  }
+`;
+
+const SearchBar = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  padding: 10px 36px;
+  border: 1px solid ${colors.line2};
+  border-radius: ${radii.sm};
+  background: ${colors.surface};
+  font-size: 14px;
+  color: ${colors.ink};
+  &:focus {
+    outline: 2px solid ${colors.primary};
+    outline-offset: 0;
+    border-color: ${colors.primary};
+  }
+  &::placeholder {
+    color: ${colors.ink3};
+  }
+`;
+
+const SearchIcon = styled.span`
+  position: absolute;
+  left: 11px;
+  display: inline-flex;
+  color: ${colors.ink3};
+  pointer-events: none;
+`;
+
+const SearchClear = styled.button`
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${colors.ink3};
+  &:hover {
+    background: ${colors.surface2};
+    color: ${colors.ink2};
+  }
 `;
 
 /**
@@ -205,6 +262,25 @@ export function TripDetail() {
   const [editItem, setEditItem] = useState<TripItem | null>(null);
   const toast = useToast();
   const weather = useTripWeather(trip?.destination, trip?.startDate, trip?.endDate);
+  // Ab Tablet-/Desktop-Breite: Personen-Board (Spalten nebeneinander) statt
+  // der mobilen Ein-Spalten-Liste mit Personen-Filter.
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Cmd+F (Mac) / Ctrl+F (Win/Linux) fokussiert die App-Suche statt der
+  // Browser-Suche — so filtert man direkt die Packliste. Escape leert.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Default filter: link the current user's linked person + unassigned
   const linkedPersonId = useMemo(() => {
@@ -241,7 +317,18 @@ export function TripDetail() {
     ? persons.filter((p) => trip.personIds!.includes(p.id))
     : persons;
 
+  const query = search.trim().toLowerCase();
+  const matchesSearch = (it: TripItem) =>
+    !query ||
+    it.name.toLowerCase().includes(query) ||
+    (it.category || "").toLowerCase().includes(query);
+  // Board (Desktop) bekommt die suchgefilterten Items; Zähler/Spalten
+  // spiegeln dann die Treffer.
+  const searchedItems = query ? items.filter(matchesSearch) : items;
+  const matchCount = query ? searchedItems.length : 0;
+
   const visibleItems = items.filter((it) => {
+    if (!matchesSearch(it)) return false;
     if (filterPerson === "all") return true;
     if (filterPerson === "none") return !it.personId;
     return it.personId === filterPerson;
@@ -436,6 +523,49 @@ export function TripDetail() {
           </ProgressTrack>
         </div>
 
+        {items.length > 0 && (
+          <div>
+            <SearchBar>
+              <SearchIcon>
+                <Search size={15} />
+              </SearchIcon>
+              <SearchInput
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearch("");
+                    e.currentTarget.blur();
+                  }
+                }}
+                placeholder="Items suchen …  (⌘F / Strg+F)"
+                aria-label="Items suchen"
+              />
+              {search && (
+                <SearchClear
+                  type="button"
+                  aria-label="Suche leeren"
+                  onClick={() => {
+                    setSearch("");
+                    searchRef.current?.focus();
+                  }}
+                >
+                  <X size={14} />
+                </SearchClear>
+              )}
+            </SearchBar>
+            {query && (
+              <Muted style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                {matchCount} {matchCount === 1 ? "Treffer" : "Treffer"}
+                {matchCount === 0 && " — nichts gefunden"}
+              </Muted>
+            )}
+          </div>
+        )}
+
+        {!isDesktop && (
         <StickyHeader>
           {tripPersons.length > 0 && (
             <ChipsScrollable>
@@ -503,8 +633,9 @@ export function TripDetail() {
             }
           />
         </StickyHeader>
+        )}
 
-        {items.length === 0 && (
+        {!isDesktop && items.length === 0 && (
           <Card>
             <Stack $gap={8} $align="center">
               <div style={{ fontSize: 32 }}>📋</div>
@@ -516,6 +647,17 @@ export function TripDetail() {
           </Card>
         )}
 
+        {isDesktop ? (
+          <TripBoard
+            trip={trip}
+            items={searchedItems}
+            persons={tripPersons}
+            categories={familyCategories}
+            onEdit={setEditItem}
+            onDelete={deleteWithUndo}
+          />
+        ) : (
+        <>
         <SortToggle>
           <SortBtn type="button" $active={sortMode === "open-first"} onClick={() => setSortMode("open-first")}>
             Offene zuerst
@@ -569,6 +711,8 @@ export function TripDetail() {
               </Card>
             )}
           </>
+        )}
+        </>
         )}
 
         <Divider />
