@@ -6,11 +6,11 @@ Ideensammlung für die Packlisten-App. ⚡ = kleiner, schneller Gewinn.
 
 | # | Feature | Status |
 |---|---------|--------|
-| 1 | Push-Erinnerungen (Trip-Reminder) | geplant |
-| 2 | Template-Deduplizierung | geplant |
-| 3 | Trip-Item-Deduplizierung | geplant |
-| 4 | Import aus Liste in der Omnibox (eine Zeile = ein Item) | geplant |
-| 5 | Wetter-basierte Item-Vorschläge | geplant |
+| 1 | Push-Erinnerungen (Trip-Reminder) | ✅ client-seitig (Background-Push offen) |
+| 2 | Template-Deduplizierung | ✅ erledigt |
+| 3 | Trip-Item-Deduplizierung | ✅ erledigt |
+| 4 | Import aus Liste in der Omnibox (eine Zeile = ein Item) | ✅ erledigt |
+| 5 | Wetter-basierte Item-Vorschläge | ✅ erledigt |
 
 Kurznotizen zur Umsetzung:
 
