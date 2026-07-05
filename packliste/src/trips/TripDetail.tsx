@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus } from "lucide-react";
 import {
   Card,
   Stack,
@@ -30,17 +30,113 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { QtyStepper } from "./QtyStepper";
 import { useTripWeather } from "../weather/useTripWeather";
 import { WeatherHint } from "../weather/WeatherHint";
-import { QuickAdd } from "./QuickAdd";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
 import { EditTripItemModal } from "./EditTripItemModal";
+import { TripBoard } from "./TripBoard";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { usePackingItems } from "../hooks/usePackingItems";
+import { calculateQuantity } from "../data/derive";
+import { parseOmni } from "./parseOmni";
 
 const Page = styled.div`
   max-width: 480px;
   margin: 0 auto;
   padding: 16px;
   padding-bottom: 80px;
+  /* Auf großen Screens: volle Breite fürs Personen-Board (Kanban-Ansicht). */
+  @media (min-width: 1024px) {
+    max-width: min(1680px, 100%);
+    padding: 20px 24px 40px;
+  }
+`;
+
+const SearchBar = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  padding: 10px 36px;
+  border: 1px solid ${colors.line2};
+  border-radius: ${radii.sm};
+  background: ${colors.surface};
+  font-size: 14px;
+  color: ${colors.ink};
+  &:focus {
+    outline: 2px solid ${colors.primary};
+    outline-offset: 0;
+    border-color: ${colors.primary};
+  }
+  &::placeholder {
+    color: ${colors.ink3};
+  }
+`;
+
+const SearchIcon = styled.span`
+  position: absolute;
+  left: 11px;
+  display: inline-flex;
+  color: ${colors.ink3};
+  pointer-events: none;
+`;
+
+const SearchClear = styled.button`
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${colors.ink3};
+  &:hover {
+    background: ${colors.surface2};
+    color: ${colors.ink2};
+  }
+`;
+
+/** „Hinzufügen"-Zeile, die erscheint, wenn die Suche keinen Treffer hat. */
+const AddOption = styled.button`
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid ${colors.primary};
+  background: ${colors.primarySoft};
+  color: ${colors.primaryInk};
+  border-radius: ${radii.sm};
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  & > span {
+    flex: 1;
+    min-width: 0;
+  }
+  & strong {
+    font-weight: 700;
+  }
+  &:hover {
+    filter: brightness(0.98);
+  }
+`;
+
+const AddHint = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${colors.primary};
+  border: 1px solid ${colors.primary};
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex-shrink: 0;
 `;
 
 /**
@@ -198,6 +294,7 @@ export function TripDetail() {
   const persons = usePersons(trip?.familyId);
   const conditions = useConditions(trip?.familyId);
   const familyCategories = useCategories(trip?.familyId);
+  const templates = usePackingItems(trip?.familyId);
   const user = useCurrentUser();
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
   const [sortMode, setSortMode] = useState<"default" | "open-first">("open-first");
@@ -205,6 +302,25 @@ export function TripDetail() {
   const [editItem, setEditItem] = useState<TripItem | null>(null);
   const toast = useToast();
   const weather = useTripWeather(trip?.destination, trip?.startDate, trip?.endDate);
+  // Ab Tablet-/Desktop-Breite: Personen-Board (Spalten nebeneinander) statt
+  // der mobilen Ein-Spalten-Liste mit Personen-Filter.
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Cmd+F (Mac) / Ctrl+F (Win/Linux) fokussiert die App-Suche statt der
+  // Browser-Suche — so filtert man direkt die Packliste. Escape leert.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Default filter: link the current user's linked person + unassigned
   const linkedPersonId = useMemo(() => {
@@ -241,7 +357,85 @@ export function TripDetail() {
     ? persons.filter((p) => trip.personIds!.includes(p.id))
     : persons;
 
+  // Omnibox: dasselbe Feld sucht UND legt an. parseOmni trennt Menge (Zahl),
+  // Person (@Initialen) und den Item-Namen. Gesucht wird nach dem Namen.
+  const parsed = parseOmni(search, tripPersons, trip.durationDays);
+  const query = parsed.name.toLowerCase();
+  const matchesSearch = (it: TripItem) =>
+    !query ||
+    it.name.toLowerCase().includes(query) ||
+    (it.category || "").toLowerCase().includes(query);
+  // Board (Desktop) bekommt die suchgefilterten Items; Zähler/Spalten
+  // spiegeln dann die Treffer.
+  const searchedItems = query ? items.filter(matchesSearch) : items;
+  const matchCount = query ? searchedItems.length : 0;
+  // „Hinzufügen" bieten wir nur an, wenn ein Name getippt wurde und es KEINE
+  // (ähnlichen) Treffer in der Packliste gibt — sonst ist es ein Suchvorgang.
+  const canAdd = query.length > 0 && searchedItems.length === 0;
+
+  function addParsed() {
+    if (!trip) return;
+    const name = parsed.name.trim();
+    if (!name) return;
+    const tpl = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (tpl) {
+      // Bestehendes Template wiederverwenden (kein Duplikat), aber der
+      // getippten Person + Menge zuordnen.
+      const userQty = parsed.qty != null;
+      const baseQ = userQty ? parsed.baseQty : tpl.baseQuantity;
+      const unit = userQty ? parsed.unit : tpl.unit;
+      const perDays = userQty ? undefined : tpl.perDays;
+      const total = calculateQuantity(
+        { baseQuantity: baseQ, unit, washable: tpl.washable, perDays },
+        trip,
+      );
+      provider.addAdhocTripItem({
+        tripId: trip.id,
+        familyId: trip.familyId,
+        personId: parsed.personId,
+        name: tpl.name,
+        category: tpl.category,
+        baseQuantity: baseQ,
+        unit,
+        perDays,
+        washable: tpl.washable,
+        quantity: total,
+        sortOrder: 9999,
+      });
+    } else {
+      // Neu → als Sonderbedarf-Template + Trip-Item anlegen.
+      provider.createPackingItem({
+        familyId: trip.familyId,
+        personIds: parsed.personId ? [parsed.personId] : [],
+        name,
+        category: "",
+        baseQuantity: parsed.baseQty,
+        unit: parsed.unit,
+        washable: false,
+        conditions: [],
+        sortOrder: templates.length,
+      });
+      provider.addAdhocTripItem({
+        tripId: trip.id,
+        familyId: trip.familyId,
+        personId: parsed.personId,
+        name,
+        category: "",
+        baseQuantity: parsed.baseQty,
+        unit: parsed.unit,
+        washable: false,
+        quantity: parsed.totalQty,
+        sortOrder: 9999,
+      });
+    }
+    toast.show({
+      message: `„${name}" hinzugefügt${parsed.personLabel ? " · " + parsed.personLabel : ""}`,
+    });
+    setSearch("");
+  }
+
   const visibleItems = items.filter((it) => {
+    if (!matchesSearch(it)) return false;
     if (filterPerson === "all") return true;
     if (filterPerson === "none") return !it.personId;
     return it.personId === filterPerson;
@@ -436,6 +630,73 @@ export function TripDetail() {
           </ProgressTrack>
         </div>
 
+        {items.length > 0 && (
+          <div>
+            <SearchBar>
+              <SearchIcon>
+                <Search size={15} />
+              </SearchIcon>
+              <SearchInput
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearch("");
+                    e.currentTarget.blur();
+                  } else if (e.key === "Enter" && canAdd) {
+                    e.preventDefault();
+                    addParsed();
+                  }
+                }}
+                placeholder="Suchen oder hinzufügen …  z.B. 3 @Li Regenjacke"
+                aria-label="Suchen oder hinzufügen"
+              />
+              {search && (
+                <SearchClear
+                  type="button"
+                  aria-label="Eingabe leeren"
+                  onClick={() => {
+                    setSearch("");
+                    searchRef.current?.focus();
+                  }}
+                >
+                  <X size={14} />
+                </SearchClear>
+              )}
+            </SearchBar>
+
+            {canAdd ? (
+              <AddOption type="button" onClick={addParsed}>
+                <Plus size={15} />
+                <span>
+                  <strong>„{parsed.name}"</strong> hinzufügen
+                  {parsed.totalQty > 1 && <> · {parsed.totalQty}×</>} ·{" "}
+                  {parsed.personLabel ?? "Gemeinsam"}
+                  {parsed.unit === "per_day" && (
+                    <Muted style={{ marginLeft: 6 }}>
+                      ({parsed.baseQty}/Tag)
+                    </Muted>
+                  )}
+                </span>
+                <AddHint>Enter ↵</AddHint>
+              </AddOption>
+            ) : query ? (
+              <Muted style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                {matchCount} {matchCount === 1 ? "Treffer" : "Treffer"}
+              </Muted>
+            ) : (search.trim() && parsed.personLabel) ? (
+              <Muted style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                Filter/Ziel: {parsed.personLabel}
+                {parsed.totalQty > 1 && ` · ${parsed.totalQty}×`}
+                {" "}— tippe einen Item-Namen
+              </Muted>
+            ) : null}
+          </div>
+        )}
+
+        {!isDesktop && (
         <StickyHeader>
           {tripPersons.length > 0 && (
             <ChipsScrollable>
@@ -493,18 +754,10 @@ export function TripDetail() {
               })()}
             </ChipsScrollable>
           )}
-
-          <QuickAdd
-            trip={trip}
-            targetPersonId={
-              typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
-                ? filterPerson
-                : undefined
-            }
-          />
         </StickyHeader>
+        )}
 
-        {items.length === 0 && (
+        {!isDesktop && items.length === 0 && (
           <Card>
             <Stack $gap={8} $align="center">
               <div style={{ fontSize: 32 }}>📋</div>
@@ -516,6 +769,16 @@ export function TripDetail() {
           </Card>
         )}
 
+        {isDesktop ? (
+          <TripBoard
+            items={searchedItems}
+            persons={tripPersons}
+            categories={familyCategories}
+            onEdit={setEditItem}
+            onDelete={deleteWithUndo}
+          />
+        ) : (
+        <>
         <SortToggle>
           <SortBtn type="button" $active={sortMode === "open-first"} onClick={() => setSortMode("open-first")}>
             Offene zuerst
@@ -569,6 +832,8 @@ export function TripDetail() {
               </Card>
             )}
           </>
+        )}
+        </>
         )}
 
         <Divider />
