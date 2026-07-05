@@ -30,6 +30,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { QtyStepper } from "./QtyStepper";
 import { useTripWeather } from "../weather/useTripWeather";
 import { WeatherHint } from "../weather/WeatherHint";
+import { WEATHER_ITEMS } from "../weather/suggest";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
@@ -528,6 +529,22 @@ export function TripDetail() {
   })();
   const dupCount = duplicateGroups.reduce((s, g) => s + g.length - 1, 0);
 
+  // Wetter-basierte Item-Vorschläge: aus den empfohlenen Bedingungen
+  // konkrete Items ableiten, bereits (fuzzy) vorhandene überspringen.
+  const weatherItemSuggestions: string[] = (() => {
+    const conds = weather.recommendation?.conditions ?? [];
+    const names = conds.flatMap((c) => WEATHER_ITEMS[c] ?? []);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const n of names) {
+      const key = n.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!items.some((it) => fuzzyIncludes(it.name, n))) out.push(n);
+    }
+    return out;
+  })();
+
   function mergeDuplicates() {
     for (const group of duplicateGroups) {
       const keeper = group[0];
@@ -726,6 +743,12 @@ export function TripDetail() {
                 `${conditionLabel(key, conditions)} aktiviert` +
                 (added > 0 ? ` · ${added} Item${added === 1 ? "" : "s"} hinzugefügt` : ""),
             });
+          }}
+          itemSuggestions={weatherItemSuggestions}
+          onAddItem={(name) => {
+            if (buildAndAdd(parseOmni(name, tripPersons, trip.durationDays), true)) {
+              toast.show({ message: `„${name}" hinzugefügt` });
+            }
           }}
         />
 

@@ -43,6 +43,10 @@ interface Props {
   activeConditions?: string[];
   /** Klick auf einen Vorschlags-Chip. Ohne Handler werden keine Chips gezeigt. */
   onApplyCondition?: (key: string) => void;
+  /** Konkrete Item-Vorschläge (bereits vorhandene sind schon herausgefiltert). */
+  itemSuggestions?: string[];
+  /** Klick auf einen Item-Vorschlags-Chip. */
+  onAddItem?: (name: string) => void;
 }
 
 /**
@@ -50,7 +54,13 @@ interface Props {
  * sich aus nichts — Vorschläge werden nur als Text und (optional) als per Tap
  * übernehmbare Chips angeboten.
  */
-export function WeatherHint({ weather, activeConditions = [], onApplyCondition }: Props) {
+export function WeatherHint({
+  weather,
+  activeConditions = [],
+  onApplyCondition,
+  itemSuggestions = [],
+  onAddItem,
+}: Props) {
   const { status } = weather;
 
   if (status === "idle" || status === "past" || status === "error") return null;
@@ -124,6 +134,24 @@ export function WeatherHint({ weather, activeConditions = [], onApplyCondition }
             );
           })}
         </Chips>
+      )}
+
+      {onAddItem && itemSuggestions.length > 0 && (
+        <>
+          <Muted style={{ fontSize: 12 }}>Passende Items — tippen zum Hinzufügen:</Muted>
+          <Chips>
+            {itemSuggestions.map((name) => (
+              <Chip
+                key={name}
+                type="button"
+                onClick={() => onAddItem(name)}
+                title="Zum Trip hinzufügen"
+              >
+                <Plus size={13} /> {name}
+              </Chip>
+            ))}
+          </Chips>
+        </>
       )}
     </Panel>
   );
