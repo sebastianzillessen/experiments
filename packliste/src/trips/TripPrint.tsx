@@ -143,21 +143,23 @@ const Tag = styled.span`
 `;
 
 /**
- * Multi-Column-Container: die Personen-Karten fließen in N Spalten. Jede
- * Karte bleibt dank break-inside dabei zusammen und wird nicht über einen
- * Spalten- oder Seitenumbruch zerrissen.
+ * Spalten-Container. WICHTIG: CSS-Multi-Column (`column-count`) wird hier
+ * bewusst NICHT verwendet — es paginiert im Druck nicht (Chrome/Safari
+ * quetschen alle Spalten auf Seite 1 und schneiden den Rest ab). CSS-Grid
+ * dagegen fragmentiert im Druck sauber: volle Zeilen brechen auf die
+ * nächste A4-Seite um. `align-items: start` hält jede Karte auf ihrer
+ * natürlichen Höhe (keine Streckung auf Zeilenhöhe).
  */
 const Columns = styled.div<{ $cols: number }>`
-  column-count: ${({ $cols }) => $cols};
-  column-gap: 10mm;
-  column-fill: balance;
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
+  align-items: start;
+  gap: 6mm 8mm;
 `;
 
 const PersonCard = styled.div<{ $color: string; $mono: boolean }>`
   break-inside: avoid;
-  -webkit-column-break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 8mm;
   border: 1px solid ${INK};
   border-radius: 6px;
   overflow: hidden;
@@ -297,11 +299,24 @@ const GhostLine = styled.div`
   }
 `;
 
-/** CSS das nur beim Drucken greift: A4 Hochformat + Ränder. */
+/**
+ * CSS das nur beim Drucken greift: A4 Hochformat + Ränder.
+ *
+ * Der entscheidende Teil ist der Height/Overflow-Reset: index.css setzt
+ * `html, body, #root { height: 100% }` (für die 100vh-App-Shell). Im Druck
+ * beschneidet das die druckbare Fläche auf EINE Seitenhöhe — der Rest wird
+ * abgeschnitten, es entsteht nur eine Seite. Wir heben das hier auf, damit
+ * der Inhalt über beliebig viele A4-Seiten fließen kann.
+ */
 const PRINT_STYLE = `
   @media print {
     @page { size: A4 portrait; margin: 10mm; }
-    html, body { background: #fff !important; }
+    html, body, #root {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+    }
     /* App-Chrome (BottomNav etc.) verstecken */
     nav { display: none !important; }
   }
