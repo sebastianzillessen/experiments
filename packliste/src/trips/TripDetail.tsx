@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus } from "lucide-react";
 import {
   Card,
   Stack,
@@ -30,13 +30,15 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { QtyStepper } from "./QtyStepper";
 import { useTripWeather } from "../weather/useTripWeather";
 import { WeatherHint } from "../weather/WeatherHint";
-import { QuickAdd } from "./QuickAdd";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
 import { EditTripItemModal } from "./EditTripItemModal";
 import { TripBoard } from "./TripBoard";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { usePackingItems } from "../hooks/usePackingItems";
+import { calculateQuantity } from "../data/derive";
+import { parseOmni } from "./parseOmni";
 
 const Page = styled.div`
   max-width: 480px;
@@ -98,6 +100,43 @@ const SearchClear = styled.button`
     background: ${colors.surface2};
     color: ${colors.ink2};
   }
+`;
+
+/** „Hinzufügen"-Zeile, die erscheint, wenn die Suche keinen Treffer hat. */
+const AddOption = styled.button`
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid ${colors.primary};
+  background: ${colors.primarySoft};
+  color: ${colors.primaryInk};
+  border-radius: ${radii.sm};
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  & > span {
+    flex: 1;
+    min-width: 0;
+  }
+  & strong {
+    font-weight: 700;
+  }
+  &:hover {
+    filter: brightness(0.98);
+  }
+`;
+
+const AddHint = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${colors.primary};
+  border: 1px solid ${colors.primary};
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex-shrink: 0;
 `;
 
 /**
@@ -255,6 +294,7 @@ export function TripDetail() {
   const persons = usePersons(trip?.familyId);
   const conditions = useConditions(trip?.familyId);
   const familyCategories = useCategories(trip?.familyId);
+  const templates = usePackingItems(trip?.familyId);
   const user = useCurrentUser();
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
   const [sortMode, setSortMode] = useState<"default" | "open-first">("open-first");
@@ -317,7 +357,10 @@ export function TripDetail() {
     ? persons.filter((p) => trip.personIds!.includes(p.id))
     : persons;
 
-  const query = search.trim().toLowerCase();
+  // Omnibox: dasselbe Feld sucht UND legt an. parseOmni trennt Menge (Zahl),
+  // Person (@Initialen) und den Item-Namen. Gesucht wird nach dem Namen.
+  const parsed = parseOmni(search, tripPersons, trip.durationDays);
+  const query = parsed.name.toLowerCase();
   const matchesSearch = (it: TripItem) =>
     !query ||
     it.name.toLowerCase().includes(query) ||
@@ -326,6 +369,70 @@ export function TripDetail() {
   // spiegeln dann die Treffer.
   const searchedItems = query ? items.filter(matchesSearch) : items;
   const matchCount = query ? searchedItems.length : 0;
+  // „Hinzufügen" bieten wir nur an, wenn ein Name getippt wurde und es KEINE
+  // (ähnlichen) Treffer in der Packliste gibt — sonst ist es ein Suchvorgang.
+  const canAdd = query.length > 0 && searchedItems.length === 0;
+
+  function addParsed() {
+    if (!trip) return;
+    const name = parsed.name.trim();
+    if (!name) return;
+    const tpl = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (tpl) {
+      // Bestehendes Template wiederverwenden (kein Duplikat), aber der
+      // getippten Person + Menge zuordnen.
+      const userQty = parsed.qty != null;
+      const baseQ = userQty ? parsed.baseQty : tpl.baseQuantity;
+      const unit = userQty ? parsed.unit : tpl.unit;
+      const perDays = userQty ? undefined : tpl.perDays;
+      const total = calculateQuantity(
+        { baseQuantity: baseQ, unit, washable: tpl.washable, perDays },
+        trip,
+      );
+      provider.addAdhocTripItem({
+        tripId: trip.id,
+        familyId: trip.familyId,
+        personId: parsed.personId,
+        name: tpl.name,
+        category: tpl.category,
+        baseQuantity: baseQ,
+        unit,
+        perDays,
+        washable: tpl.washable,
+        quantity: total,
+        sortOrder: 9999,
+      });
+    } else {
+      // Neu → als Sonderbedarf-Template + Trip-Item anlegen.
+      provider.createPackingItem({
+        familyId: trip.familyId,
+        personIds: parsed.personId ? [parsed.personId] : [],
+        name,
+        category: "",
+        baseQuantity: parsed.baseQty,
+        unit: parsed.unit,
+        washable: false,
+        conditions: [],
+        sortOrder: templates.length,
+      });
+      provider.addAdhocTripItem({
+        tripId: trip.id,
+        familyId: trip.familyId,
+        personId: parsed.personId,
+        name,
+        category: "",
+        baseQuantity: parsed.baseQty,
+        unit: parsed.unit,
+        washable: false,
+        quantity: parsed.totalQty,
+        sortOrder: 9999,
+      });
+    }
+    toast.show({
+      message: `„${name}" hinzugefügt${parsed.personLabel ? " · " + parsed.personLabel : ""}`,
+    });
+    setSearch("");
+  }
 
   const visibleItems = items.filter((it) => {
     if (!matchesSearch(it)) return false;
@@ -538,15 +645,18 @@ export function TripDetail() {
                   if (e.key === "Escape") {
                     setSearch("");
                     e.currentTarget.blur();
+                  } else if (e.key === "Enter" && canAdd) {
+                    e.preventDefault();
+                    addParsed();
                   }
                 }}
-                placeholder="Items suchen …  (⌘F / Strg+F)"
-                aria-label="Items suchen"
+                placeholder="Suchen oder hinzufügen …  z.B. 3 @Li Regenjacke"
+                aria-label="Suchen oder hinzufügen"
               />
               {search && (
                 <SearchClear
                   type="button"
-                  aria-label="Suche leeren"
+                  aria-label="Eingabe leeren"
                   onClick={() => {
                     setSearch("");
                     searchRef.current?.focus();
@@ -556,12 +666,33 @@ export function TripDetail() {
                 </SearchClear>
               )}
             </SearchBar>
-            {query && (
+
+            {canAdd ? (
+              <AddOption type="button" onClick={addParsed}>
+                <Plus size={15} />
+                <span>
+                  <strong>„{parsed.name}"</strong> hinzufügen
+                  {parsed.totalQty > 1 && <> · {parsed.totalQty}×</>} ·{" "}
+                  {parsed.personLabel ?? "Gemeinsam"}
+                  {parsed.unit === "per_day" && (
+                    <Muted style={{ marginLeft: 6 }}>
+                      ({parsed.baseQty}/Tag)
+                    </Muted>
+                  )}
+                </span>
+                <AddHint>Enter ↵</AddHint>
+              </AddOption>
+            ) : query ? (
               <Muted style={{ fontSize: 12, display: "block", marginTop: 4 }}>
                 {matchCount} {matchCount === 1 ? "Treffer" : "Treffer"}
-                {matchCount === 0 && " — nichts gefunden"}
               </Muted>
-            )}
+            ) : (search.trim() && parsed.personLabel) ? (
+              <Muted style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                Filter/Ziel: {parsed.personLabel}
+                {parsed.totalQty > 1 && ` · ${parsed.totalQty}×`}
+                {" "}— tippe einen Item-Namen
+              </Muted>
+            ) : null}
           </div>
         )}
 
@@ -623,15 +754,6 @@ export function TripDetail() {
               })()}
             </ChipsScrollable>
           )}
-
-          <QuickAdd
-            trip={trip}
-            targetPersonId={
-              typeof filterPerson === "string" && filterPerson !== "all" && filterPerson !== "none"
-                ? filterPerson
-                : undefined
-            }
-          />
         </StickyHeader>
         )}
 
@@ -649,7 +771,6 @@ export function TripDetail() {
 
         {isDesktop ? (
           <TripBoard
-            trip={trip}
             items={searchedItems}
             persons={tripPersons}
             categories={familyCategories}

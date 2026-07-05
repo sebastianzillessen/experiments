@@ -21,10 +21,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { useDataProvider } from "../data/DataProviderContext";
 import { InitialsBadge } from "../components/InitialsBadge";
 import { QtyStepper } from "./QtyStepper";
-import { QuickAdd } from "./QuickAdd";
 import { categoryIcon } from "../labels";
 import { colors, radii } from "../theme.yak";
-import type { Category, Person, Trip, TripItem } from "../types";
+import type { Category, Person, TripItem } from "../types";
 
 /**
  * Desktop-Board für einen Trip: jede Person (plus eine „Gemeinsam"-Spalte)
@@ -66,7 +65,6 @@ interface Column {
 }
 
 interface Props {
-  trip: Trip;
   items: TripItem[];
   persons: Person[];
   categories: Category[];
@@ -74,7 +72,7 @@ interface Props {
   onDelete: (item: TripItem) => void;
 }
 
-export function TripBoard({ trip, items, persons, categories, onEdit, onDelete }: Props) {
+export function TripBoard({ items, persons, categories, onEdit, onDelete }: Props) {
   const provider = useDataProvider();
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -208,10 +206,6 @@ export function TripBoard({ trip, items, persons, categories, onEdit, onDelete }
                   );
                 })}
               </ColBody>
-
-              <ColFooter>
-                <QuickAdd trip={trip} targetPersonId={col.personId} />
-              </ColFooter>
             </ColumnEl>
           );
         })}
@@ -364,12 +358,6 @@ const ColBody = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 6px 8px;
-`;
-
-const ColFooter = styled.div`
-  border-top: 1px solid ${colors.line};
-  padding: 8px;
-  background: ${colors.surface};
 `;
 
 const EmptyCol = styled.div`
