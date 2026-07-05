@@ -139,6 +139,23 @@ const AddHint = styled.span`
   flex-shrink: 0;
 `;
 
+/** Hinweis-Banner, wenn doppelte Trip-Items erkannt wurden. */
+const DupBanner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: ${radii.sm};
+  background: ${colors.accentSoft};
+  border: 1px solid ${colors.accent};
+  font-size: 13px;
+  color: ${colors.ink};
+  & > span {
+    flex: 1;
+    min-width: 0;
+  }
+`;
+
 /** Vorschau + Bestätigung für den mehrzeiligen Listen-Import. */
 const ImportPanel = styled.div`
   margin-top: 6px;
@@ -498,6 +515,34 @@ export function TripDetail() {
     setSearch("");
   }
 
+  // Doppelte Trip-Items: gleicher Name (normalisiert) + gleiche Person.
+  const duplicateGroups: TripItem[][] = (() => {
+    const map = new Map<string, TripItem[]>();
+    for (const it of items) {
+      const key = `${it.personId ?? ""}|${it.name.trim().toLowerCase()}`;
+      const arr = map.get(key);
+      if (arr) arr.push(it);
+      else map.set(key, [it]);
+    }
+    return Array.from(map.values()).filter((g) => g.length > 1);
+  })();
+  const dupCount = duplicateGroups.reduce((s, g) => s + g.length - 1, 0);
+
+  function mergeDuplicates() {
+    for (const group of duplicateGroups) {
+      const keeper = group[0];
+      // Duplikat = redundant, nicht additiv → höchste Menge/Pack-Stand
+      // behalten, nicht summieren. Kategorie: erste nicht-leere gewinnt.
+      const quantity = Math.max(...group.map((g) => g.quantity));
+      const packed = Math.min(quantity, Math.max(...group.map((g) => g.packedQty)));
+      const category = group.find((g) => g.category)?.category ?? keeper.category;
+      provider.updateTripItem(keeper.id, { quantity, category });
+      provider.setTripItemPacked(keeper.id, packed);
+      for (const r of group.slice(1)) provider.deleteTripItem(r.id);
+    }
+    toast.show({ message: `${dupCount} Duplikat${dupCount === 1 ? "" : "e"} zusammengeführt` });
+  }
+
   const visibleItems = items.filter((it) => {
     if (!inScope(it)) return false;
     if (filterPerson === "all") return true;
@@ -811,6 +856,18 @@ export function TripDetail() {
               </Muted>
             ) : null}
           </div>
+        )}
+
+        {dupCount > 0 && (
+          <DupBanner>
+            <span>
+              ⚠ {dupCount} doppelte{dupCount === 1 ? "s" : ""} Item
+              {dupCount === 1 ? "" : "s"} gefunden.
+            </span>
+            <Button $size="sm" $variant="secondary" onClick={mergeDuplicates}>
+              Zusammenführen
+            </Button>
+          </DupBanner>
         )}
 
         {!isDesktop && (
