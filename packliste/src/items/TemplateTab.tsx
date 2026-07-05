@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { styled } from "next-yak";
 import { Trash2, ChevronUp, ChevronDown, Pencil } from "lucide-react";
 import { Card, CardTitle, Stack, Row, Muted, Badge, SectionLabel } from "../components/ui/Layout";
-import { IconButton } from "../components/ui/Button";
+import { Button, IconButton } from "../components/ui/Button";
+import { useToast } from "../components/ui/Toast";
 import { useCurrentFamily } from "../hooks/useFamily";
 import { usePersons } from "../hooks/usePersons";
 import { usePackingItems } from "../hooks/usePackingItems";
@@ -68,6 +69,7 @@ const ConditionsLine = styled.div`
 export function TemplateTab() {
   const family = useCurrentFamily();
   const provider = useDataProvider();
+  const toast = useToast();
   const persons = usePersons(family?.id);
   const items = usePackingItems(family?.id);
   const conditions = useConditions(family?.id);
@@ -117,6 +119,37 @@ export function TemplateTab() {
   }
   const catEntries = Array.from(byCat.entries()).sort(([a], [b]) => a.localeCompare(b, "de"));
 
+  // Doppelte Vorlagen: gleicher Name (normalisiert). Zusammenführen vereint
+  // Personen, Bedingungen und Wäsche-Flag; „Gemeinsam" (leere Personen)
+  // gewinnt, weil es alle einschließt.
+  const dupGroups: PackingItem[][] = (() => {
+    const map = new Map<string, PackingItem[]>();
+    for (const it of items) {
+      const key = it.name.trim().toLowerCase();
+      const arr = map.get(key);
+      if (arr) arr.push(it);
+      else map.set(key, [it]);
+    }
+    return Array.from(map.values()).filter((g) => g.length > 1);
+  })();
+  const dupCount = dupGroups.reduce((s, g) => s + g.length - 1, 0);
+
+  function mergeTemplates() {
+    for (const group of dupGroups) {
+      const keeper = group[0];
+      const anyShared = group.some((g) => g.personIds.length === 0);
+      const personIds = anyShared
+        ? []
+        : Array.from(new Set(group.flatMap((g) => g.personIds)));
+      const category = group.find((g) => g.category)?.category ?? keeper.category;
+      const conditions = Array.from(new Set(group.flatMap((g) => g.conditions)));
+      const washable = group.some((g) => g.washable);
+      provider.updatePackingItem(keeper.id, { personIds, category, conditions, washable });
+      for (const r of group.slice(1)) provider.deletePackingItem(r.id);
+    }
+    toast.show({ message: `${dupCount} Duplikat${dupCount === 1 ? "" : "e"} zusammengeführt` });
+  }
+
   return (
     <>
       <Card>
@@ -131,6 +164,19 @@ export function TemplateTab() {
           onSubmit={createItem}
         />
       </Card>
+
+      {dupCount > 0 && (
+        <Card style={{ border: `1px solid ${colors.accent}`, background: colors.accentSoft }}>
+          <Row style={{ justifyContent: "space-between", gap: 12 }}>
+            <span style={{ fontSize: 13 }}>
+              ⚠ {dupCount} doppelte Vorlage{dupCount === 1 ? "" : "n"} (gleicher Name).
+            </span>
+            <Button $size="sm" $variant="secondary" onClick={mergeTemplates}>
+              Zusammenführen
+            </Button>
+          </Row>
+        </Card>
+      )}
 
       {familyCategories.length > 0 && (
         <Card>
