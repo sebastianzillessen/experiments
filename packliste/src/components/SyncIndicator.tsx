@@ -50,6 +50,10 @@ const Wrap = styled.div<{ $tone: Tone }>`
     0%, 100% { opacity: 1; }
     50% { opacity: 0.35; }
   }
+  /* Auf Ausdrucken (z.B. der Packliste-Druckansicht) nie mitdrucken. */
+  @media print {
+    display: none !important;
+  }
 `;
 
 export function SyncIndicator() {
