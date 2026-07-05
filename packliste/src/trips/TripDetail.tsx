@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer } from "lucide-react";
 import {
   Card,
   Stack,
@@ -371,6 +371,9 @@ export function TripDetail() {
           <ArrowLeft size={14} /> Trips
         </Button>
         <Row $gap={4}>
+          <IconButton aria-label="Drucken" title="Packliste drucken" onClick={() => navigate(`/trip/${trip.id}/print`)}>
+            <Printer size={14} />
+          </IconButton>
           <IconButton aria-label="Duplizieren" onClick={() => setDuplicateOpen(true)}>
             <Copy size={14} />
           </IconButton>
