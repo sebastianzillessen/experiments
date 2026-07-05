@@ -112,6 +112,38 @@ function normalize(s: string): string {
 }
 
 /**
+ * Tippfehler-tolerante Suche: liefert true, wenn `query` in `text`
+ * enthalten oder ausreichend ähnlich ist. Genutzt für die Live-Suche,
+ * damit z.B. „Bürohse" (Tippfehler) „Bürohose" findet.
+ *
+ * Regeln (alle auf umlaut-normalisierten Strings):
+ *  - Substring-Treffer  → immer Match
+ *  - Wort beginnt mit der Query → Match (Präfix-Suche beim Tippen)
+ *  - Levenshtein-Distanz (ganzer Text ODER einzelnes Wort) ≤ Toleranz
+ *    → Match. Toleranz wächst mit der Query-Länge: 0–4 Zeichen → 1,
+ *    5–7 → 2, ab 8 → 3.
+ */
+export function fuzzyIncludes(text: string, query: string): boolean {
+  const q = normalize(query);
+  if (!q) return true;
+  const t = normalize(text);
+  if (!t) return false;
+  if (t.includes(q)) return true;
+
+  const tol = q.length <= 4 ? 1 : q.length <= 7 ? 2 : 3;
+  if (levenshtein(q, t) <= tol) return true;
+
+  for (const word of t.split(/[\s/-]+/)) {
+    if (!word) continue;
+    if (word.startsWith(q)) return true;
+    if (Math.abs(word.length - q.length) <= tol && levenshtein(q, word) <= tol) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Findet den ähnlichsten Eintrag aus `candidates` für `input`. Liefert
  * null wenn nichts ausreichend ähnlich ist oder bei Exact-Match
  * (kein Vorschlag nötig — der User hat den Namen schon richtig getippt).

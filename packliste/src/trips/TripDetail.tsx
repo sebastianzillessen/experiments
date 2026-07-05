@@ -37,7 +37,7 @@ import { EditTripItemModal } from "./EditTripItemModal";
 import { TripBoard } from "./TripBoard";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePackingItems } from "../hooks/usePackingItems";
-import { calculateQuantity } from "../data/derive";
+import { calculateQuantity, fuzzyIncludes } from "../data/derive";
 import { parseOmni } from "./parseOmni";
 
 const Page = styled.div`
@@ -365,10 +365,11 @@ export function TripDetail() {
   // „@Li Regenjacke" als „hat Lilly das?" gewertet — auch wenn jemand
   // anderes das Item schon hat.
   const personScope = parsed.personId;
+  // Tippfehler-tolerant: „Bürohse" findet „Bürohose".
   const matchesSearch = (it: TripItem) =>
     !query ||
-    it.name.toLowerCase().includes(query) ||
-    (it.category || "").toLowerCase().includes(query);
+    fuzzyIncludes(it.name, parsed.name) ||
+    fuzzyIncludes(it.category || "", parsed.name);
   const inScope = (it: TripItem) =>
     matchesSearch(it) && (!personScope || (it.personId ?? undefined) === personScope);
   // Board (Desktop) bekommt die gefilterten Items (Name + ggf. @Person);
