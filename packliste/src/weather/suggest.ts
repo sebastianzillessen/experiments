@@ -119,6 +119,16 @@ export interface Recommendation {
 }
 
 /**
+ * Konkrete Item-Vorschläge pro Wetter-Bedingung. Werden im Wetter-Hinweis
+ * als per Tap hinzufügbare Chips angeboten (bereits vorhandene übersprungen).
+ */
+export const WEATHER_ITEMS: Record<string, string[]> = {
+  sun: ["Sonnencreme", "Sonnenhut", "Sonnenbrille"],
+  rain: ["Regenjacke", "Regenschirm"],
+  cold: ["Winterjacke", "Mütze", "Handschuhe"],
+};
+
+/**
  * Leitet aus der Wetterzusammenfassung empfohlene Bedingungen ab. Schwellen:
  * heiß ≥25°C → Sonne, Regenwahrscheinlichkeit ≥50% → Regen, kalt ≤3°C oder
  * Schnee → Kälte. "Schwimmen" wird bewusst nicht abgeleitet (nicht zuverlässig

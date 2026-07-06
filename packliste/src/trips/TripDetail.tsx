@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus, Bell } from "lucide-react";
 import {
   Card,
   Stack,
@@ -30,6 +30,8 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { QtyStepper } from "./QtyStepper";
 import { useTripWeather } from "../weather/useTripWeather";
 import { WeatherHint } from "../weather/WeatherHint";
+import { WEATHER_ITEMS } from "../weather/suggest";
+import { requestNotificationPermission, notificationPermission } from "../reminders";
 import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
@@ -37,8 +39,8 @@ import { EditTripItemModal } from "./EditTripItemModal";
 import { TripBoard } from "./TripBoard";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePackingItems } from "../hooks/usePackingItems";
-import { calculateQuantity } from "../data/derive";
-import { parseOmni } from "./parseOmni";
+import { calculateQuantity, fuzzyIncludes } from "../data/derive";
+import { parseOmni, type OmniParsed } from "./parseOmni";
 
 const Page = styled.div`
   max-width: 480px;
@@ -56,6 +58,15 @@ const SearchBar = styled.div`
   position: relative;
   display: flex;
   align-items: center;
+`;
+
+const ReminderSelect = styled.select`
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid ${colors.line2};
+  background: ${colors.surface};
+  font-size: 13px;
+  color: ${colors.ink};
 `;
 
 const SearchInput = styled.input`
@@ -137,6 +148,47 @@ const AddHint = styled.span`
   border-radius: 6px;
   padding: 1px 6px;
   flex-shrink: 0;
+`;
+
+/** Hinweis-Banner, wenn doppelte Trip-Items erkannt wurden. */
+const DupBanner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: ${radii.sm};
+  background: ${colors.accentSoft};
+  border: 1px solid ${colors.accent};
+  font-size: 13px;
+  color: ${colors.ink};
+  & > span {
+    flex: 1;
+    min-width: 0;
+  }
+`;
+
+/** Vorschau + Bestätigung für den mehrzeiligen Listen-Import. */
+const ImportPanel = styled.div`
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid ${colors.line2};
+  border-radius: ${radii.sm};
+  background: ${colors.surface};
+`;
+
+const ImportList = styled.ul`
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: ${colors.ink2};
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
 `;
 
 /**
@@ -306,6 +358,7 @@ export function TripDetail() {
   // der mobilen Ein-Spalten-Liste mit Personen-Filter.
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [search, setSearch] = useState("");
+  const [importLines, setImportLines] = useState<string[] | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Cmd+F (Mac) / Ctrl+F (Win/Linux) fokussiert die App-Suche statt der
@@ -361,29 +414,50 @@ export function TripDetail() {
   // Person (@Initialen) und den Item-Namen. Gesucht wird nach dem Namen.
   const parsed = parseOmni(search, tripPersons, trip.durationDays);
   const query = parsed.name.toLowerCase();
+  // @Person schränkt Suche UND Add-Prüfung auf diese Person ein: so wird
+  // „@Li Regenjacke" als „hat Lilly das?" gewertet — auch wenn jemand
+  // anderes das Item schon hat.
+  const personScope = parsed.personId;
+  // Tippfehler-tolerant: „Bürohse" findet „Bürohose".
   const matchesSearch = (it: TripItem) =>
     !query ||
-    it.name.toLowerCase().includes(query) ||
-    (it.category || "").toLowerCase().includes(query);
-  // Board (Desktop) bekommt die suchgefilterten Items; Zähler/Spalten
-  // spiegeln dann die Treffer.
-  const searchedItems = query ? items.filter(matchesSearch) : items;
+    fuzzyIncludes(it.name, parsed.name) ||
+    fuzzyIncludes(it.category || "", parsed.name);
+  const inScope = (it: TripItem) =>
+    matchesSearch(it) && (!personScope || (it.personId ?? undefined) === personScope);
+  // Board (Desktop) bekommt die gefilterten Items (Name + ggf. @Person);
+  // Zähler/Spalten spiegeln dann die Treffer.
+  const searchedItems = query || personScope ? items.filter(inScope) : items;
   const matchCount = query ? searchedItems.length : 0;
-  // „Hinzufügen" bieten wir nur an, wenn ein Name getippt wurde und es KEINE
-  // (ähnlichen) Treffer in der Packliste gibt — sonst ist es ein Suchvorgang.
+  // „Hinzufügen" bieten wir nur an, wenn ein Name getippt wurde und es für
+  // das Ziel (die @Person, falls angegeben — sonst trip-weit) KEINEN Treffer
+  // gibt — sonst ist es ein Suchvorgang.
   const canAdd = query.length > 0 && searchedItems.length === 0;
 
-  function addParsed() {
-    if (!trip) return;
-    const name = parsed.name.trim();
-    if (!name) return;
+  /**
+   * Legt ein Item aus einem geparsten Omnibox-Ausdruck an. Nutzt ein
+   * bestehendes Template (kein Duplikat) oder legt Sonderbedarf an.
+   * `skipIfExists` überspringt Zeilen, deren Item es (für dieselbe Person)
+   * schon gibt — für den Listen-Import. Liefert true, wenn etwas angelegt
+   * wurde.
+   */
+  function buildAndAdd(p: OmniParsed, skipIfExists = false): boolean {
+    if (!trip) return false;
+    const name = p.name.trim();
+    if (!name) return false;
+    if (skipIfExists) {
+      const exists = items.some(
+        (it) =>
+          (it.personId ?? undefined) === p.personId &&
+          it.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      if (exists) return false;
+    }
     const tpl = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
     if (tpl) {
-      // Bestehendes Template wiederverwenden (kein Duplikat), aber der
-      // getippten Person + Menge zuordnen.
-      const userQty = parsed.qty != null;
-      const baseQ = userQty ? parsed.baseQty : tpl.baseQuantity;
-      const unit = userQty ? parsed.unit : tpl.unit;
+      const userQty = p.qty != null;
+      const baseQ = userQty ? p.baseQty : tpl.baseQuantity;
+      const unit = userQty ? p.unit : tpl.unit;
       const perDays = userQty ? undefined : tpl.perDays;
       const total = calculateQuantity(
         { baseQuantity: baseQ, unit, washable: tpl.washable, perDays },
@@ -392,7 +466,7 @@ export function TripDetail() {
       provider.addAdhocTripItem({
         tripId: trip.id,
         familyId: trip.familyId,
-        personId: parsed.personId,
+        personId: p.personId,
         name: tpl.name,
         category: tpl.category,
         baseQuantity: baseQ,
@@ -403,14 +477,13 @@ export function TripDetail() {
         sortOrder: 9999,
       });
     } else {
-      // Neu → als Sonderbedarf-Template + Trip-Item anlegen.
       provider.createPackingItem({
         familyId: trip.familyId,
-        personIds: parsed.personId ? [parsed.personId] : [],
+        personIds: p.personId ? [p.personId] : [],
         name,
         category: "",
-        baseQuantity: parsed.baseQty,
-        unit: parsed.unit,
+        baseQuantity: p.baseQty,
+        unit: p.unit,
         washable: false,
         conditions: [],
         sortOrder: templates.length,
@@ -418,24 +491,87 @@ export function TripDetail() {
       provider.addAdhocTripItem({
         tripId: trip.id,
         familyId: trip.familyId,
-        personId: parsed.personId,
+        personId: p.personId,
         name,
         category: "",
-        baseQuantity: parsed.baseQty,
-        unit: parsed.unit,
+        baseQuantity: p.baseQty,
+        unit: p.unit,
         washable: false,
-        quantity: parsed.totalQty,
+        quantity: p.totalQty,
         sortOrder: 9999,
       });
     }
-    toast.show({
-      message: `„${name}" hinzugefügt${parsed.personLabel ? " · " + parsed.personLabel : ""}`,
-    });
+    return true;
+  }
+
+  function addParsed() {
+    if (buildAndAdd(parsed)) {
+      toast.show({
+        message: `„${parsed.name.trim()}" hinzugefügt${parsed.personLabel ? " · " + parsed.personLabel : ""}`,
+      });
+      setSearch("");
+    }
+  }
+
+  // Mehrzeiliges Einfügen → Listen-Import (eine Zeile = ein Item).
+  function importList() {
+    if (!trip || !importLines) return;
+    let n = 0;
+    for (const line of importLines) {
+      const p = parseOmni(line, tripPersons, trip.durationDays);
+      if (buildAndAdd(p, true)) n++;
+    }
+    toast.show({ message: `${n} Item${n === 1 ? "" : "s"} importiert` });
+    setImportLines(null);
     setSearch("");
   }
 
+  // Doppelte Trip-Items: gleicher Name (normalisiert) + gleiche Person.
+  const duplicateGroups: TripItem[][] = (() => {
+    const map = new Map<string, TripItem[]>();
+    for (const it of items) {
+      const key = `${it.personId ?? ""}|${it.name.trim().toLowerCase()}`;
+      const arr = map.get(key);
+      if (arr) arr.push(it);
+      else map.set(key, [it]);
+    }
+    return Array.from(map.values()).filter((g) => g.length > 1);
+  })();
+  const dupCount = duplicateGroups.reduce((s, g) => s + g.length - 1, 0);
+
+  // Wetter-basierte Item-Vorschläge: aus den empfohlenen Bedingungen
+  // konkrete Items ableiten, bereits (fuzzy) vorhandene überspringen.
+  const weatherItemSuggestions: string[] = (() => {
+    const conds = weather.recommendation?.conditions ?? [];
+    const names = conds.flatMap((c) => WEATHER_ITEMS[c] ?? []);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const n of names) {
+      const key = n.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!items.some((it) => fuzzyIncludes(it.name, n))) out.push(n);
+    }
+    return out;
+  })();
+
+  function mergeDuplicates() {
+    for (const group of duplicateGroups) {
+      const keeper = group[0];
+      // Duplikat = redundant, nicht additiv → höchste Menge/Pack-Stand
+      // behalten, nicht summieren. Kategorie: erste nicht-leere gewinnt.
+      const quantity = Math.max(...group.map((g) => g.quantity));
+      const packed = Math.min(quantity, Math.max(...group.map((g) => g.packedQty)));
+      const category = group.find((g) => g.category)?.category ?? keeper.category;
+      provider.updateTripItem(keeper.id, { quantity, category });
+      provider.setTripItemPacked(keeper.id, packed);
+      for (const r of group.slice(1)) provider.deleteTripItem(r.id);
+    }
+    toast.show({ message: `${dupCount} Duplikat${dupCount === 1 ? "" : "e"} zusammengeführt` });
+  }
+
   const visibleItems = items.filter((it) => {
-    if (!matchesSearch(it)) return false;
+    if (!inScope(it)) return false;
     if (filterPerson === "all") return true;
     if (filterPerson === "none") return !it.personId;
     return it.personId === filterPerson;
@@ -605,6 +741,36 @@ export function TripDetail() {
           )}
         </Row>
 
+        {trip.startDate && (
+          <Row $gap={8} $align="center" $wrap>
+            <Muted style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Bell size={13} /> Erinnerung
+            </Muted>
+            <ReminderSelect
+              value={trip.reminderDaysBefore ?? 0}
+              aria-label="Erinnerung vor Reisebeginn"
+              onChange={async (e) => {
+                const v = Number(e.target.value);
+                if (v > 0) await requestNotificationPermission();
+                provider.updateTrip(trip.id, { reminderDaysBefore: v || undefined });
+              }}
+            >
+              <option value={0}>Aus</option>
+              <option value={1}>1 Tag vorher</option>
+              <option value={2}>2 Tage vorher</option>
+              <option value={3}>3 Tage vorher</option>
+              <option value={7}>1 Woche vorher</option>
+            </ReminderSelect>
+            {trip.reminderDaysBefore ? (
+              notificationPermission() === "denied" ? (
+                <Muted>Benachrichtigungen blockiert — nur In-App-Hinweis.</Muted>
+              ) : notificationPermission() === "unsupported" ? (
+                <Muted>Gerät ohne Benachrichtigungen — nur In-App-Hinweis.</Muted>
+              ) : null
+            ) : null}
+          </Row>
+        )}
+
         <WeatherHint
           weather={weather}
           activeConditions={trip.conditions}
@@ -617,6 +783,12 @@ export function TripDetail() {
                 `${conditionLabel(key, conditions)} aktiviert` +
                 (added > 0 ? ` · ${added} Item${added === 1 ? "" : "s"} hinzugefügt` : ""),
             });
+          }}
+          itemSuggestions={weatherItemSuggestions}
+          onAddItem={(name) => {
+            if (buildAndAdd(parseOmni(name, tripPersons, trip.durationDays), true)) {
+              toast.show({ message: `„${name}" hinzugefügt` });
+            }
           }}
         />
 
@@ -644,13 +816,26 @@ export function TripDetail() {
                 onKeyDown={(e) => {
                   if (e.key === "Escape") {
                     setSearch("");
+                    setImportLines(null);
                     e.currentTarget.blur();
                   } else if (e.key === "Enter" && canAdd) {
                     e.preventDefault();
                     addParsed();
                   }
                 }}
-                placeholder="Suchen oder hinzufügen …  z.B. 3 @Li Regenjacke"
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  const lines = text
+                    .split(/\r?\n/)
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  // Mehrzeilig eingefügt → als Liste importieren.
+                  if (lines.length > 1) {
+                    e.preventDefault();
+                    setImportLines(lines);
+                  }
+                }}
+                placeholder="Suchen · hinzufügen · Liste einfügen …  z.B. 3 @Li Regenjacke"
                 aria-label="Suchen oder hinzufügen"
               />
               {search && (
@@ -667,7 +852,47 @@ export function TripDetail() {
               )}
             </SearchBar>
 
-            {canAdd ? (
+            {importLines ? (
+              <ImportPanel>
+                <Row style={{ justifyContent: "space-between" }}>
+                  <strong style={{ fontSize: 13 }}>
+                    {importLines.length} Zeilen einfügen
+                  </strong>
+                  <SearchClear
+                    type="button"
+                    aria-label="Import abbrechen"
+                    style={{ position: "static" }}
+                    onClick={() => setImportLines(null)}
+                  >
+                    <X size={14} />
+                  </SearchClear>
+                </Row>
+                <ImportList>
+                  {importLines.slice(0, 8).map((line, i) => {
+                    const p = parseOmni(line, tripPersons, trip.durationDays);
+                    return (
+                      <li key={i}>
+                        {p.name || <em>(kein Name)</em>}
+                        {p.totalQty > 1 && ` · ${p.totalQty}×`}
+                        {p.personLabel && ` · ${p.personLabel}`}
+                      </li>
+                    );
+                  })}
+                  {importLines.length > 8 && (
+                    <li>
+                      <Muted>… und {importLines.length - 8} weitere</Muted>
+                    </li>
+                  )}
+                </ImportList>
+                <Button $size="sm" onClick={importList}>
+                  <Plus size={14} /> {importLines.length} Items importieren
+                </Button>
+                <Muted style={{ fontSize: 11 }}>
+                  Eine Zeile = ein Item. Zahl = Menge, @Initialen = Person.
+                  Bereits vorhandene werden übersprungen.
+                </Muted>
+              </ImportPanel>
+            ) : canAdd ? (
               <AddOption type="button" onClick={addParsed}>
                 <Plus size={15} />
                 <span>
@@ -694,6 +919,18 @@ export function TripDetail() {
               </Muted>
             ) : null}
           </div>
+        )}
+
+        {dupCount > 0 && (
+          <DupBanner>
+            <span>
+              ⚠ {dupCount} doppelte{dupCount === 1 ? "s" : ""} Item
+              {dupCount === 1 ? "" : "s"} gefunden.
+            </span>
+            <Button $size="sm" $variant="secondary" onClick={mergeDuplicates}>
+              Zusammenführen
+            </Button>
+          </DupBanner>
         )}
 
         {!isDesktop && (

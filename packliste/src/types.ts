@@ -99,6 +99,12 @@ export interface Trip {
   hasWasher: boolean;
   washIntervalDays?: number;
   /**
+   * Erinnerung: so viele Tage vor Reisebeginn wird (client-seitig, beim
+   * Öffnen der App) eine Benachrichtigung + In-App-Hinweis ausgelöst.
+   * undefined/0 = keine Erinnerung.
+   */
+  reminderDaysBefore?: number;
+  /**
    * Personen aus der Familie, die auf diesem Trip mitreisen. Beim
    * Trip-Anlegen erzeugt jeder Person-zugewiesene Vorlagen-Eintrag nur für
    * diese Personen eine Zeile. undefined = keine Einschränkung (alle
