@@ -166,6 +166,27 @@ export interface DataProvider {
    */
   loadSharedSnapshot(code: string): Promise<void>;
 
+  // --- Nur-Lese-Trip-Share ---
+
+  /** Aktiver Nur-Lese-Share-Code für einen Trip, oder null. */
+  getTripShareCode(tripId: string): string | null;
+  /** Alle aktiven Trip-Shares (tripId → Share-Code). */
+  listTripShares(): Record<string, string>;
+  /**
+   * Erstellt einen Nur-Lese-Share für den Trip beim Worker (oder
+   * aktualisiert den bestehenden) und liefert den Share-Code. Der Link
+   * bleibt 30 Tage nach der letzten Aktualisierung gültig.
+   */
+  shareTripToRemote(tripId: string): Promise<string>;
+  /**
+   * Aktualisiert einen bestehenden Trip-Share mit dem aktuellen Stand.
+   * Liefert false, wenn der Code remote nicht mehr existiert (abgelaufen)
+   * — die lokale Zuordnung wird dann entfernt.
+   */
+  pushTripShareUpdate(tripId: string): Promise<boolean>;
+  /** Widerruft den Share: löscht Remote-Eintrag + lokale Zuordnung. */
+  revokeTripShare(tripId: string): Promise<void>;
+
   // --- Sync-Metadaten + aktiver Sync-Code ---
 
   /** ISO-Timestamp der letzten lokalen Mutation, oder null wenn keine. */

@@ -6,6 +6,8 @@
   //     90-day TTL, Resend host notification)
   //   * handles API routes under /api/packliste/share* (KV-backed snapshot
   //     sharing for the Packliste app, 30-day sliding-window TTL)
+  //   * handles API routes under /api/packliste/trip-share* (read-only
+  //     single-trip share links, same KV under "trip:" prefix)
   //   * rewrites requests for hoko.zillessen.dev to serve _site/hoko/
   //   * falls through to ASSETS for everything else
   //     (palermo, kinderbetreuung-lohn, packliste)

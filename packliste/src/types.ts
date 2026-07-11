@@ -138,3 +138,20 @@ export interface TripItem {
 }
 
 export type PresetKey = "empty" | "beach" | "ski" | "city";
+
+/**
+ * Payload eines Nur-Lese-Trip-Shares. Enthält alles, was die geteilte
+ * Ansicht ohne lokale Daten (und ohne Login) rendern muss: den Trip, seine
+ * Items sowie die referenzierten Personen/Kategorien/Bedingungen der
+ * Familie. Wird zum Worker hochgeladen und dort per Code abgerufen.
+ */
+export interface TripShareSnapshot {
+  schema: "packliste-trip-v1";
+  sharedAt: string;
+  familyName?: string;
+  trip: Trip;
+  items: TripItem[];
+  persons: Person[];
+  categories: Category[];
+  conditions: Condition[];
+}

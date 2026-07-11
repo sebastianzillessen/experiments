@@ -8,6 +8,10 @@
  *   /api/packliste/share*     → Packliste cloud-sync
  *                                (POST, PUT/:code, GET/:code, KV: PACKLISTE_KV,
  *                                 30-day TTL with sliding window)
+ *   /api/packliste/trip-share* → Packliste read-only trip share
+ *                                (POST, PUT/:code, GET/:code, DELETE/:code,
+ *                                 KV: PACKLISTE_KV under "trip:"-prefix,
+ *                                 30-day TTL with sliding window)
  *
  * Anything else falls through to the static-asset binding (`env.ASSETS`),
  * which serves the per-app builds from ./_site/. Host-based rewrites let a
@@ -54,6 +58,7 @@ interface Env {
 const HOKO_HOST = "hoko.zillessen.dev";
 const HOKO_API_PREFIX = "/api/hoko";
 const PACKLISTE_PREFIX = "/api/packliste/share";
+const PACKLISTE_TRIP_SHARE_PREFIX = "/api/packliste/trip-share";
 
 // salaerli.zillessen.dev (and its umlaut/punycode form) serve the
 // kinderbetreuung-lohn ("Salärli") app from the subdomain root instead of
@@ -70,6 +75,13 @@ export default {
 
     if (url.pathname === HOKO_API_PREFIX || url.pathname.startsWith(`${HOKO_API_PREFIX}/`)) {
       return handleHokoApi(request, env, ctx, url);
+    }
+
+    if (
+      url.pathname === PACKLISTE_TRIP_SHARE_PREFIX ||
+      url.pathname.startsWith(`${PACKLISTE_TRIP_SHARE_PREFIX}/`)
+    ) {
+      return handlePacklisteTripShare(request, env, url);
     }
 
     if (url.pathname === PACKLISTE_PREFIX || url.pathname.startsWith(`${PACKLISTE_PREFIX}/`)) {
@@ -111,7 +123,7 @@ function fetchWithPrefix(request: Request, env: Env, url: URL, prefix: string): 
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -721,6 +733,114 @@ async function handlePacklisteShare(request: Request, env: Env, url: URL): Promi
       status: 200,
       headers: { "content-type": "application/json", ...corsHeaders() },
     });
+  }
+
+  return jsonResponse({ error: "Method not allowed" }, 405);
+}
+
+// ===========================================================================
+// Packliste — read-only trip share (einzelner Trip als Nur-Lese-Link)
+// ===========================================================================
+
+// Trip-Shares leben im selben KV-Namespace wie die Sync-Snapshots, aber
+// unter einem eigenen Key-Prefix — so kollidieren die Code-Räume nicht.
+const TRIP_SHARE_KV_PREFIX = "trip:";
+// Länger als der Sync-Code (6): der Code steckt in einem Link statt von
+// Hand eingetippt zu werden, darf also ruhig schwerer zu erraten sein.
+const TRIP_SHARE_CODE_LENGTH = 10;
+const TRIP_SHARE_CODE_REGEX = /^[A-Z2-9]{10}$/;
+
+async function handlePacklisteTripShare(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      headers: { ...corsHeaders(), "Access-Control-Max-Age": "86400" },
+    });
+  }
+
+  if (!env.PACKLISTE_KV) {
+    return jsonResponse(
+      {
+        error:
+          "KV-Namespace nicht eingerichtet. Befehl ausführen: `npx wrangler kv:namespace create PACKLISTE_KV` und die zurückgegebene ID in wrangler.jsonc setzen.",
+      },
+      503,
+    );
+  }
+
+  function validateBody(body: string): Response | null {
+    if (body.length === 0) return jsonResponse({ error: "Leerer Body" }, 400);
+    if (body.length > PACKLISTE_MAX_BYTES) {
+      return jsonResponse(
+        { error: `Snapshot zu groß (max ${PACKLISTE_MAX_BYTES} Bytes)` },
+        413,
+      );
+    }
+    try {
+      JSON.parse(body);
+    } catch {
+      return jsonResponse({ error: "Ungültiges JSON" }, 400);
+    }
+    return null;
+  }
+
+  // POST /api/packliste/trip-share — neuen Share-Code anlegen
+  if (request.method === "POST" && url.pathname === PACKLISTE_TRIP_SHARE_PREFIX) {
+    const body = await request.text();
+    const invalid = validateBody(body);
+    if (invalid) return invalid;
+    let code = generateCode(TRIP_SHARE_CODE_LENGTH);
+    for (let i = 0; i < 3; i++) {
+      const existing = await env.PACKLISTE_KV.get(TRIP_SHARE_KV_PREFIX + code);
+      if (existing === null) break;
+      code = generateCode(TRIP_SHARE_CODE_LENGTH);
+    }
+    await env.PACKLISTE_KV.put(TRIP_SHARE_KV_PREFIX + code, body, {
+      expirationTtl: PACKLISTE_TTL_SECONDS,
+    });
+    return jsonResponse({ code, expiresInDays: 30 }, 201);
+  }
+
+  const codeMatch = url.pathname.match(/^\/api\/packliste\/trip-share\/([A-Z2-9]+)$/);
+  const code = codeMatch?.[1];
+  if (!code || !TRIP_SHARE_CODE_REGEX.test(code)) {
+    return jsonResponse({ error: "Ungültiges Code-Format" }, code ? 400 : 405);
+  }
+  const kvKey = TRIP_SHARE_KV_PREFIX + code;
+
+  // PUT /api/packliste/trip-share/:code — bestehenden Share aktualisieren.
+  // Nur Updates auf existierende Codes, damit niemand Codes "besetzen" kann.
+  if (request.method === "PUT") {
+    const body = await request.text();
+    const invalid = validateBody(body);
+    if (invalid) return invalid;
+    const existing = await env.PACKLISTE_KV.get(kvKey);
+    if (existing === null) {
+      return jsonResponse({ error: "Code nicht gefunden — erst per POST anlegen" }, 404);
+    }
+    // TTL bei jedem Update verlängern (sliding window)
+    await env.PACKLISTE_KV.put(kvKey, body, { expirationTtl: PACKLISTE_TTL_SECONDS });
+    return jsonResponse({ ok: true }, 200);
+  }
+
+  // GET /api/packliste/trip-share/:code — Nur-Lese-Ansicht abrufen
+  if (request.method === "GET") {
+    const value = await env.PACKLISTE_KV.get(kvKey);
+    if (value === null) {
+      return jsonResponse(
+        { error: "Link nicht gefunden oder abgelaufen (30 Tage nach letzter Änderung)" },
+        404,
+      );
+    }
+    return new Response(value, {
+      status: 200,
+      headers: { "content-type": "application/json", ...corsHeaders() },
+    });
+  }
+
+  // DELETE /api/packliste/trip-share/:code — Share widerrufen
+  if (request.method === "DELETE") {
+    await env.PACKLISTE_KV.delete(kvKey);
+    return jsonResponse({ ok: true }, 200);
   }
 
   return jsonResponse({ error: "Method not allowed" }, 405);

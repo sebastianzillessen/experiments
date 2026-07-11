@@ -48,6 +48,9 @@ Kurznotizen zur Umsetzung:
 
 ## Zusammenarbeit (Auth aktuell gemockt)
 
+- ✅ **Nur-Lese-Trip-Share** — einzelnen Trip als Link teilen (`#/share/:code`, ohne Login).
+  Worker-KV unter `/api/packliste/trip-share*`, 30-Tage-Sliding-TTL, Auto-Update beim
+  Packen (`TripShareRunner`), Widerruf im Share-Dialog.
 - **Echte Accounts + Live-Sync** — statt 6-stelligem KV-Code echter Familien-Cloud-Sync + Präsenz.
 - **Verantwortung zuweisen** — „wer packt was"; gefilterte Sicht pro Mitglied (passt zum Board-DnD).
 - ⚡ **Einladungs-Link** — statt Sync-Code abtippen.

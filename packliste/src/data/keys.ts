@@ -23,4 +23,10 @@ export const K = {
   lastPulledAt: `${STORAGE_PREFIX}sync:last-pulled-at`,
   /** Aktiver Sync-Code (6 Zeichen) — wenn gesetzt, ist Auto-Sync aktiv. */
   syncCode: `${STORAGE_PREFIX}sync:code`,
+  /**
+   * Map tripId → Share-Code für aktive Nur-Lese-Trip-Shares. Wandert
+   * bewusst MIT in den Sync-Snapshot: so aktualisiert jedes Gerät der
+   * Familie denselben geteilten Link.
+   */
+  tripShares: `${STORAGE_PREFIX}trip-shares`,
 };

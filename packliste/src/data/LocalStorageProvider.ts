@@ -8,6 +8,7 @@ import type {
   PresetKey,
   Trip,
   TripItem,
+  TripShareSnapshot,
   User,
 } from "../types";
 import { K, STORAGE_PREFIX } from "./keys";
@@ -734,6 +735,8 @@ export class LocalStorageProvider implements DataProvider {
       list.splice(idx, 1);
       write(K.trips(f.id), list);
       remove(K.tripItems(id));
+      // Aktiven Nur-Lese-Share mit aufräumen (Remote-Delete best-effort).
+      if (this.getTripShareCode(id)) void this.revokeTripShare(id);
       this.notify();
       return;
     }
@@ -1077,6 +1080,103 @@ export class LocalStorageProvider implements DataProvider {
     }
     const json = await res.text();
     this.importSnapshot(json);
+  }
+
+  // ---------- Nur-Lese-Trip-Share ----------
+
+  getTripShareCode(tripId: string): string | null {
+    return this.listTripShares()[tripId] ?? null;
+  }
+
+  listTripShares(): Record<string, string> {
+    return read<Record<string, string>>(K.tripShares, {});
+  }
+
+  private setTripShareMapping(tripId: string, code: string | null): void {
+    const map = this.listTripShares();
+    if (code) map[tripId] = code;
+    else delete map[tripId];
+    if (Object.keys(map).length === 0) remove(K.tripShares);
+    else write(K.tripShares, map);
+    this.notify();
+  }
+
+  /** Baut den Nur-Lese-Payload für einen Trip. Wirft, wenn der Trip fehlt. */
+  private buildTripShareSnapshot(tripId: string): string {
+    const trip = this.getTrip(tripId);
+    if (!trip) throw new Error("Trip nicht gefunden");
+    const families = read<Family[]>(K.families, []);
+    const snapshot: TripShareSnapshot = {
+      schema: "packliste-trip-v1",
+      sharedAt: nowIso(),
+      familyName: families.find((f) => f.id === trip.familyId)?.name,
+      trip,
+      items: this.listTripItems(tripId),
+      persons: this.listPersons(trip.familyId),
+      categories: this.listCategories(trip.familyId),
+      conditions: this.listConditions(trip.familyId),
+    };
+    return JSON.stringify(snapshot);
+  }
+
+  async shareTripToRemote(tripId: string): Promise<string> {
+    const existing = this.getTripShareCode(tripId);
+    if (existing) {
+      // Bestehenden Link aktualisieren statt einen zweiten zu erzeugen.
+      // Wenn der Code remote abgelaufen ist, fällt pushTripShareUpdate auf
+      // false zurück und wir legen unten einen frischen an.
+      const ok = await this.pushTripShareUpdate(tripId);
+      if (ok) return existing;
+    }
+    const res = await fetch("/api/packliste/trip-share", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: this.buildTripShareSnapshot(tripId),
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) msg = body.error;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
+    const data = (await res.json()) as { code?: string };
+    if (!data.code) throw new Error("Kein Code vom Server erhalten");
+    this.setTripShareMapping(tripId, data.code);
+    return data.code;
+  }
+
+  async pushTripShareUpdate(tripId: string): Promise<boolean> {
+    const code = this.getTripShareCode(tripId);
+    if (!code) return false;
+    if (!this.getTrip(tripId)) {
+      this.setTripShareMapping(tripId, null);
+      return false;
+    }
+    const res = await fetch(`/api/packliste/trip-share/${code}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: this.buildTripShareSnapshot(tripId),
+    });
+    if (res.status === 404) {
+      // Remote abgelaufen — lokale Zuordnung aufräumen
+      this.setTripShareMapping(tripId, null);
+      return false;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return true;
+  }
+
+  async revokeTripShare(tripId: string): Promise<void> {
+    const code = this.getTripShareCode(tripId);
+    this.setTripShareMapping(tripId, null);
+    if (!code) return;
+    // Best-effort: wenn der DELETE fehlschlägt, läuft der Eintrag spätestens
+    // nach 30 Tagen von selbst ab.
+    await fetch(`/api/packliste/trip-share/${code}`, { method: "DELETE" }).catch(() => {});
   }
 
   importSnapshot(json: string): void {

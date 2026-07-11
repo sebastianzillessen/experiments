@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { styled } from "next-yak";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Copy, RefreshCw, Trash2, Pencil, Printer, Search, X, Plus, Bell } from "lucide-react";
+import { ArrowLeft, Archive, Copy, RefreshCw, Share2, Trash2, Pencil, Printer, Search, X, Plus, Bell } from "lucide-react";
 import {
   Card,
   Stack,
@@ -36,6 +36,7 @@ import { conditionEmoji, conditionLabel } from "../labels";
 import { colors, radii } from "../theme.yak";
 import { TripCreateModal } from "./TripCreateModal";
 import { EditTripItemModal } from "./EditTripItemModal";
+import { TripShareModal } from "./TripShareModal";
 import { TripBoard } from "./TripBoard";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePackingItems } from "../hooks/usePackingItems";
@@ -351,6 +352,7 @@ export function TripDetail() {
   const [filterPerson, setFilterPerson] = useState<string | "all" | "none">("all");
   const [sortMode, setSortMode] = useState<"default" | "open-first">("open-first");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [editItem, setEditItem] = useState<TripItem | null>(null);
   const toast = useToast();
   const weather = useTripWeather(trip?.destination, trip?.startDate, trip?.endDate);
@@ -704,6 +706,14 @@ export function TripDetail() {
           <ArrowLeft size={14} /> Trips
         </Button>
         <Row $gap={4}>
+          <IconButton
+            aria-label="Teilen"
+            title="Nur-Lese-Link teilen"
+            onClick={() => setShareOpen(true)}
+            style={provider.getTripShareCode(trip.id) ? { color: colors.primary } : undefined}
+          >
+            <Share2 size={14} />
+          </IconButton>
           <IconButton aria-label="Drucken" title="Packliste drucken" onClick={() => navigate(`/trip/${trip.id}/print`)}>
             <Printer size={14} />
           </IconButton>
@@ -1101,6 +1111,8 @@ export function TripDetail() {
       {duplicateOpen && (
         <TripCreateModal duplicateSource={trip} onClose={() => setDuplicateOpen(false)} />
       )}
+
+      {shareOpen && <TripShareModal trip={trip} onClose={() => setShareOpen(false)} />}
 
       {editItem && (
         <EditTripItemModal item={editItem} trip={trip} onClose={() => setEditItem(null)} />
