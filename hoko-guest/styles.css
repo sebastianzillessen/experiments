@@ -37,11 +37,11 @@ main { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
   margin-bottom: 18px;
   padding: 0 4px;
 }
-.intro a {
+.intro a, .card a {
   color: var(--primary);
   text-decoration: underline;
 }
-.intro a:hover { color: var(--primary-dark); }
+.intro a:hover, .card a:hover { color: var(--primary-dark); }
 
 .card {
   background: var(--card);
