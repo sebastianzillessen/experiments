@@ -40,3 +40,23 @@ The workflow [`.github/workflows/jugglux-reviews.yml`](../.github/workflows/jugg
 runs every Monday at 05:00 UTC (and on manual dispatch), re-scrapes all
 reviews, and commits updated exports in `data/` back to the repository when
 anything changed.
+
+## Q3 review count notification (October 1)
+
+[`q3_report.py`](q3_report.py) scrapes all reviews and prints a Markdown
+report with the number of reviews posted in **July, August, and September**
+of the current year:
+
+```bash
+python q3_report.py                                  # fresh scrape
+python q3_report.py --from-file data/reviews_all.json --year 2026
+```
+
+The workflow
+[`.github/workflows/jugglux-q3-report.yml`](../.github/workflows/jugglux-q3-report.yml)
+runs **every October 1 at 06:00 UTC** (and on manual dispatch), scrapes the
+live site, and opens a GitHub issue with the July–September counts, assigned
+to the repo owner — GitHub's issue notification serves as the reminder email.
+
+> Note: GitHub only runs scheduled workflows from the default branch, so both
+> workflows become active once this branch is merged into `main`.
