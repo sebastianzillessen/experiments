@@ -1,0 +1,40 @@
+name: Jugglux Q3 review count notification
+
+on:
+  schedule:
+    # October 1 at 06:00 UTC — report review counts for July–September
+    - cron: "0 6 1 10 *"
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r jugglux-reviews-parser/requirements.txt
+
+      - name: Scrape reviews and build report
+        run: |
+          cd jugglux-reviews-parser
+          python q3_report.py > /tmp/q3_report.md
+          cat /tmp/q3_report.md
+
+      - name: Open notification issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Jugglux Bewertungen Juli–September $(date -u +%Y)"
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" \
+            --body-file /tmp/q3_report.md \
+            --assignee "${GITHUB_REPOSITORY_OWNER}"
