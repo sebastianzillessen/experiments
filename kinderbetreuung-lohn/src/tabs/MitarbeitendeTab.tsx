@@ -29,7 +29,7 @@ export function MitarbeitendeTab() {
   const {
     activeTab, data, role, openInvites, setSyncStatus,
     addEmployee, updateEmployee, addWage, updateWage, deleteWage,
-    createInvite, reloadInvites
+    createInvite, createLinkInvite, reloadInvites
   } = useApp();
   const [mitUi, setMitUi] = useState<MitUi>({ mode: 'list', empId: null });
   const [fields, setFields] = useState<FormFields>(() => fieldsFrom(sanitizeEmployeeData({})));
@@ -38,6 +38,8 @@ export function MitarbeitendeTab() {
   const [wageEdits, setWageEdits] = useState<Record<string, string>>({});
   const [wageError, setWageError] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   const isAdmin = role === 'owner' || role === 'admin';
 
@@ -104,6 +106,33 @@ export function MitarbeitendeTab() {
     if (ok) {
       setInviteEmail('');
       try { await reloadInvites(); } catch (e) { console.warn(e); }
+    }
+  }
+
+  // Link invite for THIS employee: carries employee_id so accepting it links the
+  // new login to this record (otherwise the person could log in but not record
+  // any hours — shift RLS requires a linked employee).
+  async function onInviteLink(empId: string) {
+    setLinkBusy(true);
+    try {
+      const url = await createLinkInvite({ role: 'employee', employeeId: empId });
+      if (url) {
+        await copyInviteLink(url, 'new');
+        try { await reloadInvites(); } catch (e) { console.warn(e); }
+      }
+    } finally {
+      setLinkBusy(false);
+    }
+  }
+
+  async function copyInviteLink(url: string, id: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedInviteId(id);
+      setTimeout(() => setCopiedInviteId(prev => (prev === id ? null : prev)), 2500);
+    } catch {
+      // Clipboard blocked — the link stays visible in the field to copy manually.
+      setCopiedInviteId(null);
     }
   }
 
@@ -273,7 +302,22 @@ export function MitarbeitendeTab() {
                   pendingInvite ? (
                     <div className="card">
                       <h3>Login verknüpfen (optional)</h3>
-                      <div className="info" style={{ marginBottom: 12 }}>Einladung an <strong>{pendingInvite.email}</strong> ist offen. Sobald die Person den Anmelde-Link annimmt, wird ihr Login automatisch mit diesem Eintrag verknüpft.</div>
+                      {pendingInvite.email ? (
+                        <div className="info" style={{ marginBottom: 12 }}>Einladung an <strong>{pendingInvite.email}</strong> ist offen. Sobald die Person den Anmelde-Link annimmt, wird ihr Login automatisch mit diesem Eintrag verknüpft.</div>
+                      ) : (
+                        <>
+                          <div className="info" style={{ marginBottom: 12 }}>Einladungs-Link erstellt (noch nicht eingelöst). Wer ihn öffnet und sich registriert, wird automatisch mit diesem Eintrag verknüpft und kann eigene Stunden erfassen.</div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+                            <input type="text" id="emp-invite-link-url" readOnly
+                              value={`${location.origin}${location.pathname}?invite=${pendingInvite.token}`}
+                              onFocus={e => e.currentTarget.select()} style={{ flex: '1 1 240px' }} />
+                            <button className="btn btn-small btn-secondary" id="emp-invite-link-copy"
+                              onClick={() => copyInviteLink(`${location.origin}${location.pathname}?invite=${pendingInvite.token}`, pendingInvite.id)}>
+                              {copiedInviteId === pendingInvite.id ? 'Kopiert ✓' : 'Link kopieren'}
+                            </button>
+                          </div>
+                        </>
+                      )}
                       <div className="btn-row">
                         <button className="btn btn-danger" id="emp-invite-revoke" data-invite-id={pendingInvite.id}
                           onClick={() => onInviteRevoke(pendingInvite.id)}>Einladung zurückziehen</button>
@@ -286,6 +330,13 @@ export function MitarbeitendeTab() {
                       <div className="grid-2">
                         <div><label htmlFor="emp-invite-email">E-Mail-Adresse</label><input type="email" id="emp-invite-email" placeholder="person@example.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} /></div>
                         <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="btn" id="emp-invite-btn" onClick={() => onInvite(editingEmp.id!)}>Als Mitarbeitende/r einladen</button></div>
+                      </div>
+                      <div className="section-sub" style={{ margin: '14px 0 6px' }}>E-Mail-Adresse unbekannt? Erstelle stattdessen einen Einladungs-Link — er ist mit diesem Eintrag verknüpft.</div>
+                      <div className="btn-row">
+                        <button className="btn btn-secondary" id="emp-invite-link-btn" disabled={linkBusy}
+                          onClick={() => onInviteLink(editingEmp.id!)}>
+                          {linkBusy ? 'Wird erstellt …' : 'Stattdessen Einladungs-Link erstellen'}
+                        </button>
                       </div>
                     </div>
                   )
