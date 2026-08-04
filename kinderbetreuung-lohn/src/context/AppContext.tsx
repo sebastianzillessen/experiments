@@ -7,7 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { supabase, hadAuthErrorInUrl } from '../supabaseClient';
+import { supabase, hadAuthErrorInUrl, getPendingInviteToken, clearPendingInviteToken } from '../supabaseClient';
 import { sanitizeState, sanitizeEmployeeData } from '../lib/state';
 import type { AppState, Employer, EmployeeData, EmploymentType, PaySettingsData } from '../lib/state';
 import { activeEmployees, ownEmployee as ownEmployeeOf } from '../lib/payroll';
@@ -16,7 +16,9 @@ export type Role = 'owner' | 'admin' | 'employee';
 
 export type Member = { user_id: string; email: string; full_name: string | null; role: Role };
 
-export type OpenInvite = { id: string; email: string; role: Role; employeeId: string | null; createdAt: string };
+// email is null for link invites (invited by URL, no email known); token is
+// non-null only for link invites and carries the shareable secret.
+export type OpenInvite = { id: string; email: string | null; role: Role; employeeId: string | null; token: string | null; createdAt: string };
 
 export type PendingInvite = {
   id: string;
@@ -98,6 +100,9 @@ type AppContextValue = {
   loadMembersList: () => Promise<Member[]>;
   reloadInvites: () => Promise<OpenInvite[]>;
   createInvite: (args: { email: string; role: Role; employeeId?: string | null }) => Promise<boolean>;
+  // Mint a URL invite for someone whose email we don't know. Returns the full
+  // shareable link (…?invite=<token>) or null on failure.
+  createLinkInvite: (args: { role: Role; employeeId?: string | null }) => Promise<string | null>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -281,13 +286,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadInvites = useCallback(async (): Promise<OpenInvite[]> => {
     const { data: rows, error } = await supabase
       .from('invites')
-      .select('id, email, role, employee_id, created_at, accepted_at')
+      .select('id, email, role, employee_id, token, created_at, accepted_at')
       .eq('household_id', householdIdRef.current)
       .is('accepted_at', null);
     if (error) throw error;
     const list: OpenInvite[] = (rows || []).map(i => ({
       id: i.id, email: i.email, role: i.role,
-      employeeId: i.employee_id, createdAt: i.created_at
+      employeeId: i.employee_id, token: i.token, createdAt: i.created_at
     }));
     setOpenInvites(list);
     return list;
@@ -310,6 +315,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const onSignedIn = useCallback(async (u: User) => {
     userRef.current = u;
     setUser(u);
+
+    // Link invite: consume any pending ?invite=<token> before resolving the
+    // membership, so a user who registered through the link is already a member
+    // of the invited household when we fetch it. For a brand-new signup the
+    // handle_new_user trigger has usually consumed the token already (metadata
+    // path) — this RPC then just returns null. Best-effort: a failure here must
+    // not block sign-in.
+    const inviteToken = getPendingInviteToken();
+    if (inviteToken) {
+      try {
+        await supabase.rpc('accept_invite_by_token', { p_token: inviteToken });
+      } catch (e) {
+        console.warn('[invite] accept_invite_by_token failed:', e);
+      }
+      clearPendingInviteToken();
+    }
 
     let membership = await fetchMembership();
     if (!membership) {
@@ -863,6 +884,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [setSyncStatus]);
 
+  // Create a URL invite (no email known) and return the shareable link. The
+  // token is generated server-side by the create_link_invite RPC.
+  const createLinkInvite = useCallback(async ({ role: invRole, employeeId }: { role: Role; employeeId?: string | null }): Promise<string | null> => {
+    setSyncStatus('pending');
+    try {
+      const { data: token, error } = await supabase.rpc('create_link_invite', {
+        p_role: invRole,
+        p_employee_id: employeeId ?? null
+      });
+      if (error) throw error;
+      setSyncStatus('ok');
+      return `${location.origin}${location.pathname}?invite=${token}`;
+    } catch (e) {
+      setSyncStatus('error', e);
+      return null;
+    }
+  }, [setSyncStatus]);
+
   const value = useMemo<AppContextValue>(() => ({
     user, role, householdId, members, openInvites, data, ui, sync,
     authError, setAuthError, loginWarning, setLoginWarning,
@@ -873,7 +912,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateHouseholdName, updateEmployer, addShift, deleteShift,
     addEmployee, updateEmployee, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
-    importState, clearAll, loadMembersList, reloadInvites, createInvite
+    importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite
   }), [
     user, role, householdId, members, openInvites, data, ui, sync, authError, loginWarning,
     recoveryMode,
@@ -882,7 +921,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateHouseholdName, updateEmployer, addShift, deleteShift,
     addEmployee, updateEmployee, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
-    importState, clearAll, loadMembersList, reloadInvites, createInvite
+    importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -12,6 +12,15 @@ Vereinfachte Lohnabrechnung (VAV/VAVplus) für Kinderbetreuung im Privathaushalt
   Feiertagszulage, Mindestlohn) sind **indikativ und editierbar** — sie sind nicht
   zentral verbindlich publiziert, ändern jährlich (FAK-Reform 2026–29) und sollten
   mit der zuständigen Ausgleichskasse geprüft werden.
+- **Einladen per E-Mail oder Link.** Owner/Admins laden weitere Personen in den
+  Haushalt ein — entweder klassisch per E-Mail-Adresse (Anmelde-Link wird
+  zugestellt) oder, wenn die E-Mail-Adresse unbekannt ist, per **Einladungs-Link**.
+  Der Link (`…?invite=<token>`) wird frei geteilt (z. B. Chat); wer ihn öffnet,
+  registriert sich mit einer beliebigen E-Mail-Adresse und wird automatisch dem
+  Haushalt mit der vorgegebenen Rolle zugeordnet. Der Token wird serverseitig beim
+  Registrieren eingelöst (`handle_new_user`), sodass kein eigener Haushalt angelegt
+  wird; ein bereits angemeldeter Nutzer löst ihn über `accept_invite_by_token` ein.
+  Jeder Link gilt für eine Person (Single-Use).
 - **Stundenlohn oder Monatslohn.** Pro Person wählbar. Monatslohn-Angestellte
   erfassen keine Stunden; der Monat wird unter „Stundenerfassung" bestätigt. Ferien
   und Feiertage sind im Monatslohn enthalten (keine separate Zulage). Die

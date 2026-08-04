@@ -8,13 +8,17 @@ import { fmtDate, roleLabel } from '../lib/format';
 export function MitgliederTab() {
   const {
     activeTab, user, role, data, householdId, setSyncStatus,
-    loadMembersList, reloadInvites, createInvite
+    loadMembersList, reloadInvites, createInvite, createLinkInvite
   } = useApp();
   const [members, setMembers] = useState<Member[] | null>(null); // null = loading
   const [invites, setInvites] = useState<OpenInvite[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [invEmail, setInvEmail] = useState('');
   const [invRole, setInvRole] = useState<'employee' | 'admin'>('employee');
+  const [linkRole, setLinkRole] = useState<'employee' | 'admin'>('employee');
+  const [generatedLink, setGeneratedLink] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const isOwner = role === 'owner';
   const active = activeTab === 'mitglieder';
@@ -82,6 +86,34 @@ export function MitgliederTab() {
     if (ok) { setInvEmail(''); reload(); }
   }
 
+  async function createLink() {
+    setLinkBusy(true);
+    setCopied(false);
+    setGeneratedLink('');
+    try {
+      const url = await createLinkInvite({ role: linkRole });
+      if (url) {
+        setGeneratedLink(url);
+        await copyLink(url);
+        reload();
+      }
+    } finally {
+      setLinkBusy(false);
+    }
+  }
+
+  async function copyLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard blocked (insecure context / permissions) — the link stays
+      // visible in the field so it can be selected and copied manually.
+      setCopied(false);
+    }
+  }
+
   return (
     <section id="mitglieder" role="tabpanel" aria-labelledby="tab-mitglieder" tabIndex={0}
       className={activeTab === 'mitglieder' ? 'active' : undefined}>
@@ -136,14 +168,21 @@ export function MitgliederTab() {
             invites.map(i => {
               const inviteEmp = i.employeeId ? employeeById(data, i.employeeId) : null;
               const empNote = inviteEmp ? ` · verknüpft mit ${employeeName(inviteEmp)}` : '';
+              const isLink = !i.email && !!i.token;
+              const linkUrl = isLink ? `${location.origin}${location.pathname}?invite=${i.token}` : '';
               return (
                 <div className="member-row" key={i.id}>
                   <div className="info-block">
-                    <div className="name">{i.email}</div>
-                    <div className="meta">eingeladen am {fmtDate(i.createdAt.slice(0, 10))}{empNote}</div>
+                    <div className="name">{i.email || 'Einladungs-Link (per URL)'}</div>
+                    <div className="meta">eingeladen am {fmtDate(i.createdAt.slice(0, 10))}{empNote}
+                      {isLink ? ' · noch nicht eingelöst' : ''}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span className={`role-badge ${i.role}`}>{roleLabel(i.role)}</span>
+                    {isLink && (
+                      <button className="btn btn-small btn-secondary" data-copy={i.id}
+                        onClick={() => copyLink(linkUrl)}>Link kopieren</button>
+                    )}
                     <button className="btn btn-small btn-danger" data-revoke={i.id}
                       onClick={() => revokeInvite(i.id)}>Zurückziehen</button>
                   </div>
@@ -174,6 +213,37 @@ export function MitgliederTab() {
         <div className="btn-row">
           <button className="btn" id="btn-invite" onClick={sendInvite}>Einladen</button>
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Per Link einladen</h3>
+        <div className="info">Du kennst die E-Mail-Adresse nicht? Erstelle einen Einladungs-Link und teile ihn direkt (z.&nbsp;B. per WhatsApp). Wer den Link öffnet, kann sich mit einer beliebigen E-Mail-Adresse registrieren und wird automatisch diesem Haushalt hinzugefügt. Jeder Link gilt für <strong>eine</strong> Person und wird beim Registrieren eingelöst.</div>
+        <div className="grid-2">
+          <div>
+            <label htmlFor="link-role">Rolle</label>
+            <select id="link-role" value={linkRole} onChange={e => setLinkRole(e.target.value as 'employee' | 'admin')}>
+              <option value="employee">Mitarbeitende/r — sieht nur Stundenerfassung, nur eigene Einsätze</option>
+              <option value="admin">Admin — sieht und bearbeitet alles, ausser Mitglieder</option>
+            </select>
+          </div>
+        </div>
+        <div className="btn-row">
+          <button className="btn" id="btn-create-link" onClick={createLink} disabled={linkBusy}>
+            {linkBusy ? 'Wird erstellt …' : 'Einladungs-Link erstellen'}
+          </button>
+        </div>
+        {generatedLink && (
+          <div id="link-invite-result" style={{ marginTop: 12 }}>
+            <label htmlFor="link-invite-url">Einladungs-Link</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="text" id="link-invite-url" readOnly value={generatedLink}
+                onFocus={e => e.currentTarget.select()} style={{ flex: '1 1 240px' }} />
+              <button className="btn btn-small btn-secondary" id="btn-copy-link"
+                onClick={() => copyLink(generatedLink)}>{copied ? 'Kopiert ✓' : 'Kopieren'}</button>
+            </div>
+            <div className="info" style={{ marginTop: 6 }}>Teile diesen Link mit der Person. Er erscheint auch oben unter „Offene Einladungen“, bis er eingelöst wird.</div>
+          </div>
+        )}
       </div>
     </section>
   );

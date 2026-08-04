@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, getPendingInviteToken } from '../supabaseClient';
 import { useApp } from '../context/AppContext';
 
 export function LoginScreen() {
@@ -10,6 +10,24 @@ export function LoginScreen() {
   const [info, setInfo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [pwBusy, setPwBusy] = useState(false);
+  const [inviteHousehold, setInviteHousehold] = useState<string | null>(null);
+
+  const inviteToken = getPendingInviteToken();
+  // Carrying the invite token as signup metadata lets handle_new_user join the
+  // household synchronously at account creation (see the link_invites migration).
+  const signupData = inviteToken ? { invite_token: inviteToken } : undefined;
+
+  // Greet an invitee arriving via a link with the household they are joining.
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('invite_info', { p_token: inviteToken });
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!cancelled && !error && row?.household_name) setInviteHousehold(row.household_name);
+    })();
+    return () => { cancelled = true; };
+  }, [inviteToken]);
 
   function resetMessages() {
     setAuthError(null);
@@ -35,7 +53,7 @@ export function LoginScreen() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: addr,
-        options: { emailRedirectTo: location.href }
+        options: { emailRedirectTo: location.href, data: signupData }
       });
       if (error) throw error;
       setInfo(`Anmelde-Link an ${addr} gesendet. Bitte Posteingang prüfen (auch Spam).`);
@@ -99,7 +117,7 @@ export function LoginScreen() {
       const { data, error } = await supabase.auth.signUp({
         email: addr,
         password,
-        options: { emailRedirectTo: location.href }
+        options: { emailRedirectTo: location.href, data: signupData }
       });
       if (error) throw error;
       if (!data.session) {
@@ -121,7 +139,16 @@ export function LoginScreen() {
         <h1>Salärli</h1>
         <p className="muted" style={{ marginTop: -6 }}>Lohnabrechnung für Angestellte im Privathaushalt</p>
         <div id="login-warning" className="warn" hidden={!loginWarning} style={{ textAlign: 'left', margin: '0 0 16px' }}>{loginWarning}</div>
-        <p>Melde dich mit deiner E-Mail-Adresse an — per Anmelde-Link oder mit Passwort.</p>
+        {inviteToken && (
+          <div id="invite-greeting" className="success" style={{ textAlign: 'left', margin: '0 0 16px' }}>
+            {inviteHousehold
+              ? `Du wurdest zu „${inviteHousehold}“ eingeladen. Registriere dich mit deiner E-Mail-Adresse — danach bist du automatisch dabei.`
+              : 'Du wurdest zu einem Haushalt eingeladen. Registriere dich mit deiner E-Mail-Adresse — danach bist du automatisch dabei.'}
+          </div>
+        )}
+        <p>{inviteToken
+          ? 'Neu hier? Wähle unten eine E-Mail-Adresse und ein Passwort und tippe auf „Neues Konto erstellen“. Schon registriert? Melde dich einfach an.'
+          : 'Melde dich mit deiner E-Mail-Adresse an — per Anmelde-Link oder mit Passwort.'}</p>
         <form id="magic-link-form" noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }} onSubmit={onMagicLink}>
           <input
             type="email" id="login-email" placeholder="dein.name@example.com" required
