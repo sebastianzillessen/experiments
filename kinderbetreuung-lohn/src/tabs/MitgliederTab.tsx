@@ -8,7 +8,8 @@ import { fmtDate, roleLabel } from '../lib/format';
 export function MitgliederTab() {
   const {
     activeTab, user, role, data, householdId, setSyncStatus,
-    loadMembersList, reloadInvites, createInvite, createLinkInvite
+    loadMembersList, reloadInvites, createInvite, createLinkInvite,
+    unlinkEmployeeLogin, removeEmployeeFromHousehold
   } = useApp();
   const [members, setMembers] = useState<Member[] | null>(null); // null = loading
   const [invites, setInvites] = useState<OpenInvite[] | null>(null);
@@ -46,6 +47,15 @@ export function MitgliederTab() {
 
   async function removeMember(userId: string) {
     if (!confirm('Mitglied wirklich entfernen?')) return;
+    // If the member is linked to an employee record, revoke access AND detach the
+    // record in one step so the link doesn't dangle (removeEmployeeFromHousehold
+    // wraps the owner-only remove_member RPC + the unlink).
+    const linkedEmp = data.employees.find(e => e.userId === userId);
+    if (linkedEmp) {
+      const ok = await removeEmployeeFromHousehold(linkedEmp.id!, userId);
+      if (ok) reload();
+      return;
+    }
     setSyncStatus('pending');
     try {
       // Privileged delete via security-definer RPC. A direct
@@ -66,6 +76,12 @@ export function MitgliederTab() {
       setSyncStatus('ok');
       reload();
     } catch (e) { setSyncStatus('error', e); }
+  }
+
+  async function unlinkMember(employeeId: string) {
+    if (!confirm('Verknüpfung mit dem Mitarbeitenden-Eintrag aufheben?\n\nDie Person bleibt Mitglied des Haushalts, ist aber nicht mehr mit dem Eintrag verknüpft und kann keine eigenen Stunden mehr darauf erfassen. Stammdaten und bisherige Einsätze bleiben erhalten.')) return;
+    const ok = await unlinkEmployeeLogin(employeeId);
+    if (ok) reload();
   }
 
   async function revokeInvite(id: string) {
@@ -145,6 +161,10 @@ export function MitgliederTab() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span className={`role-badge ${m.role}`}>{roleLabel(m.role)}</span>
+                    {linkedEmp && !isSelf && (
+                      <button className="btn btn-small btn-secondary" data-unlink={m.user_id}
+                        onClick={() => unlinkMember(linkedEmp.id!)}>Verknüpfung aufheben</button>
+                    )}
                     {showRemove && (
                       <button className="btn btn-small btn-danger" data-remove={m.user_id}
                         onClick={() => removeMember(m.user_id)}>Entfernen</button>
