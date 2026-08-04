@@ -28,7 +28,8 @@ function fieldsFrom(d: EmployeeData): FormFields {
 export function MitarbeitendeTab() {
   const {
     activeTab, data, role, openInvites, setSyncStatus,
-    addEmployee, updateEmployee, addWage, updateWage, deleteWage,
+    addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold,
+    addWage, updateWage, deleteWage,
     createInvite, createLinkInvite, reloadInvites
   } = useApp();
   const [mitUi, setMitUi] = useState<MitUi>({ mode: 'list', empId: null });
@@ -134,6 +135,16 @@ export function MitarbeitendeTab() {
       // Clipboard blocked — the link stays visible in the field to copy manually.
       setCopiedInviteId(null);
     }
+  }
+
+  async function onUnlinkLogin(empId: string) {
+    if (!confirm('Verknüpfung mit dem Login aufheben?\n\nDie Person bleibt Mitglied des Haushalts, ist aber nicht mehr mit diesem Eintrag verknüpft und kann keine eigenen Stunden mehr darauf erfassen. Stammdaten und bisherige Einsätze bleiben erhalten.')) return;
+    await unlinkEmployeeLogin(empId);
+  }
+
+  async function onRemoveLogin(empId: string, userId: string) {
+    if (!confirm('Zugang zum Haushalt entfernen?\n\nDie Person verliert den Zugriff auf diesen Haushalt und wird von diesem Eintrag getrennt. Stammdaten und bisherige Einsätze bleiben erhalten. Das Benutzerkonto selbst wird nicht gelöscht.')) return;
+    await removeEmployeeFromHousehold(empId, userId);
   }
 
   async function onInviteRevoke(inviteId: string) {
@@ -340,6 +351,24 @@ export function MitarbeitendeTab() {
                       </div>
                     </div>
                   )
+                )}
+
+                {mitUi.mode === 'edit' && editingEmp?.id && linked && (
+                  <div className="card">
+                    <h3>Verknüpftes Login</h3>
+                    <div className="section-sub">Diese Person hat ein Login und kann eigene Stunden erfassen. Du kannst die Verknüpfung aufheben (der Eintrag bleibt als reine Stammdaten bestehen) oder den Zugang zum Haushalt ganz entfernen. Stammdaten und bisherige Einsätze bleiben in beiden Fällen erhalten.</div>
+                    <div className="btn-row">
+                      <button className="btn btn-secondary" id="emp-unlink-login"
+                        onClick={() => onUnlinkLogin(editingEmp.id!)}>Verknüpfung aufheben</button>
+                      {role === 'owner' && editingEmp.userId && (
+                        <button className="btn btn-danger" id="emp-remove-login"
+                          onClick={() => onRemoveLogin(editingEmp.id!, editingEmp.userId!)}>Zugang zum Haushalt entfernen</button>
+                      )}
+                    </div>
+                    {role !== 'owner' && (
+                      <div className="section-sub" style={{ marginTop: 8 }}>Den Zugang zum Haushalt ganz entfernen kann nur der Owner.</div>
+                    )}
+                  </div>
                 )}
               </>
             )}

@@ -1,6 +1,15 @@
-import { adminClient, getStackInfo } from './supabase';
+import { adminClient, anonClient, clientForUser, getStackInfo } from './supabase';
 
 export type CreatedUser = { id: string; email: string };
+
+// Sign a confirmed user in via password and return a client bound to their JWT,
+// so tests can exercise the auth-context RPCs / RLS the way the app does.
+export async function authedClientFor(email: string, password: string) {
+  const { data, error } = await anonClient().auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  const s = data.session!;
+  return clientForUser(s.access_token, s.refresh_token);
+}
 
 export async function createConfirmedUser(email: string, password?: string): Promise<CreatedUser> {
   const { data, error } = await adminClient().auth.admin.createUser({

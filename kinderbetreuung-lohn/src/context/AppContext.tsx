@@ -89,6 +89,10 @@ type AppContextValue = {
   deleteShift: (id: string) => Promise<void>;
   addEmployee: (data: EmployeeData) => Promise<string | null>;
   updateEmployee: (id: string, patch: { data?: EmployeeData; archived_at?: string | null }) => Promise<boolean>;
+  // Detach a login from an employee record (keeps the household membership).
+  unlinkEmployeeLogin: (employeeId: string) => Promise<boolean>;
+  // Revoke a linked person's household access and detach the employee record.
+  removeEmployeeFromHousehold: (employeeId: string, userId: string) => Promise<boolean>;
   addWage: (employeeId: string, effectiveMonth: string, amount: number, kind?: EmploymentType) => Promise<boolean>;
   updateWage: (employeeId: string, id: string, amount: number, kind?: EmploymentType) => Promise<boolean>;
   deleteWage: (employeeId: string, id: string) => Promise<boolean>;
@@ -603,6 +607,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) { setSyncStatus('error', e); return false; }
   }, [ensureSelectedEmployee, setData, setSyncStatus]);
 
+  // Detach the login from an employee record (employees.user_id → null). The
+  // person keeps their household membership but is no longer tied to this record
+  // and can no longer record hours against it; Stammdaten and shifts stay.
+  const unlinkEmployeeLogin = useCallback(async (employeeId: string): Promise<boolean> => {
+    setSyncStatus('pending');
+    try {
+      const { data: row, error } = await supabase
+        .from('employees')
+        .update({ user_id: null })
+        .eq('id', employeeId)
+        .select('id, data, user_id, archived_at')
+        .single();
+      if (error) throw error;
+      setData(prev => ({
+        ...prev,
+        employees: prev.employees.map(e => e.id === employeeId ? { ...e, userId: row.user_id } : e)
+      }));
+      ensureSelectedEmployee();
+      try { await loadMembers(householdIdRef.current!); } catch (e) { console.warn(e); }
+      setSyncStatus('ok');
+      return true;
+    } catch (e) { setSyncStatus('error', e); return false; }
+  }, [ensureSelectedEmployee, loadMembers, setData, setSyncStatus]);
+
+  // Remove a linked person from the household entirely: revoke their membership
+  // (owner-only remove_member RPC) and detach the employee record. The auth
+  // account itself is not deleted — that needs the service role — but the person
+  // loses all access to this household. Stammdaten and shifts are preserved.
+  const removeEmployeeFromHousehold = useCallback(async (employeeId: string, userId: string): Promise<boolean> => {
+    setSyncStatus('pending');
+    try {
+      const { data: count, error } = await supabase.rpc('remove_member', {
+        p_household_id: householdIdRef.current,
+        p_user_id: userId
+      });
+      if (error) throw error;
+      if (!count) {
+        throw new Error('Zugang wurde nicht entfernt — evtl. bereits entfernt oder fehlende Rechte (nur Owner darf Mitglieder entfernen).');
+      }
+      const { data: row, error: upErr } = await supabase
+        .from('employees')
+        .update({ user_id: null })
+        .eq('id', employeeId)
+        .select('id, data, user_id, archived_at')
+        .single();
+      if (upErr) throw upErr;
+      setData(prev => ({
+        ...prev,
+        employees: prev.employees.map(e => e.id === employeeId ? { ...e, userId: row.user_id } : e)
+      }));
+      ensureSelectedEmployee();
+      try { await loadMembers(householdIdRef.current!); } catch (e) { console.warn(e); }
+      setSyncStatus('ok');
+      return true;
+    } catch (e) { setSyncStatus('error', e); return false; }
+  }, [ensureSelectedEmployee, loadMembers, setData, setSyncStatus]);
+
   /* ---- CLOUD SAVE: employee_wages ---- */
   // `kind` decides whether `amount` is an hourly rate or a monthly salary; the
   // other column stays NULL. The employee's employmentType picks the kind.
@@ -910,7 +971,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectedEmployeeId, setSelectedEmployeeId,
     setSyncStatus, refreshSignedIn, hideInviteBanner,
     updateHouseholdName, updateEmployer, addShift, deleteShift,
-    addEmployee, updateEmployee, addWage, updateWage, deleteWage,
+    addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
     importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite
   }), [
@@ -919,7 +980,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTab, tabVisible, showTab, primedTabs, selectedEmployeeId, setSelectedEmployeeId,
     setSyncStatus, refreshSignedIn, hideInviteBanner,
     updateHouseholdName, updateEmployer, addShift, deleteShift,
-    addEmployee, updateEmployee, addWage, updateWage, deleteWage,
+    addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
     importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite
   ]);
