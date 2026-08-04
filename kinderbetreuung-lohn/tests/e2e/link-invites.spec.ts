@@ -112,6 +112,66 @@ test.describe('Link invitations (invite by URL, no email known)', () => {
     expect(secondTry).toBeNull();
   });
 
+  test('an employee-linked link invite links the new login to the employee record', async () => {
+    const ownerEmail = uniqueEmail('link-owner');
+    const ownerPw = 'link-owner-pw-emp';
+    const owner = await createConfirmedUser(ownerEmail, ownerPw);
+    const { data: ownerMembership } = await adminClient()
+      .from('memberships').select('household_id').eq('user_id', owner.id).single();
+    const householdId = ownerMembership!.household_id as string;
+
+    // A pure-Stammdaten employee record (no login yet).
+    const { data: employee } = await adminClient()
+      .from('employees').insert({ household_id: householdId, data: { name: 'Nanny' } })
+      .select('id').single();
+
+    const ownerClient = await authedClientFor(ownerEmail, ownerPw);
+    const { data: token, error } = await ownerClient.rpc('create_link_invite', {
+      p_role: 'employee', p_employee_id: employee!.id
+    });
+    expect(error).toBeNull();
+
+    // Invitee registers through the link (token in signup metadata).
+    const inviteeEmail = uniqueEmail('link-nanny');
+    const { data: created } = await adminClient().auth.admin.createUser({
+      email: inviteeEmail, email_confirm: true, user_metadata: { invite_token: token }
+    });
+    const inviteeId = created.user!.id;
+
+    // Joined as employee …
+    const { data: membership } = await adminClient()
+      .from('memberships').select('role').eq('household_id', householdId).eq('user_id', inviteeId).single();
+    expect(membership?.role).toBe('employee');
+
+    // … and the employee record now points at the new login, so they can record
+    // their own hours (shift RLS requires a linked employee).
+    const { data: linkedEmp } = await adminClient()
+      .from('employees').select('user_id').eq('id', employee!.id).single();
+    expect(linkedEmp?.user_id).toBe(inviteeId);
+  });
+
+  test('create_link_invite rejects an employee from another household', async () => {
+    // Owner A with an employee record.
+    const ownerAEmail = uniqueEmail('link-ownerA');
+    const ownerAPw = 'link-ownerA-pw';
+    const ownerA = await createConfirmedUser(ownerAEmail, ownerAPw);
+    const { data: mA } = await adminClient()
+      .from('memberships').select('household_id').eq('user_id', ownerA.id).single();
+    const { data: empA } = await adminClient()
+      .from('employees').insert({ household_id: mA!.household_id, data: { name: 'Foreign' } })
+      .select('id').single();
+
+    // Owner B tries to mint an invite pointing at Owner A's employee.
+    const ownerBEmail = uniqueEmail('link-ownerB');
+    const ownerBPw = 'link-ownerB-pw';
+    await createConfirmedUser(ownerBEmail, ownerBPw);
+    const ownerBClient = await authedClientFor(ownerBEmail, ownerBPw);
+    const { error } = await ownerBClient.rpc('create_link_invite', {
+      p_role: 'employee', p_employee_id: empA!.id
+    });
+    expect(error).not.toBeNull();
+  });
+
   test('invite_info exposes the household name to an anonymous (not-yet-registered) visitor', async () => {
     const ownerEmail = uniqueEmail('link-owner');
     const ownerPw = 'link-owner-pw-4';

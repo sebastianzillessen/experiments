@@ -227,6 +227,9 @@ export function MitgliederTab() {
             </select>
           </div>
         </div>
+        {linkRole === 'employee' && (
+          <div className="info" style={{ marginTop: 8 }}>Damit die Person eigene Stunden erfassen kann, muss ihr Login mit einem Mitarbeitenden-Eintrag verknüpft sein. Erstelle den Link am besten im Tab <strong>Mitarbeitende</strong> beim jeweiligen Eintrag — dann wird er automatisch verknüpft. Ein Link von hier lädt die Person nur als Mitglied ein (ohne Verknüpfung).</div>
+        )}
         <div className="btn-row">
           <button className="btn" id="btn-create-link" onClick={createLink} disabled={linkBusy}>
             {linkBusy ? 'Wird erstellt …' : 'Einladungs-Link erstellen'}
