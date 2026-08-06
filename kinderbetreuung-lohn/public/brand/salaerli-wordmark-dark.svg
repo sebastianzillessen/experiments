@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="120" viewBox="0 0 340 84" role="img" aria-label="Salärli">
+  <g transform="translate(2,2) scale(1.18)">
+    <path d="M52 26 C52 17 41 14 34 18 C25 23 28 35 39 38 C50 41 53 52 45 57 C38 61 27 59 24 52" fill="none" stroke="#9CCC65" stroke-width="7.5" stroke-linecap="round"/>
+    <path d="M36 35 C26 31 19 34 21 44 C32 47 37 41 36 35 Z" fill="#9CCC65"/>
+    <path d="M44 28 C54 23 61 26 59 36 C48 39 43 33 44 28 Z" fill="#F2A03D"/>
+  </g>
+  <text x="74" y="63" font-family="Inter, Helvetica, Arial, sans-serif" font-size="60" font-weight="500" letter-spacing="-2.5" fill="#FFFFFF">alärli</text>
+</svg>

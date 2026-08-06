@@ -1,6 +1,6 @@
 :root {
-  --primary: #2e6ea6; --primary-dark: #1a3a5c; --accent: #d4654a;
-  --green: #3a7d44; --amber: #c49000; --red: #b03a2e;
+  --primary: #2E7D32; --primary-dark: #1F3D2A; --accent: #F2A03D;
+  --green: #7CB342; --amber: #c49000; --red: #b03a2e;
   --bg: #f5f7fa; --card: #ffffff; --border: #e1e6eb;
   --text: #1f2933; --muted: #6b7480; --soft: #f0f4f8;
 }
@@ -17,6 +17,8 @@ nav button.active { background:var(--primary); }
 /* HEADER */
 header { background:linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color:#fff; padding:28px 20px 24px; text-align:center; }
 header h1 { font-size:clamp(22px,4vw,30px); font-weight:700; margin-bottom:4px; }
+header h1.brand { margin:0 0 6px; line-height:0; }
+.brand-wordmark { height:clamp(34px,7vw,46px); width:auto; max-width:min(280px,80vw); display:inline-block; vertical-align:middle; }
 header .sub { font-size:14px; opacity:0.85; font-weight:300; }
 
 main { max-width:960px; margin:0 auto; padding:24px 16px 60px; }
@@ -40,12 +42,12 @@ section h2 .emoji { margin-right:6px; }
    actually constrain it. */
 .grid-2 > *, .grid-3 > * { min-width:0; }
 label { display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.03em; }
-input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], select, textarea {
-  width:100%; min-width:0; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; color:var(--text);
+input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], input[type="password"], select, textarea {
+  width:100%; min-width:0; min-height:40px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; color:var(--text);
 }
-input:focus, select:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(46,110,166,0.15); }
-.checkbox-row { display:flex; align-items:center; gap:8px; margin:10px 0; }
-.checkbox-row input { width:auto; }
+input:focus, select:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(46,125,50,0.18); }
+.checkbox-row { display:flex; align-items:flex-start; gap:10px; margin:10px 0; }
+.checkbox-row input { width:20px; height:20px; flex:0 0 auto; margin-top:1px; accent-color:var(--primary); cursor:pointer; }
 .checkbox-row label { margin:0; text-transform:none; font-size:14px; color:var(--text); font-weight:400; letter-spacing:0; }
 
 /* BUTTONS */
@@ -90,7 +92,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .print-doc .signatures .sig { border-top:1px solid var(--text); padding-top:6px; font-size:11px; color:var(--muted); text-align:center; }
 
 /* INFO BOXES */
-.info { background:#eff6fc; border-left:3px solid var(--primary); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
+.info { background:#edf5ec; border-left:3px solid var(--primary); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
 .warn { background:#fef5e7; border-left:3px solid var(--amber); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
 .danger { background:#fbeae5; border-left:3px solid var(--red); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; color:var(--red); font-weight:600; }
 .success { background:#e8f3ea; border-left:3px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin:12px 0; font-size:13px; }
@@ -121,13 +123,13 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .user-strip button:hover { background:rgba(255,255,255,0.15); }
 
 /* INVITE BANNER */
-.invite-banner { background:#eff6fc; border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.invite-banner { background:#edf5ec; border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .invite-banner .text { font-size:13px; color:var(--text); }
 .invite-banner .actions { display:flex; gap:8px; }
 
 /* ONBOARDING / TUTORIAL */
 .onboarding-wrap { max-width:960px; margin:0 auto; padding:16px 16px 0; }
-.onboarding { background:linear-gradient(135deg, #eef5fb 0%, #e4eefa 100%); border:1px solid var(--border); border-left:4px solid var(--primary); border-radius:0 10px 10px 0; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+.onboarding { background:linear-gradient(135deg, #eef6ea 0%, #e2f0de 100%); border:1px solid var(--border); border-left:4px solid var(--primary); border-radius:0 10px 10px 0; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(0,0,0,0.03); }
 .onboarding-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .onboarding-head h3 { color:var(--primary-dark); font-size:16px; font-weight:700; margin:0; }
 .onboarding-dismiss { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:14px; padding:3px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
@@ -135,7 +137,7 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
 .onboarding-intro { font-size:13px; color:var(--text); margin:8px 0 14px; }
 .onboarding-steps { list-style:none; display:flex; flex-direction:column; gap:8px; margin:0; padding:0; }
 .onboarding-step { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
-.onboarding-step.current { border-color:var(--primary); box-shadow:0 0 0 2px rgba(46,110,166,0.12); }
+.onboarding-step.current { border-color:var(--primary); box-shadow:0 0 0 2px rgba(46,125,50,0.14); }
 .onboarding-step.upcoming { opacity:0.7; }
 .onboarding-step-marker { flex:0 0 auto; width:24px; height:24px; border-radius:50%; background:var(--soft); color:var(--muted); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
 .onboarding-step.current .onboarding-step-marker { background:var(--primary); color:#fff; }
@@ -214,6 +216,13 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
      adjacency to overlap. */
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 
+  /* Larger, more legible inputs on phones — empty/unfocused date, month and
+     password fields no longer look tiny, and 16px avoids any iOS focus-zoom. */
+  input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], input[type="password"], select, textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
   /* iOS Safari's native date/month control ignores width:100% and renders with
      centered text; reset the appearance so it behaves like the other inputs. */
   input[type="date"], input[type="month"] {
@@ -221,6 +230,9 @@ table .total-row td { font-weight:700; background:var(--soft); border-top:2px so
     appearance: none;
     text-align: left;
   }
+
+  /* Bigger, easier-to-tap checkboxes on phones. */
+  .checkbox-row input { width:22px; height:22px; }
 }
 
 /* PRINT

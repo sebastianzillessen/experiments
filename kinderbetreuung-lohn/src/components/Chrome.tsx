@@ -11,7 +11,11 @@ import { roleLabel } from '../lib/format';
 export function Header() {
   return (
     <header>
-      <h1>Salärli</h1>
+      <h1 className="brand">
+        <img className="brand-wordmark"
+          src="brand/salaerli-wordmark-dark.svg"
+          alt="Salärli" width={520} height={120} />
+      </h1>
       <div className="sub">Lohnabrechnung für Angestellte im Privathaushalt · Vereinfachte Abrechnung (VAV/VAVplus) · Stand 1.1.2026</div>
     </header>
   );
