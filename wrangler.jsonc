@@ -7,6 +7,11 @@
   //   * handles API routes under /api/packliste/share* (KV-backed snapshot
   //     sharing for the Packliste app, 30-day sliding-window TTL)
   //   * rewrites requests for hoko.zillessen.dev to serve _site/hoko/
+  //   * handles API routes under /api/workout/* (KV-backed reminder push
+  //     subscriptions for the 7-minute-workout app) and a cron-driven
+  //     scheduled() handler that sends the daily reminder push
+  //   * rewrites requests for workout.zillessen.dev to serve
+  //     _site/seven-minutes-workout/
   //   * falls through to ASSETS for everything else
   //     (palermo, kinderbetreuung-lohn, packliste)
   // - "assets" points at the directory produced by ./build.sh
@@ -14,13 +19,19 @@
   // One-time setup:
   //   npx wrangler kv namespace create HOKO_KV
   //   npx wrangler kv namespace create PACKLISTE_KV
+  //   npx wrangler kv namespace create WORKOUT_KV
   //     → paste the returned ids into kv_namespaces[] below
   //   npx wrangler secret put RESEND_API_KEY
   //   npx wrangler secret put HOST_NOTIFY_EMAIL
   //   npx wrangler secret put RESEND_FROM
+  //   # 7-minute-workout reminder push (npx web-push generate-vapid-keys):
+  //   npx wrangler secret put VAPID_PUBLIC_KEY
+  //   npx wrangler secret put VAPID_PRIVATE_KEY
+  //   npx wrangler secret put VAPID_SUBJECT      # e.g. mailto:you@zillessen.dev
   //
-  // Custom domain hoko.zillessen.dev is configured in the Cloudflare
-  // dashboard (Workers & Pages → this worker → Custom Domains).
+  // Custom domains hoko.zillessen.dev and workout.zillessen.dev are configured
+  // in the Cloudflare dashboard (Workers & Pages → this worker → Custom
+  // Domains).
   "name": "experiments",
   "compatibility_date": "2026-05-08",
   "main": "./worker/index.ts",
@@ -42,6 +53,17 @@
     {
       "binding": "PACKLISTE_KV",
       "id": "82318e25cfbd44dc8a5582b05b174561"
+    },
+    {
+      "binding": "WORKOUT_KV",
+      // Run `npx wrangler kv namespace create WORKOUT_KV` and paste the id here.
+      "id": "REPLACE_WITH_WORKOUT_KV_ID"
     }
-  ]
+  ],
+  // Daily-reminder push for the 7-minute-workout app. Every 15 min the
+  // scheduled() handler pushes to subscriptions whose local reminder time
+  // falls in the current window.
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  }
 }

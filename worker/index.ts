@@ -44,16 +44,27 @@ interface Env {
   ASSETS: Fetcher;
   HOKO_KV?: KVNamespace;
   PACKLISTE_KV?: KVNamespace;
+  WORKOUT_KV?: KVNamespace;
   RESEND_API_KEY?: string;
   HOST_NOTIFY_EMAIL?: string;
   RESEND_FROM?: string;
   AIRBNB_ICAL_URL?: string;
   HOKO_PULLER_TOKEN?: string;
+  // VAPID keys for the 7-minute-workout reminder push (payload-less).
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string; // e.g. "mailto:you@zillessen.dev"
 }
 
 const HOKO_HOST = "hoko.zillessen.dev";
 const HOKO_API_PREFIX = "/api/hoko";
 const PACKLISTE_PREFIX = "/api/packliste/share";
+const WORKOUT_API_PREFIX = "/api/workout";
+
+// workout.zillessen.dev serves the 7-minute-workout PWA from the subdomain
+// root instead of the experiments overview.
+const WORKOUT_HOST = "workout.zillessen.dev";
+const WORKOUT_PREFIX = "/seven-minutes-workout";
 
 // salaerli.zillessen.dev (and its umlaut/punycode form) serve the
 // kinderbetreuung-lohn ("Salärli") app from the subdomain root instead of
@@ -76,7 +87,18 @@ export default {
       return handlePacklisteShare(request, env, url);
     }
 
+    if (url.pathname === WORKOUT_API_PREFIX || url.pathname.startsWith(`${WORKOUT_API_PREFIX}/`)) {
+      return handleWorkoutApi(request, env, url);
+    }
+
     return serveAssets(request, env, url);
+  },
+
+  // Cron-driven reminder push for the 7-minute-workout app. Configured in
+  // wrangler.jsonc → triggers.crons (every 15 min). Sends a payload-less push
+  // to each subscription whose local reminder time falls in the current window.
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sendDueWorkoutReminders(env));
   },
 };
 
@@ -91,6 +113,9 @@ function serveAssets(request: Request, env: Env, url: URL): Promise<Response> {
   }
   if (SALAERLI_HOSTS.has(host) && !url.pathname.startsWith(SALAERLI_PREFIX)) {
     return fetchWithPrefix(request, env, url, SALAERLI_PREFIX);
+  }
+  if (host === WORKOUT_HOST && !url.pathname.startsWith(WORKOUT_PREFIX)) {
+    return fetchWithPrefix(request, env, url, WORKOUT_PREFIX);
   }
   return env.ASSETS.fetch(request);
 }
@@ -111,7 +136,7 @@ function fetchWithPrefix(request: Request, env: Env, url: URL, prefix: string): 
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -724,4 +749,295 @@ async function handlePacklisteShare(request: Request, env: Env, url: URL): Promi
   }
 
   return jsonResponse({ error: "Method not allowed" }, 405);
+}
+
+// ===========================================================================
+// 7-Minute Workout — reminder push subscriptions + cron delivery
+// ===========================================================================
+//
+// We use *payload-less* Web Push: the only thing stored per subscription is the
+// endpoint + when to remind. A Cron Trigger (wrangler.jsonc → triggers.crons)
+// runs every 15 min and POSTs an empty, VAPID-signed push to each subscription
+// whose local reminder time falls in the current window; the app's service
+// worker renders a fixed reminder. No aes128gcm payload encryption needed —
+// only the VAPID JWT (ES256) is signed here via Web Crypto.
+//
+// One-time setup:
+//   npx web-push generate-vapid-keys          # → public + private (base64url)
+//   npx wrangler kv namespace create WORKOUT_KV   # → id into wrangler.jsonc
+//   npx wrangler secret put VAPID_PUBLIC_KEY
+//   npx wrangler secret put VAPID_PRIVATE_KEY
+//   npx wrangler secret put VAPID_SUBJECT      # e.g. "mailto:you@zillessen.dev"
+// The public key is also exposed to the frontend via build.sh → config.js.
+
+const WORKOUT_SUB_PREFIX = "sub:";
+const WORKOUT_MAX_BYTES = 4_000;
+const REMINDER_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+interface WorkoutSub {
+  endpoint: string;
+  reminderTime: string; // "HH:MM" local
+  tz: string; // IANA timezone
+  lastSentDate: string; // "YYYY-MM-DD" local, "" if never
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function isHttpsPushEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== "string" || endpoint.length > 1000) return false;
+  try {
+    return new URL(endpoint).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function handleWorkoutApi(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { headers: { ...corsHeaders(), "Access-Control-Max-Age": "86400" } });
+  }
+
+  if (!env.WORKOUT_KV) {
+    return jsonResponse(
+      {
+        error:
+          "WORKOUT_KV not bound. Run `npx wrangler kv namespace create WORKOUT_KV` and set the id in wrangler.jsonc.",
+      },
+      503,
+    );
+  }
+
+  // POST /api/workout/subscribe — create/update a reminder subscription.
+  if (request.method === "POST" && url.pathname === `${WORKOUT_API_PREFIX}/subscribe`) {
+    const text = await request.text();
+    if (text.length === 0 || text.length > WORKOUT_MAX_BYTES) {
+      return jsonResponse({ error: "Invalid body size" }, 400);
+    }
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    if (!isHttpsPushEndpoint(body.endpoint)) {
+      return jsonResponse({ error: "Invalid endpoint" }, 400);
+    }
+    const reminderTime = typeof body.reminderTime === "string" ? body.reminderTime : "";
+    if (!REMINDER_TIME_REGEX.test(reminderTime)) {
+      return jsonResponse({ error: "Invalid reminderTime (expected HH:MM)" }, 400);
+    }
+    const tz = sanitiseStr(body.tz, 64) || "UTC";
+
+    const key = WORKOUT_SUB_PREFIX + (await sha256Hex(body.endpoint));
+    // Preserve lastSentDate if the subscription already exists (settings update).
+    const existing = await env.WORKOUT_KV.get<WorkoutSub>(key, "json");
+    const sub: WorkoutSub = {
+      endpoint: body.endpoint,
+      reminderTime,
+      tz,
+      lastSentDate: existing?.lastSentDate ?? "",
+    };
+    await env.WORKOUT_KV.put(key, JSON.stringify(sub));
+    return jsonResponse({ ok: true }, 201);
+  }
+
+  // DELETE /api/workout/subscribe — drop a subscription.
+  if (request.method === "DELETE" && url.pathname === `${WORKOUT_API_PREFIX}/subscribe`) {
+    const text = await request.text();
+    let body: Record<string, unknown> = {};
+    try {
+      body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    if (!isHttpsPushEndpoint(body.endpoint)) {
+      return jsonResponse({ error: "Invalid endpoint" }, 400);
+    }
+    await env.WORKOUT_KV.delete(WORKOUT_SUB_PREFIX + (await sha256Hex(body.endpoint)));
+    return jsonResponse({ ok: true }, 200);
+  }
+
+  // POST /api/workout/test — send a reminder to an already-subscribed endpoint
+  // immediately (used for manual verification). The endpoint must exist in KV.
+  if (request.method === "POST" && url.pathname === `${WORKOUT_API_PREFIX}/test`) {
+    const text = await request.text();
+    let body: Record<string, unknown> = {};
+    try {
+      body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    if (!isHttpsPushEndpoint(body.endpoint)) {
+      return jsonResponse({ error: "Invalid endpoint" }, 400);
+    }
+    const key = WORKOUT_SUB_PREFIX + (await sha256Hex(body.endpoint));
+    if ((await env.WORKOUT_KV.get(key)) === null) {
+      return jsonResponse({ error: "Unknown subscription" }, 404);
+    }
+    const signer = await getVapidSigner(env);
+    if (!signer) return jsonResponse({ error: "VAPID not configured" }, 503);
+    const status = await sendWorkoutPush(body.endpoint, signer, env.VAPID_PUBLIC_KEY!);
+    if (status === 404 || status === 410) await env.WORKOUT_KV.delete(key);
+    return jsonResponse({ pushStatus: status }, status < 400 ? 200 : 502);
+  }
+
+  return jsonResponse({ error: "Method not allowed" }, 405);
+}
+
+// ---------------------------------------------------------------------------
+// VAPID / Web Push (payload-less) via Web Crypto
+// ---------------------------------------------------------------------------
+
+interface VapidSigner {
+  key: CryptoKey;
+  subject: string;
+}
+
+function b64urlEncode(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64urlDecode(str: string): Uint8Array {
+  const pad = "=".repeat((4 - (str.length % 4)) % 4);
+  const b64 = (str + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function getVapidSigner(env: Env): Promise<VapidSigner | null> {
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_SUBJECT) return null;
+  const d = b64urlDecode(env.VAPID_PRIVATE_KEY); // 32-byte raw private scalar
+  const pub = b64urlDecode(env.VAPID_PUBLIC_KEY); // 65-byte uncompressed point
+  if (pub.length !== 65 || pub[0] !== 0x04) return null;
+  const jwk: JsonWebKey = {
+    kty: "EC",
+    crv: "P-256",
+    d: b64urlEncode(d),
+    x: b64urlEncode(pub.slice(1, 33)),
+    y: b64urlEncode(pub.slice(33, 65)),
+    ext: true,
+  };
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
+  return { key, subject: env.VAPID_SUBJECT };
+}
+
+async function signVapidJwt(audience: string, signer: VapidSigner): Promise<string> {
+  const enc = new TextEncoder();
+  const header = b64urlEncode(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const exp = Math.floor(Date.now() / 1000) + 12 * 60 * 60; // ≤24h per spec
+  const payload = b64urlEncode(
+    enc.encode(JSON.stringify({ aud: audience, exp, sub: signer.subject })),
+  );
+  const signingInput = `${header}.${payload}`;
+  // Web Crypto ECDSA produces the raw r||s signature that JWS ES256 expects.
+  const sig = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    signer.key,
+    enc.encode(signingInput),
+  );
+  return `${signingInput}.${b64urlEncode(new Uint8Array(sig))}`;
+}
+
+/** POST a payload-less push to the endpoint. Returns the HTTP status. */
+async function sendWorkoutPush(
+  endpoint: string,
+  signer: VapidSigner,
+  publicKey: string,
+): Promise<number> {
+  const aud = new URL(endpoint).origin;
+  const jwt = await signVapidJwt(aud, signer);
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `vapid t=${jwt}, k=${publicKey}`,
+        TTL: "86400",
+        Urgency: "normal",
+      },
+    });
+    return res.status;
+  } catch (err) {
+    console.error("push send failed", err);
+    return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cron delivery
+// ---------------------------------------------------------------------------
+
+/** Local "YYYY-MM-DD" + minutes-since-midnight for a tz, defaulting to UTC. */
+function localTimeInZone(tz: string, now: Date): { date: string; minutes: number } {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+  } catch {
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+  }
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  let hh = parseInt(get("hour"), 10);
+  if (hh === 24) hh = 0; // some engines emit 24 at midnight
+  const mm = parseInt(get("minute"), 10);
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, minutes: hh * 60 + mm };
+}
+
+async function sendDueWorkoutReminders(env: Env): Promise<void> {
+  if (!env.WORKOUT_KV) return;
+  const signer = await getVapidSigner(env);
+  if (!signer) {
+    console.warn("VAPID not configured — skipping workout reminders");
+    return;
+  }
+  const now = new Date();
+  let cursor: string | undefined;
+  do {
+    const page = await env.WORKOUT_KV.list({ prefix: WORKOUT_SUB_PREFIX, cursor });
+    for (const k of page.keys) {
+      const sub = await env.WORKOUT_KV.get<WorkoutSub>(k.name, "json");
+      if (!sub) continue;
+      const { date, minutes } = localTimeInZone(sub.tz, now);
+      const [th, tm] = sub.reminderTime.split(":").map((n) => parseInt(n, 10));
+      const target = th * 60 + tm;
+      const windowStart = Math.floor(minutes / 15) * 15;
+      const due = target >= windowStart && target < windowStart + 15;
+      if (!due || sub.lastSentDate === date) continue;
+
+      const status = await sendWorkoutPush(sub.endpoint, signer, env.VAPID_PUBLIC_KEY!);
+      if (status === 404 || status === 410) {
+        await env.WORKOUT_KV.delete(k.name); // prune dead subscription
+      } else if (status >= 200 && status < 300) {
+        await env.WORKOUT_KV.put(k.name, JSON.stringify({ ...sub, lastSentDate: date }));
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
 }

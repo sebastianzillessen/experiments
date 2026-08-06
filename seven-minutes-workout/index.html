@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#ff5a3c" />
+    <title>7-Minuten Workout</title>
+    <link rel="icon" type="image/svg+xml" href="/seven-minutes-workout/favicon.svg" />
+    <!-- iOS Home-Screen-App: Icon + Standalone-Verhalten -->
+    <link rel="apple-touch-icon" href="/seven-minutes-workout/apple-touch-icon-180x180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="7min Workout" />
+    <!-- config.js is generated at deploy time (build.sh) and provides the VAPID
+         public key for push subscriptions. Missing in local dev → app still
+         works, push just stays disabled. -->
+    <script src="/seven-minutes-workout/config.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
