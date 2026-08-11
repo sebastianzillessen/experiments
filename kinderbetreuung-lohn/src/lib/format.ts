@@ -33,3 +33,18 @@ export function monthLabel(yyyymm: string): string {
 export function fmtNum(n: number): string {
   return n.toLocaleString('de-CH');
 }
+
+// Hours between two "HH:MM" times, rounded to two decimals. A "Bis" that is not
+// after "Von" is treated as crossing midnight (e.g. 22:00–06:00 = 8h), which
+// covers overnight childcare. Returns null when either time is missing/invalid
+// or the span is zero, so callers can leave the hours untouched.
+export function hoursBetweenTimes(from: string, to: string): number | null {
+  if (!from || !to) return null;
+  const [fh, fm] = from.split(':').map(Number);
+  const [th, tm] = to.split(':').map(Number);
+  if ([fh, fm, th, tm].some(n => !Number.isFinite(n))) return null;
+  let mins = (th * 60 + tm) - (fh * 60 + fm);
+  if (mins < 0) mins += 24 * 60; // crossed midnight
+  if (mins <= 0) return null;
+  return Math.round((mins / 60) * 100) / 100;
+}

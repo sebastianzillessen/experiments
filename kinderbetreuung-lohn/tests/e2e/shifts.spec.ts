@@ -65,6 +65,54 @@ test.describe('Shifts', () => {
     expect(data?.[0].employee_id).toBe(employeeId);
   });
 
+  test('Von/Bis auto-calculates the hours (note stays optional)', async ({ signedInUser }) => {
+    const { page, householdId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await seedPaySettings(householdId, month);
+    const employeeId = await seedEmployee(householdId);
+    await seedWage(employeeId, month, 30);
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+
+    // Enter start/end instead of hours; leave the note empty.
+    await page.locator('#e-datum').fill(`${month}-12`);
+    await page.locator('#e-von').fill('14:00');
+    await page.locator('#e-bis').fill('17:30');
+    await expect(page.locator('#e-stunden')).toHaveValue('3.5');
+
+    await page.locator('#btn-add').click();
+
+    await expect.poll(async () => {
+      const { data } = await adminClient()
+        .from('shifts')
+        .select('hours, note')
+        .eq('household_id', householdId)
+        .eq('date', `${month}-12`)
+        .maybeSingle();
+      return data ? `${Number(data.hours)}|${data.note}` : null;
+    }, { timeout: 8_000 }).toBe('3.5|');
+
+    // 3.5 h × CHF 30 = CHF 105.00 shows in the list.
+    await expect(page.locator('#entries-list')).toContainText('CHF 105.00');
+  });
+
+  test('overnight Von/Bis crosses midnight (22:00–06:00 = 8h)', async ({ signedInUser }) => {
+    const { page, householdId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await seedPaySettings(householdId, month);
+    const employeeId = await seedEmployee(householdId);
+    await seedWage(employeeId, month, 30);
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+
+    await page.locator('#e-datum').fill(`${month}-13`);
+    await page.locator('#e-von').fill('22:00');
+    await page.locator('#e-bis').fill('06:00');
+    await expect(page.locator('#e-stunden')).toHaveValue('8');
+  });
+
   test('wage raise: two versions yield different hourly rates per month', async ({ signedInUser }) => {
     const { page, householdId, userId } = signedInUser;
     const now = new Date();
