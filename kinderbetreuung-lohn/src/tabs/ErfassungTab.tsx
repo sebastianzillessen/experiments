@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { activeEmployees, activeMonthlySalaryFor, activeWageFor, employeeById, employeeName, ownEmployee } from '../lib/payroll';
-import { fmtChf, fmtDate, fmtNum, monthLabel, round2 } from '../lib/format';
+import { fmtChf, fmtDate, fmtNum, hoursBetweenTimes, monthLabel, round2 } from '../lib/format';
 import { normalizeEffectiveMonth } from '../lib/state';
 import { EmployeeTutorial } from '../components/Onboarding';
 
@@ -20,8 +20,24 @@ export function ErfassungTab() {
   } = useApp();
   const [date, setDate] = useState(todayIso);
   const [hoursStr, setHoursStr] = useState('');
+  const [fromTime, setFromTime] = useState('');
+  const [toTime, setToTime] = useState('');
   const [note, setNote] = useState('');
   const [monthStr, setMonthStr] = useState(currentMonth);
+
+  // Von/Bis are a convenience: whenever both are set we fill the Stunden field
+  // automatically (still editable, so a manual number keeps working too).
+  function updateFromTime(v: string) {
+    setFromTime(v);
+    const h = hoursBetweenTimes(v, toTime);
+    if (h != null) setHoursStr(String(h));
+  }
+  function updateToTime(v: string) {
+    setToTime(v);
+    const h = hoursBetweenTimes(fromTime, v);
+    if (h != null) setHoursStr(String(h));
+  }
+  const computedHours = hoursBetweenTimes(fromTime, toTime);
 
   const userId = user ? user.id : null;
   const own = ownEmployee(data, userId);
@@ -70,6 +86,8 @@ export function ErfassungTab() {
     }
     await addShift({ date, hours, note: note.trim(), employeeId: employeeId! });
     setHoursStr('');
+    setFromTime('');
+    setToTime('');
     setNote('');
   }
 
@@ -101,7 +119,7 @@ export function ErfassungTab() {
     <section id="erfassung" role="tabpanel" aria-labelledby="tab-erfassung" tabIndex={0}
       className={activeTab === 'erfassung' ? 'active' : undefined}>
       <h2>Stundenerfassung</h2>
-      <div className="section-sub">Trage hier jeden Einsatz mit Datum und geleisteten Stunden ein.</div>
+      <div className="section-sub">Trage hier jeden Einsatz ein: Datum und Arbeitszeit von–bis — die Stunden werden automatisch berechnet. Eine Notiz ist optional.</div>
 
       <EmployeeTutorial />
 
@@ -142,14 +160,34 @@ export function ErfassungTab() {
                 <input type="date" id="e-datum" value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
+                <label htmlFor="e-von">Von</label>
+                <input type="time" id="e-von" step="300" value={fromTime}
+                  onChange={e => updateFromTime(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="e-bis">Bis</label>
+                <input type="time" id="e-bis" step="300" value={toTime}
+                  onChange={e => updateToTime(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid-2" style={{ marginTop: 12 }}>
+              <div>
                 <label htmlFor="e-stunden">Stunden</label>
                 <input type="number" id="e-stunden" step="0.25" min="0" placeholder="z.B. 4.5"
                   value={hoursStr} onChange={e => setHoursStr(e.target.value)} />
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  {computedHours != null
+                    ? `Aus Von/Bis berechnet: ${fmtNum(computedHours)} Std. — du kannst sie auch direkt anpassen.`
+                    : 'Wird aus Von/Bis automatisch berechnet — oder direkt eintragen.'}
+                </div>
               </div>
               <div>
-                <label htmlFor="e-notiz">Notiz (optional)</label>
-                <input type="text" id="e-notiz" placeholder="z.B. Reinigung 14–17 Uhr"
+                <label htmlFor="e-notiz">Notiz <span className="muted" style={{ fontWeight: 400 }}>— optional</span></label>
+                <input type="text" id="e-notiz" placeholder="z.B. Spielplatz, Znacht kochen"
                   value={note} onChange={e => setNote(e.target.value)} />
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  Freitext für dich — für die Abrechnung nicht nötig. Die Zeiten gehören oben in „Von“ und „Bis“.
+                </div>
               </div>
             </div>
             <div className="btn-row">
