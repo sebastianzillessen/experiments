@@ -85,7 +85,7 @@ type AppContextValue = {
   hideInviteBanner: () => void;
   updateHouseholdName: (name: string) => void;
   updateEmployer: (patch: Partial<Employer>) => void;
-  addShift: (s: { date: string; hours: number | null; note: string; employeeId: string }) => Promise<void>;
+  addShift: (s: { date: string; hours: number | null; note: string; employeeId: string; startTime?: string | null; endTime?: string | null }) => Promise<void>;
   deleteShift: (id: string) => Promise<void>;
   addEmployee: (data: EmployeeData) => Promise<string | null>;
   updateEmployee: (id: string, patch: { data?: EmployeeData; archived_at?: string | null }) => Promise<boolean>;
@@ -236,7 +236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadFromCloud = useCallback(async (hh: string) => {
     const [profileRes, shiftsRes, settingsRes, householdRes, employeesRes, wagesRes] = await Promise.all([
       supabase.from('household_profile').select('*').eq('household_id', hh).maybeSingle(),
-      supabase.from('shifts').select('id, date, hours, note, entered_by, employee_id').eq('household_id', hh).order('date'),
+      supabase.from('shifts').select('id, date, hours, note, start_time, end_time, entered_by, employee_id').eq('household_id', hh).order('date'),
       supabase.from('pay_settings').select('id, effective_month, data').eq('household_id', hh).order('effective_month'),
       supabase.from('households').select('name').eq('id', hh).maybeSingle(),
       supabase.from('employees').select('id, data, user_id, archived_at').eq('household_id', hh).order('created_at'),
@@ -273,7 +273,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })),
       shifts: (shiftsRes.data || []).map(r => ({
         id: r.id, date: r.date, hours: r.hours == null ? null : Number(r.hours),
-        note: r.note || '', entered_by: r.entered_by, employeeId: r.employee_id
+        note: r.note || '', startTime: r.start_time, endTime: r.end_time,
+        entered_by: r.entered_by, employeeId: r.employee_id
       }))
     }));
     ensureSelectedEmployee();
@@ -526,12 +527,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [persistHouseholdProfile, setData]);
 
   /* ---- CLOUD SAVE: shifts ---- */
-  const addShift = useCallback(async ({ date, hours, note, employeeId }: { date: string; hours: number | null; note: string; employeeId: string }) => {
+  const addShift = useCallback(async ({ date, hours, note, employeeId, startTime, endTime }: { date: string; hours: number | null; note: string; employeeId: string; startTime?: string | null; endTime?: string | null }) => {
     setSyncStatus('pending');
     try {
       const insert: Record<string, unknown> = {
         household_id: householdIdRef.current,
         date, hours, note,
+        start_time: startTime || null,
+        end_time: endTime || null,
         entered_by: userRef.current?.id
       };
       // Attribute to an employee. With a single active employee the DB trigger
@@ -547,7 +550,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev,
         shifts: [...prev.shifts, {
           id: row.id, date: row.date, hours: row.hours == null ? null : Number(row.hours),
-          note: row.note || '', entered_by: row.entered_by, employeeId: row.employee_id
+          note: row.note || '', startTime: row.start_time, endTime: row.end_time,
+          entered_by: row.entered_by, employeeId: row.employee_id
         }].sort((a, b) => a.date.localeCompare(b.date))
       }));
       setSyncStatus('ok');
@@ -860,7 +864,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (fresh.shifts.length) {
       const rows = fresh.shifts.map(e => {
-        const row: Record<string, unknown> = { household_id: hh, date: e.date, hours: e.hours, note: e.note, entered_by: userRef.current?.id };
+        const row: Record<string, unknown> = { household_id: hh, date: e.date, hours: e.hours, note: e.note, start_time: e.startTime, end_time: e.endTime, entered_by: userRef.current?.id };
         if (e.employeeId && idMap[e.employeeId]) row.employee_id = idMap[e.employeeId];
         return row;
       });

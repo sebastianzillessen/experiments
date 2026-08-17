@@ -83,18 +83,39 @@ test.describe('Shifts', () => {
 
     await page.locator('#btn-add').click();
 
+    // hours computed, note empty, and the raw Von/Bis persisted.
     await expect.poll(async () => {
       const { data } = await adminClient()
         .from('shifts')
-        .select('hours, note')
+        .select('hours, note, start_time, end_time')
         .eq('household_id', householdId)
         .eq('date', `${month}-12`)
         .maybeSingle();
-      return data ? `${Number(data.hours)}|${data.note}` : null;
-    }, { timeout: 8_000 }).toBe('3.5|');
+      return data ? `${Number(data.hours)}|${data.note}|${data.start_time}|${data.end_time}` : null;
+    }, { timeout: 8_000 }).toBe('3.5||14:00:00|17:30:00');
 
-    // 3.5 h × CHF 30 = CHF 105.00 shows in the list.
+    // The overview shows the range (not the empty note) and the amount.
+    await expect(page.locator('#entries-list')).toContainText('14:00-17:30');
     await expect(page.locator('#entries-list')).toContainText('CHF 105.00');
+  });
+
+  test('overview shows "{from}-{to}: note" when both a range and a note are set', async ({ signedInUser }) => {
+    const { page, householdId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await seedPaySettings(householdId, month);
+    const employeeId = await seedEmployee(householdId);
+    await seedWage(employeeId, month, 30);
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+
+    await page.locator('#e-datum').fill(`${month}-14`);
+    await page.locator('#e-von').fill('09:00');
+    await page.locator('#e-bis').fill('12:00');
+    await page.locator('#e-notiz').fill('Spielplatz');
+    await page.locator('#btn-add').click();
+
+    await expect(page.locator('#entries-list')).toContainText('9:00-12:00: Spielplatz', { timeout: 8_000 });
   });
 
   test('overnight Von/Bis crosses midnight (22:00–06:00 = 8h)', async ({ signedInUser }) => {

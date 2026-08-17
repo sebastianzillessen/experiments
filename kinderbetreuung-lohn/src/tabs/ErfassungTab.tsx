@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { activeEmployees, activeMonthlySalaryFor, activeWageFor, employeeById, employeeName, ownEmployee } from '../lib/payroll';
-import { fmtChf, fmtDate, fmtNum, hoursBetweenTimes, monthLabel, round2 } from '../lib/format';
+import { fmtChf, fmtDate, fmtNum, hoursBetweenTimes, monthLabel, round2, shiftNoteLabel } from '../lib/format';
 import { normalizeEffectiveMonth } from '../lib/state';
 import { EmployeeTutorial } from '../components/Onboarding';
 
@@ -84,7 +84,14 @@ export function ErfassungTab() {
       employeeId = selectedEmployeeId || (actives.length === 1 ? actives[0].id : null);
       if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
     }
-    await addShift({ date, hours, note: note.trim(), employeeId: employeeId! });
+    // Persist the raw Von/Bis only when both are set (so the overview can show
+    // the range); hours stays the authoritative figure either way.
+    const bothTimes = fromTime && toTime;
+    await addShift({
+      date, hours, note: note.trim(), employeeId: employeeId!,
+      startTime: bothTimes ? fromTime : null,
+      endTime: bothTimes ? toTime : null
+    });
     setHoursStr('');
     setFromTime('');
     setToTime('');
@@ -223,11 +230,12 @@ export function ErfassungTab() {
                     ? (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0)
                     : round2((e.hours ?? 0) * lohn);
                   const canDelete = role !== 'employee' || (own && e.employeeId === own.id) || e.entered_by === userId;
+                  const noteLabel = shiftNoteLabel(e.startTime, e.endTime, e.note);
                   return (
                     <tr key={e.id}>
                       <td>{isMonth ? monthLabel(e.date.slice(0, 7)) : fmtDate(e.date)}</td>
                       {showEmployee && <td>{empLabel(e.employeeId)}</td>}
-                      <td>{e.note ? e.note : <span className="muted">–</span>}</td>
+                      <td>{noteLabel ? noteLabel : <span className="muted">–</span>}</td>
                       <td className="num">{isMonth ? 'Monat' : fmtNum(e.hours ?? 0)}</td>
                       <td className="num">{isMonth ? '–' : `CHF ${fmtChf(lohn)}`}</td>
                       <td className="num">CHF {fmtChf(betrag)}</td>

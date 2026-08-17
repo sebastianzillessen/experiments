@@ -34,6 +34,20 @@ export function fmtNum(n: number): string {
   return n.toLocaleString('de-CH');
 }
 
+// "HH:MM" (or "HH:MM:SS") → "H:MM" for display, e.g. "07:30" → "7:30".
+export function fmtTime(t: string): string {
+  const [h, m] = t.split(':');
+  return `${Number(h)}:${m ?? '00'}`;
+}
+
+// Entries-overview label: "7:30-17:00" when both times are set, the note when
+// only a note exists, and "7:30-17:00: note" when both are present.
+export function shiftNoteLabel(startTime: string | null, endTime: string | null, note: string): string {
+  const range = (startTime && endTime) ? `${fmtTime(startTime)}-${fmtTime(endTime)}` : '';
+  if (range && note) return `${range}: ${note}`;
+  return range || note;
+}
+
 // Hours between two "HH:MM" times, rounded to two decimals. A "Bis" that is not
 // after "Von" is treated as crossing midnight (e.g. 22:00–06:00 = 8h), which
 // covers overnight childcare. Returns null when either time is missing/invalid
