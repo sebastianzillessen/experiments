@@ -29,6 +29,10 @@ export type Shift = {
   // (the month "to be paid"), which carries no hours of its own.
   hours: number | null;
   note: string;
+  // Optional "Von"/"Bis" the hours were derived from, as "HH:MM" (or null). Only
+  // display context — `hours` stays authoritative for payroll.
+  startTime: string | null;
+  endTime: string | null;
   entered_by: string;
   employeeId: string | null;
 };
@@ -118,6 +122,17 @@ export function defaultPaySettingsData(canton?: string): PaySettingsData {
 
 export const asString = (v: unknown): string => typeof v === 'string' ? v : (v == null ? '' : String(v));
 export const asNumber = (v: unknown, fallback: number): number => { const n = Number(v); return Number.isFinite(n) ? n : fallback; };
+// Normalise a time to "HH:MM" (accepts "H:MM", "HH:MM", "HH:MM:SS"); null if
+// absent or out of range. Postgres `time` comes back as "HH:MM:SS".
+export const asTimeHHMM = (v: unknown): string | null => {
+  const s = asString(v);
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (h > 23 || mi > 59) return null;
+  return `${String(h).padStart(2, '0')}:${m[2]}`;
+};
 
 export function sanitizePaySettingsData(d: unknown): PaySettingsData {
   const raw = (d && typeof d === 'object') ? d as Record<string, unknown> : {};
@@ -260,6 +275,8 @@ export function sanitizeState(rawInput: unknown): AppState {
             id: asString(xx.id),
             date, hours,
             note: asString(xx.note),
+            startTime: asTimeHHMM(xx.startTime ?? xx.start_time),
+            endTime: asTimeHHMM(xx.endTime ?? xx.end_time),
             entered_by: asString(xx.entered_by),
             employeeId: asString(xx.employeeId || xx.employee_id) || null
           };

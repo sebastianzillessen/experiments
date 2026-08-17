@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import {
   activeMonthlySalaryFor, activePaySettingsFor, activeWageFor, berechneAbrechnung, employeeById, employeeName
 } from '../lib/payroll';
-import { fmtChf, fmtDate, fmtNum, monthLabel, round2 } from '../lib/format';
+import { fmtChf, fmtDate, fmtNum, monthLabel, round2, shiftNoteLabel } from '../lib/format';
 import { ausgleichskasseLabel } from '../lib/cantons';
 import { vacationPercentForWeeks } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
@@ -108,7 +108,7 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
                 return (
                   <tr key={x.id}>
                     <td>{fmtDate(x.date)}</td>
-                    <td>{x.note ? x.note : ''}</td>
+                    <td>{shiftNoteLabel(x.startTime, x.endTime, x.note)}</td>
                     <td className="num">{fmtNum(hrs)}</td>
                     <td className="num">CHF {fmtChf(rate)}</td>
                     <td className="num">CHF {fmtChf(round2(hrs * rate))}</td>
