@@ -1,5 +1,13 @@
+import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures';
 import { adminClient } from '../helpers/supabase';
+
+// Pick a "HH:MM" time via the hour + 15-min dropdowns (#<id> and #<id>-min).
+async function pickTime(page: Page, id: string, hhmm: string) {
+  const [h, m] = hhmm.split(':');
+  await page.locator(`#${id}`).selectOption(h);
+  await page.locator(`#${id}-min`).selectOption(m);
+}
 
 const DEFAULT_PS_DATA = {
   holidayPercent: 3.59,
@@ -77,8 +85,8 @@ test.describe('Shifts', () => {
 
     // Enter start/end instead of hours; leave the note empty.
     await page.locator('#e-datum').fill(`${month}-12`);
-    await page.locator('#e-von').fill('14:00');
-    await page.locator('#e-bis').fill('17:30');
+    await pickTime(page, 'e-von', '14:00');
+    await pickTime(page, 'e-bis', '17:30');
     await expect(page.locator('#e-stunden')).toHaveValue('3.5');
 
     await page.locator('#btn-add').click();
@@ -110,8 +118,8 @@ test.describe('Shifts', () => {
     await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
 
     await page.locator('#e-datum').fill(`${month}-14`);
-    await page.locator('#e-von').fill('09:00');
-    await page.locator('#e-bis').fill('12:00');
+    await pickTime(page, 'e-von', '09:00');
+    await pickTime(page, 'e-bis', '12:00');
     await page.locator('#e-notiz').fill('Spielplatz');
     await page.locator('#btn-add').click();
 
@@ -129,8 +137,8 @@ test.describe('Shifts', () => {
     await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
 
     await page.locator('#e-datum').fill(`${month}-13`);
-    await page.locator('#e-von').fill('22:00');
-    await page.locator('#e-bis').fill('06:00');
+    await pickTime(page, 'e-von', '22:00');
+    await pickTime(page, 'e-bis', '06:00');
     await expect(page.locator('#e-stunden')).toHaveValue('8');
   });
 

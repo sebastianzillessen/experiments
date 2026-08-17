@@ -13,6 +13,32 @@ function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTIONS = ['00', '15', '30', '45'];
+
+// Hour + 15-minute dropdowns instead of a native <input type=time>: iOS Safari
+// ignores the time input's `step`, so it can't enforce quarter-hour slots — a
+// select can. Value is "HH:MM" (or "" when no hour is chosen); picking an hour
+// defaults the minutes to :00.
+function TimeSelect({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  const [h, m] = value ? value.split(':') : ['', ''];
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <select id={id} aria-label="Stunde" value={h} style={{ flex: 1 }}
+        onChange={e => onChange(e.target.value ? `${e.target.value}:${m || '00'}` : '')}>
+        <option value="">–</option>
+        {HOUR_OPTIONS.map(hh => <option key={hh} value={hh}>{hh}</option>)}
+      </select>
+      <span aria-hidden="true" style={{ alignSelf: 'center' }}>:</span>
+      <select id={`${id}-min`} aria-label="Minute" value={h ? (m || '00') : ''} disabled={!h} style={{ flex: 1 }}
+        onChange={e => onChange(h ? `${h}:${e.target.value}` : '')}>
+        {!h && <option value="">–</option>}
+        {MINUTE_OPTIONS.map(mm => <option key={mm} value={mm}>{mm}</option>)}
+      </select>
+    </div>
+  );
+}
+
 export function ErfassungTab() {
   const {
     activeTab, data, user, role, householdId, addShift, deleteShift, primedTabs,
@@ -168,13 +194,11 @@ export function ErfassungTab() {
               </div>
               <div>
                 <label htmlFor="e-von">Von</label>
-                <input type="time" id="e-von" step="300" value={fromTime}
-                  onChange={e => updateFromTime(e.target.value)} />
+                <TimeSelect id="e-von" value={fromTime} onChange={updateFromTime} />
               </div>
               <div>
                 <label htmlFor="e-bis">Bis</label>
-                <input type="time" id="e-bis" step="300" value={toTime}
-                  onChange={e => updateToTime(e.target.value)} />
+                <TimeSelect id="e-bis" value={toTime} onChange={updateToTime} />
               </div>
             </div>
             <div className="grid-2" style={{ marginTop: 12 }}>
