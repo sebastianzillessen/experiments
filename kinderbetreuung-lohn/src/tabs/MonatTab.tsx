@@ -96,30 +96,39 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
         </>
       ) : (
         <>
-          <h4>Geleistete Stunden</h4>
-          <table>
-            <thead>
-              <tr><th>Datum</th><th>Notiz</th><th className="num">Stunden</th><th className="num">Stundenlohn</th><th className="num">Betrag</th></tr>
-            </thead>
-            <tbody>
-              {sorted.map(x => {
-                const rate = empId ? activeWageFor(data, empId, x.date) : 0;
-                const hrs = x.hours ?? 0;
-                return (
-                  <tr key={x.id}>
-                    <td>{fmtDate(x.date)}</td>
-                    <td>{shiftNoteLabel(x.startTime, x.endTime, x.note)}</td>
-                    <td className="num">{fmtNum(hrs)}</td>
-                    <td className="num">CHF {fmtChf(rate)}</td>
-                    <td className="num">CHF {fmtChf(round2(hrs * rate))}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="total-row"><td colSpan={2}>Total</td><td className="num">{fmtNum(calc.stundenTotal)}</td><td></td><td className="num">CHF {fmtChf(calc.bruttoStunden)}</td></tr>
-            </tfoot>
-          </table>
+          {(() => {
+            // Stundenlohn is fixed per month, so show it once in the heading
+            // instead of a per-row column (usually one rate; list all if it
+            // changed mid-month).
+            const rates = [...new Set(sorted.filter(x => x.hours != null).map(x => empId ? activeWageFor(data, empId, x.date) : 0))]
+              .filter(r => r > 0).sort((a, b) => a - b);
+            const rateLabel = rates.length ? `CHF ${rates.map(fmtChf).join(' / ')}/Std.` : '';
+            return <h4>Geleistete Stunden{rateLabel ? ` (${rateLabel})` : ''}</h4>;
+          })()}
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Datum</th><th>Notiz</th><th className="num">Stunden</th><th className="num">Betrag</th></tr>
+              </thead>
+              <tbody>
+                {sorted.map(x => {
+                  const rate = empId ? activeWageFor(data, empId, x.date) : 0;
+                  const hrs = x.hours ?? 0;
+                  return (
+                    <tr key={x.id}>
+                      <td>{fmtDate(x.date)}</td>
+                      <td>{shiftNoteLabel(x.startTime, x.endTime, x.note)}</td>
+                      <td className="num">{fmtNum(hrs)}</td>
+                      <td className="num">CHF {fmtChf(round2(hrs * rate))}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="total-row"><td colSpan={2}>Total</td><td className="num">{fmtNum(calc.stundenTotal)}</td><td className="num">CHF {fmtChf(calc.bruttoStunden)}</td></tr>
+              </tfoot>
+            </table>
+          </div>
 
           <h4>Bruttolohn</h4>
           <div className="summary-row"><span>Stundenlohn-Summe</span><span>CHF {fmtChf(calc.bruttoStunden)}</span></div>

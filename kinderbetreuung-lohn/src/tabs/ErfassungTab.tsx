@@ -84,13 +84,6 @@ export function ErfassungTab() {
     ? data.shifts.filter(e => (own && e.employeeId === own.id) || e.entered_by === userId)
     : data.shifts;
 
-  const isAdmin = role === 'owner' || role === 'admin';
-  const showEmployee = isAdmin && actives.length > 1;
-  const empLabel = (id: string | null) => {
-    const emp = employeeById(data, id);
-    return emp ? employeeName(emp) : '–';
-  };
-
   async function onAdd() {
     const hours = Number(hoursStr);
     if (!date) { alert('Bitte ein Datum eingeben.'); return; }
@@ -139,14 +132,25 @@ export function ErfassungTab() {
     setNote('');
   }
 
-  // Hours sum ignores Monatslohn markers (hours === null); Betrag includes both
-  // hourly amounts and monthly salaries.
-  const totalH = visible.reduce((s, e) => s + (e.hours ?? 0), 0);
-  const totalB = round2(visible.reduce((s, e) => {
-    if (e.hours == null) return s + (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0);
-    return s + e.hours * (e.employeeId ? activeWageFor(data, e.employeeId, e.date) : 0);
-  }, 0));
-  const totalColspan = showEmployee ? 3 : 2;
+  // Group the visible entries by Mitarbeiter (in employee display order) so each
+  // person's shifts render under a header with their name + hourly rate — the
+  // per-row Stundenlohn column is dropped (it's fixed per month).
+  const orderedEmpIds = data.employees.map(e => e.id);
+  const shiftGroups = (() => {
+    const byEmp = new Map<string | null, typeof visible>();
+    for (const s of visible) {
+      const list = byEmp.get(s.employeeId) ?? [];
+      list.push(s);
+      byEmp.set(s.employeeId, list);
+    }
+    return [...byEmp.entries()]
+      .map(([empId, shifts]) => ({ empId, shifts: [...shifts].sort((a, b) => a.date.localeCompare(b.date)) }))
+      .sort((a, b) => {
+        const ia = a.empId == null ? Infinity : orderedEmpIds.indexOf(a.empId);
+        const ib = b.empId == null ? Infinity : orderedEmpIds.indexOf(b.empId);
+        return ia - ib;
+      });
+  })();
 
   return (
     <section id="erfassung" role="tabpanel" aria-labelledby="tab-erfassung" tabIndex={0}
@@ -234,60 +238,78 @@ export function ErfassungTab() {
           {!primedTabs.has('erfassung') ? null : !visible.length ? (
             <div className="empty-state">Noch keine Einsätze erfasst.</div>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Datum</th>
-                  {showEmployee && <th>Mitarbeiter/in</th>}
-                  <th>Notiz</th>
-                  <th className="num">Stunden</th>
-                  <th className="num">Stundenlohn</th>
-                  <th className="num">Betrag</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map(e => {
-                  const isMonth = e.hours == null;
-                  const lohn = (!isMonth && e.employeeId) ? activeWageFor(data, e.employeeId, e.date) : 0;
-                  const betrag = isMonth
-                    ? (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0)
-                    : round2((e.hours ?? 0) * lohn);
-                  const canDelete = role !== 'employee' || (own && e.employeeId === own.id) || e.entered_by === userId;
-                  const noteLabel = shiftNoteLabel(e.startTime, e.endTime, e.note);
-                  return (
-                    <tr key={e.id}>
-                      <td>{isMonth ? monthLabel(e.date.slice(0, 7)) : fmtDate(e.date)}</td>
-                      {showEmployee && <td>{empLabel(e.employeeId)}</td>}
-                      <td>{noteLabel ? noteLabel : <span className="muted">–</span>}</td>
-                      <td className="num">{isMonth ? 'Monat' : fmtNum(e.hours ?? 0)}</td>
-                      <td className="num">{isMonth ? '–' : `CHF ${fmtChf(lohn)}`}</td>
-                      <td className="num">CHF {fmtChf(betrag)}</td>
-                      <td className="actions">
-                        {canDelete && (
-                          <button className="btn btn-small btn-danger" data-del={e.id}
-                            onClick={async () => {
-                              if (!confirm('Eintrag wirklich löschen?')) return;
-                              await deleteShift(e.id);
-                            }}>
-                            Löschen
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="total-row">
-                  <td colSpan={totalColspan}>Total</td>
-                  <td className="num">{fmtNum(totalH)}</td>
-                  <td></td>
-                  <td className="num">CHF {fmtChf(totalB)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+            shiftGroups.map(({ empId, shifts }) => {
+              const emp = employeeById(data, empId);
+              const monthly = emp?.data.employmentType === 'monthly';
+              const hasHourly = shifts.some(s => s.hours != null);
+              const rates = monthly ? [] : [...new Set(
+                shifts.filter(s => s.hours != null).map(s => empId ? activeWageFor(data, empId, s.date) : 0)
+              )].filter(r => r > 0).sort((a, b) => a - b);
+              const rateLabel = monthly ? 'Monatslohn' : (rates.length ? `CHF ${rates.map(fmtChf).join(' / ')}/Std.` : null);
+              const grpHours = shifts.reduce((s, e) => s + (e.hours ?? 0), 0);
+              const grpBetrag = round2(shifts.reduce((s, e) => e.hours == null
+                ? s + (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0)
+                : s + e.hours * (e.employeeId ? activeWageFor(data, e.employeeId, e.date) : 0), 0));
+              return (
+                <div className="table-wrap" key={empId ?? '—'} style={{ marginBottom: 16 }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th className="group-head" colSpan={5}>
+                          {emp ? employeeName(emp) : 'Ohne Zuordnung'}
+                          {rateLabel ? <span className="group-rate"> ({rateLabel})</span> : null}
+                        </th>
+                      </tr>
+                      <tr>
+                        <th>Datum</th>
+                        <th>Notiz</th>
+                        <th className="num">Stunden</th>
+                        <th className="num">Betrag</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shifts.map(e => {
+                        const isMonth = e.hours == null;
+                        const lohn = (!isMonth && e.employeeId) ? activeWageFor(data, e.employeeId, e.date) : 0;
+                        const betrag = isMonth
+                          ? (e.employeeId ? activeMonthlySalaryFor(data, e.employeeId, e.date) : 0)
+                          : round2((e.hours ?? 0) * lohn);
+                        const canDelete = role !== 'employee' || (own && e.employeeId === own.id) || e.entered_by === userId;
+                        const noteLabel = shiftNoteLabel(e.startTime, e.endTime, e.note);
+                        return (
+                          <tr key={e.id}>
+                            <td>{isMonth ? monthLabel(e.date.slice(0, 7)) : fmtDate(e.date)}</td>
+                            <td>{noteLabel ? noteLabel : <span className="muted">–</span>}</td>
+                            <td className="num">{isMonth ? 'Monat' : fmtNum(e.hours ?? 0)}</td>
+                            <td className="num">CHF {fmtChf(betrag)}</td>
+                            <td className="actions">
+                              {canDelete && (
+                                <button className="btn btn-small btn-danger" data-del={e.id}
+                                  onClick={async () => {
+                                    if (!confirm('Eintrag wirklich löschen?')) return;
+                                    await deleteShift(e.id);
+                                  }}>
+                                  Löschen
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="total-row">
+                        <td colSpan={2}>Total</td>
+                        <td className="num">{hasHourly ? fmtNum(grpHours) : ''}</td>
+                        <td className="num">CHF {fmtChf(grpBetrag)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

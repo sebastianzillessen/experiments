@@ -61,7 +61,11 @@ test.describe('Shifts', () => {
     await page.locator('#btn-add').click();
 
     await expect(page.locator('#entries-list')).toContainText('Test-Einsatz', { timeout: 8_000 });
-    await expect(page.locator('#entries-list')).toContainText('CHF 35.00');
+    // Entries are grouped by Mitarbeiter with the fixed rate in the header
+    // (no per-row Stundenlohn column) — CHF 140.00 is the row amount (4×35).
+    await expect(page.locator('#entries-list .group-head')).toContainText('Erika Beispiel');
+    await expect(page.locator('#entries-list .group-head')).toContainText('CHF 35.00/Std.');
+    await expect(page.locator('#entries-list')).toContainText('CHF 140.00');
 
     const { data } = await adminClient()
       .from('shifts')

@@ -70,6 +70,12 @@ table tr:last-child td { border-bottom:none; }
 table .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 table .actions { text-align:right; white-space:nowrap; }
 table .total-row td { font-weight:700; background:var(--soft); border-top:2px solid var(--primary-dark); }
+/* Group header row (entries grouped by Mitarbeiter): a title, not a column head. */
+table th.group-head { text-transform:none; letter-spacing:0; font-size:14px; color:var(--primary-dark); background:var(--soft); border-bottom:2px solid var(--primary-dark); }
+table th.group-head .group-rate { font-weight:400; color:var(--muted); white-space:nowrap; }
+/* Safety net so a wide table scrolls within its own box instead of pushing the
+   whole page sideways on a narrow phone. */
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
 /* PRINTABLE LOHNABRECHNUNG */
 .print-doc { background:#fff; border:1px solid var(--border); padding:32px; border-radius:6px; font-size:13px; max-width:780px; margin:0 auto; }
