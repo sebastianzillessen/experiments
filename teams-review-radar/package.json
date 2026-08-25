@@ -1,0 +1,13 @@
+{
+  "name": "teams-review-radar",
+  "version": "1.0.0",
+  "description": "Lists Teams channel messages that ask for a PR review but have no checkmark reaction yet",
+  "main": "index.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "demo": "node index.js --input sample-data/messages.sample.json --out out/dashboard.html",
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "inputPath": "~/OneDrive - Digitec Galaxus AG/Apps/teams-review-radar/messages.json",
+  "outputPath": "out/dashboard.html",
+
+  "reactions": {
+    "approved": ["✅", "✔️", "☑️"],
+    "inReview": ["👀", "🔍"],
+    "approvedNames": ["approved", "checkmark", "check", "done", "lgtm"],
+    "inReviewNames": ["eyes", "looking", "reviewing"]
+  },
+
+  "prPatterns": [
+    "github\\.com/[^/\\s\"']+/[^/\\s\"']+/pull/\\d+",
+    "dev\\.azure\\.com/[^\\s\"']+/pullrequest/\\d+",
+    "/_git/[^/\\s\"']+/pullrequest/\\d+",
+    "gitlab\\.com/[^\\s\"']+/-/merge_requests/\\d+"
+  ],
+  "requirePrMatch": true
+}

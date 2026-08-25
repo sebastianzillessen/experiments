@@ -1,0 +1,568 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#teams('fbe2bf47-16c8-47cf-b4a5-4b9b187c508b')/channels('19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2')/messages",
+  "@odata.count": 10,
+  "value": [
+    {
+      "id": "1716900000001",
+      "replyToId": null,
+      "etag": "1716900000001",
+      "messageType": "message",
+      "createdDateTime": "2026-08-19T08:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-19T08:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000001?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000001",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "11111111-1111-1111-1111-111111111111",
+          "displayName": "Nadia Fischer",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "Review please 🙏 <a href=\"https://github.com/digitecgalaxus/checkout-api/pull/4821\">Fix idempotency key collision on retry</a>"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000002",
+      "replyToId": null,
+      "etag": "1716900000002",
+      "messageType": "message",
+      "createdDateTime": "2026-08-25T10:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-25T10:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000002?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000002",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "displayName": "Tobias Meier",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "Small one, should be quick:<br>https://dev.azure.com/dgcontoso/Platform/_git/shipping/pullrequest/9912"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000005",
+      "replyToId": null,
+      "etag": "1716900000005",
+      "messageType": "message",
+      "createdDateTime": "2026-08-22T14:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-22T14:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": "Bump Node to 22 across build images",
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000005?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000005",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "33333333-3333-3333-3333-333333333333",
+          "displayName": "Sarah Brunner",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "<p>Needs a second pair of eyes on the Dockerfile changes.</p><p><a href=\"https://github.com/digitecgalaxus/build-images/pull/331\">build-images#331</a></p>"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [
+        {
+          "reactionType": "👀",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-22T17:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "44444444-4444-4444-4444-444444444444",
+              "displayName": "Marco Keller",
+              "userIdentityType": "aadUser"
+            }
+          }
+        },
+        {
+          "reactionType": "👀",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-23T21:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "55555555-5555-5555-5555-555555555555",
+              "displayName": "Lena Vogt",
+              "userIdentityType": "aadUser"
+            }
+          }
+        }
+      ],
+      "messageHistory": [],
+      "replies@odata.count": 2,
+      "replies": [
+        {
+          "id": "1716900000003",
+          "replyToId": null,
+          "etag": "1716900000003",
+          "messageType": "message",
+          "createdDateTime": "2026-08-22T19:10:19.312Z",
+          "lastModifiedDateTime": "2026-08-22T19:10:19.312Z",
+          "deletedDateTime": null,
+          "from": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "44444444-4444-4444-4444-444444444444",
+              "displayName": "Marco Keller",
+              "userIdentityType": "aadUser"
+            }
+          },
+          "body": {
+            "contentType": "text",
+            "content": "Why pin the patch version here?"
+          },
+          "reactions": []
+        },
+        {
+          "id": "1716900000004",
+          "replyToId": null,
+          "etag": "1716900000004",
+          "messageType": "message",
+          "createdDateTime": "2026-08-24T17:10:19.312Z",
+          "lastModifiedDateTime": "2026-08-24T17:10:19.312Z",
+          "deletedDateTime": null,
+          "from": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "33333333-3333-3333-3333-333333333333",
+              "displayName": "Sarah Brunner",
+              "userIdentityType": "aadUser"
+            }
+          },
+          "body": {
+            "contentType": "text",
+            "content": "Reproducible builds — updated the comment."
+          },
+          "reactions": []
+        }
+      ]
+    },
+    {
+      "id": "1716900000006",
+      "replyToId": null,
+      "etag": "1716900000006",
+      "messageType": "message",
+      "createdDateTime": "2026-08-23T09:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-23T09:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000006?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000006",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "44444444-4444-4444-4444-444444444444",
+          "displayName": "Marco Keller",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "https://github.com/digitecgalaxus/search-indexer/pull/77 — refactors the batching loop, no behaviour change."
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [
+        {
+          "reactionType": "👀",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-23T11:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "11111111-1111-1111-1111-111111111111",
+              "displayName": "Nadia Fischer",
+              "userIdentityType": "aadUser"
+            }
+          }
+        }
+      ],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000007",
+      "replyToId": null,
+      "etag": "1716900000007",
+      "messageType": "message",
+      "createdDateTime": "2026-08-24T07:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-24T07:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000007?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000007",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "55555555-5555-5555-5555-555555555555",
+          "displayName": "Lena Vogt",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "https://github.com/digitecgalaxus/checkout-api/pull/4830 ready for review"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [
+        {
+          "reactionType": "👀",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-24T09:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "22222222-2222-2222-2222-222222222222",
+              "displayName": "Tobias Meier",
+              "userIdentityType": "aadUser"
+            }
+          }
+        },
+        {
+          "reactionType": "✅",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-24T11:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "22222222-2222-2222-2222-222222222222",
+              "displayName": "Tobias Meier",
+              "userIdentityType": "aadUser"
+            }
+          }
+        }
+      ],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000008",
+      "replyToId": null,
+      "etag": "1716900000008",
+      "messageType": "message",
+      "createdDateTime": "2026-08-24T11:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-24T11:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000008?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000008",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "displayName": "Tobias Meier",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "https://github.com/digitecgalaxus/pricing/pull/1204"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [
+        {
+          "reactionType": "custom",
+          "displayName": "approved",
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-24T15:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "33333333-3333-3333-3333-333333333333",
+              "displayName": "Sarah Brunner",
+              "userIdentityType": "aadUser"
+            }
+          }
+        }
+      ],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000009",
+      "replyToId": null,
+      "etag": "1716900000009",
+      "messageType": "message",
+      "createdDateTime": "2026-08-24T15:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-24T15:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000009?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000009",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "11111111-1111-1111-1111-111111111111",
+          "displayName": "Nadia Fischer",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "https://gitlab.com/dg/tools/-/merge_requests/58"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [
+        {
+          "reactionType": "✔️",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-24T19:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "44444444-4444-4444-4444-444444444444",
+              "displayName": "Marco Keller",
+              "userIdentityType": "aadUser"
+            }
+          }
+        }
+      ],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000010",
+      "replyToId": null,
+      "etag": "1716900000010",
+      "messageType": "message",
+      "createdDateTime": "2026-08-25T08:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-25T08:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": null,
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000010?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000010",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "33333333-3333-3333-3333-333333333333",
+          "displayName": "Sarah Brunner",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "Anyone up for lunch at 12:15?"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [
+        {
+          "reactionType": "👍",
+          "displayName": null,
+          "reactionContentUrl": null,
+          "createdDateTime": "2026-08-25T09:10:19.312Z",
+          "user": {
+            "application": null,
+            "device": null,
+            "user": {
+              "id": "55555555-5555-5555-5555-555555555555",
+              "displayName": "Lena Vogt",
+              "userIdentityType": "aadUser"
+            }
+          }
+        }
+      ],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    },
+    {
+      "id": "1716900000011",
+      "messageType": "systemEventMessage",
+      "createdDateTime": "2026-08-22T05:10:19.312Z",
+      "deletedDateTime": null,
+      "from": null,
+      "body": {
+        "contentType": "html",
+        "content": "<systemEventMessage/>"
+      },
+      "reactions": [],
+      "eventDetail": {
+        "@odata.type": "#microsoft.graph.membersAddedEventMessageDetail",
+        "members": [
+          {
+            "id": "66666666-6666-6666-6666-666666666666"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1716900000012",
+      "replyToId": null,
+      "etag": "1716900000012",
+      "messageType": "message",
+      "createdDateTime": "2026-08-21T19:10:19.312Z",
+      "lastModifiedDateTime": "2026-08-21T19:10:19.312Z",
+      "lastEditedDateTime": null,
+      "deletedDateTime": "2026-08-21T20:10:19.312Z",
+      "subject": null,
+      "summary": null,
+      "chatId": null,
+      "importance": "normal",
+      "locale": "en-us",
+      "webUrl": "https://teams.microsoft.com/l/message/19%3A4a95f7d8db4c4e7fae857bcebe0623e6%40thread.tacv2/1716900000012?groupId=fbe2bf47-16c8-47cf-b4a5-4b9b187c508b&parentMessageId=1716900000012",
+      "policyViolation": null,
+      "eventDetail": null,
+      "from": {
+        "application": null,
+        "device": null,
+        "user": {
+          "id": "55555555-5555-5555-5555-555555555555",
+          "displayName": "Lena Vogt",
+          "userIdentityType": "aadUser"
+        }
+      },
+      "body": {
+        "contentType": "html",
+        "content": "<div></div>"
+      },
+      "channelIdentity": {
+        "teamId": "fbe2bf47-16c8-47cf-b4a5-4b9b187c508b",
+        "channelId": "19:4a95f7d8db4c4e7fae857bcebe0623e6@thread.tacv2"
+      },
+      "attachments": [],
+      "mentions": [],
+      "reactions": [],
+      "messageHistory": [],
+      "replies@odata.count": 0,
+      "replies": []
+    }
+  ]
+}
