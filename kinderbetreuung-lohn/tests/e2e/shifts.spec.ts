@@ -170,7 +170,12 @@ test.describe('Shifts', () => {
     const entries = page.locator('#entries-list');
     await expect(entries).toContainText('old-rate', { timeout: 8_000 });
     await expect(entries).toContainText('new-rate');
-    await expect(entries).toContainText('CHF 30.00');
-    await expect(entries).toContainText('CHF 40.00');
+    // Both rates are listed once in the group header (no per-row Stundenlohn
+    // column), and the two months apply different rates — visible in the per-row
+    // amounts: 2 h × CHF 30 = 60.00 and 2 h × CHF 40 = 80.00.
+    await expect(entries.locator('.group-head')).toContainText('CHF 30.00');
+    await expect(entries.locator('.group-head')).toContainText('40.00/Std.');
+    await expect(entries).toContainText('CHF 60.00');
+    await expect(entries).toContainText('CHF 80.00');
   });
 });
