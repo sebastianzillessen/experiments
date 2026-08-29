@@ -1,0 +1,49 @@
+name: Supabase keep-alive
+
+# Free-tier Supabase projects are paused after ~7 days without database or API
+# activity. This job connects to the project's database on a schedule (twice a
+# week, so the gap is always < 7 days) to reset that inactivity timer and keep
+# the Kinderbetreuung/Salärli project from suspending.
+#
+# It reuses the same CLI and secrets as supabase-migrate.yml — no new secrets:
+#   - SUPABASE_ACCESS_TOKEN: personal access token (for `supabase link`)
+#   - SUPABASE_DB_PASSWORD:  the project's database password (for the DB query)
+#
+# NOTE: this only PREVENTS pausing. A project that is already paused must be
+# resumed once from the Supabase dashboard; the schedule keeps it awake after.
+
+on:
+  schedule:
+    # 06:00 UTC on Monday and Thursday (Mon→Thu = 3 days, Thu→Mon = 4 days).
+    - cron: '0 6 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kinderbetreuung-lohn
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: tbknudbcgaarqixweizj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.2
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Ping database (resets the free-tier inactivity timer)
+        # Read-only: querying the remote migration history opens a real DB
+        # connection — the same kind of activity that kept the project awake
+        # during active development — without changing any data.
+        run: supabase migration list --linked
