@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: 2.98.2
+          version: 2.116.0
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
       - name: Ping database (resets the free-tier inactivity timer)
