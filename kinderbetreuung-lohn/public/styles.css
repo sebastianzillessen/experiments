@@ -75,7 +75,10 @@ table th.group-head { text-transform:none; letter-spacing:0; font-size:14px; col
 table th.group-head .group-rate { font-weight:400; color:var(--muted); white-space:nowrap; }
 /* Safety net so a wide table scrolls within its own box instead of pushing the
    whole page sideways on a narrow phone. */
-.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+/* No -webkit-overflow-scrolling: it is a no-op on modern iOS (momentum scroll is
+   the default) and, as a composited scroll layer, it makes iOS Safari print a
+   blank page when it sits inside the printed document. */
+.table-wrap { overflow-x:auto; }
 
 /* PRINTABLE LOHNABRECHNUNG */
 .print-doc { background:#fff; border:1px solid var(--border); padding:32px; border-radius:6px; font-size:13px; max-width:780px; margin:0 auto; }
@@ -246,8 +249,13 @@ table th.group-head .group-rate { font-weight:400; color:var(--muted); white-spa
   /* Within the active printable tab, keep only the document (drop heading + controls). */
   #monat > *:not(#monat-doc), #jahr > *:not(#jahr-doc) { display:none !important; }
   .no-print { display:none !important; }
-  /* iOS Safari: never let a scroll/overflow ancestor clip printed content. */
-  * { overflow:visible !important; }
+  /* iOS Safari: never let a scroll/overflow ancestor clip printed content, and
+     never leave a composited momentum-scroll layer — either one makes it print
+     a blank page. */
+  * { overflow:visible !important; -webkit-overflow-scrolling:auto !important; }
+  /* The screen-only horizontal-scroll wrapper must not generate a box in print:
+     collapse it so its table lays out as a direct child of the document. */
+  .table-wrap { display:contents !important; }
   .card { border:none; box-shadow:none; padding:0; margin:0; }
   .print-doc { border:none; padding:0; max-width:none; }
   /* Print the QR-bill on its own page, like a real invoice's payment part. */
