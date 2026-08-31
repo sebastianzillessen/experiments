@@ -243,7 +243,10 @@ table th.group-head .group-rate { font-weight:400; color:var(--muted); white-spa
    forced visible — both are what iOS Safari needs to not print a blank page. */
 @media print {
   body, html { background:#fff; }
-  body > *:not(main) { display:none !important; }
+  /* The React app mounts inside #root, so hide main's SIBLINGS within #root
+     (login, header, nav, footer, overlays) — not `body > *`, which would hide
+     #root itself and blank the whole print. */
+  #root > *:not(main) { display:none !important; }
   main { max-width:none; margin:0; padding:0; }
   main > section:not(.active) { display:none !important; }
   /* Within the active printable tab, keep only the document (drop heading + controls). */
