@@ -7,6 +7,7 @@ import { Header, UserStrip, TabNav, SyncWarn, SyncStatus, AppVersionFooter } fro
 import { OnboardingBanner } from './components/Onboarding';
 import { DevMenu } from './components/DevMenu';
 import { HelpAssistant } from './components/HelpAssistant';
+import { UpdatePrompt } from './components/UpdatePrompt';
 import { ErfassungTab } from './tabs/ErfassungTab';
 import { MonatTab } from './tabs/MonatTab';
 import { JahrTab } from './tabs/JahrTab';
@@ -46,6 +47,7 @@ export default function App() {
       <AppVersionFooter />
       <HelpAssistant />
       <DevMenu />
+      <UpdatePrompt />
     </AppProvider>
   );
 }
