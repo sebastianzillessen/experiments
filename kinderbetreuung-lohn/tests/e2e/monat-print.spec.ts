@@ -100,4 +100,33 @@ test.describe('Monatsabrechnung print', () => {
 
     await page.emulateMedia({ media: 'screen' });
   });
+
+  test('on a phone-width viewport the printed header stays side-by-side (compact, one page)', async ({ signedInUser }) => {
+    const { page, householdId, userId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await seedHourlyShift(householdId, userId, month);
+
+    // iOS prints the mobile layout (viewport ≤ 600px), which stacks the header
+    // and pushes the payslip onto a second page. The print rules must force it
+    // back side-by-side.
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#tab-monat').click();
+    await page.locator('#m-monat').fill(month);
+    await expect(page.locator('#monat-doc .print-doc')).toBeVisible({ timeout: 10_000 });
+
+    // On screen at this width the header stacks (column) …
+    const screenDir = await page.locator('#monat-doc .print-doc .doc-header')
+      .evaluate(el => getComputedStyle(el).flexDirection);
+    expect(screenDir).toBe('column');
+
+    // … but in print it must be side-by-side (row) to fit one page.
+    await page.emulateMedia({ media: 'print' });
+    const printDir = await page.locator('#monat-doc .print-doc .doc-header')
+      .evaluate(el => getComputedStyle(el).flexDirection);
+    expect(printDir).toBe('row');
+
+    await page.emulateMedia({ media: 'screen' });
+  });
 });
