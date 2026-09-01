@@ -11,6 +11,7 @@ set -euo pipefail
 #
 # Usage:
 #   bash build.sh                      # build all experiments (production)
+#   bash build.sh family-planner       # build a single experiment
 #   bash build.sh kinderbetreuung-lohn # build a single experiment (used by the
 #                                        kinderbetreuung-lohn E2E global-setup so
 #                                        the test doesn't depend on the packliste
@@ -74,6 +75,29 @@ window.__APP_ENV = $(printf '%s' "$app_env" | python3 -c 'import json,sys; print
 EOF
 }
 
+build_family_planner() {
+  mkdir -p _site/family-planner
+  # Build the React app (npm ci is expected to have run at repo root already).
+  npm -w @experiments/family-planner run build
+  cp -r family-planner/dist/. _site/family-planner/
+  local commit build_time branch app_env
+  commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+  if [ -z "$commit" ]; then commit="${WORKERS_CI_COMMIT_SHA:-${CF_PAGES_COMMIT_SHA:-unknown}}"; commit="${commit:0:7}"; fi
+  build_time="$(date -u +'%Y-%m-%d %H:%M UTC')"
+  branch="${WORKERS_CI_BRANCH:-${CF_PAGES_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}}"
+  if [ "$branch" = "main" ]; then app_env="production"; else app_env="preview"; fi
+
+  # Same Supabase project as kinderbetreuung-lohn: shared auth users, own tables.
+  cat > _site/family-planner/config.js <<EOF
+window.__APP_CONFIG = {
+  url: $(printf '%s' "$SUPABASE_URL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+  key: $(printf '%s' "$SUPABASE_PUBLISHABLE_KEY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+};
+window.__APP_VERSION = { commit: $(printf '%s' "$commit" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'), builtAt: $(printf '%s' "$build_time" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))') };
+window.__APP_ENV = $(printf '%s' "$app_env" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))');
+EOF
+}
+
 build_packliste() {
   mkdir -p _site/packliste
   # Build the React app (npm ci is expected to have run at repo root already).
@@ -94,6 +118,7 @@ ul{list-style:none;padding:0}li{padding:10px 0;border-bottom:1px solid #e1e6eb}.
   <li><a href="packliste/">Packliste</a><div class="muted">Familien-Packliste mit Bedingungen und Waschmaschinen-Logik</div></li>
   <li><a href="palermo/">Palermo Urlaubshandbuch</a><div class="muted">Reisefuehrer Palermo (April 2026)</div></li>
   <li><a href="kinderbetreuung-lohn/">Lohnabrechnung Kinderbetreuung</a><div class="muted">Vereinfachte Abrechnung Kanton Zuerich</div></li>
+  <li><a href="family-planner/">Familienplaner</a><div class="muted">Wochen- und Monatsplaner der Familie, mit Kalender-Anbindung</div></li>
 </ul>
 </body></html>
 HTML
@@ -104,6 +129,7 @@ mkdir -p _site
 
 case "$TARGET" in
   kinderbetreuung-lohn) build_kinderbetreuung ;;
+  family-planner)       build_family_planner ;;
   palermo)              build_palermo ;;
   hoko)                 build_hoko ;;
   packliste)            build_packliste ;;
@@ -112,10 +138,11 @@ case "$TARGET" in
     build_hoko
     build_kinderbetreuung
     build_packliste
+    build_family_planner
     write_root_index
     ;;
   *)
-    echo "Unknown build target: $TARGET (expected: all | kinderbetreuung-lohn | palermo | hoko | packliste)" >&2
+    echo "Unknown build target: $TARGET (expected: all | kinderbetreuung-lohn | family-planner | palermo | hoko | packliste)" >&2
     exit 1
     ;;
 esac

@@ -1,0 +1,42 @@
+name: Family Planner checks
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'family-planner/**'
+      - 'build.sh'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/family-planner.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: family-planner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: family-planner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies (workspaces)
+        run: npm ci
+        working-directory: .
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build

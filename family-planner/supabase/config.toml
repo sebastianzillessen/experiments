@@ -1,0 +1,28 @@
+# Supabase project configuration for the Familienplaner.
+#
+# Same project as kinderbetreuung-lohn (Salärli) on purpose: both apps share
+# the auth users, so one login works in both. Only the tables differ — every
+# object of this app is prefixed `fp_`.
+#
+# Ports are shifted by +100 against the defaults so a local Familienplaner
+# stack can run next to the Salärli one without fighting over them.
+
+project_id = "tbknudbcgaarqixweizj"
+
+[api]
+port = 54421
+
+[db]
+port = 54422
+
+[studio]
+port = 54423
+
+[inbucket]
+port = 54424
+
+# Local-stack only. Production auth config (redirect URL allowlist for
+# https://planer.zillessen.dev/**) lives in the Supabase Dashboard.
+[auth]
+site_url = "http://127.0.0.1:8081"
+additional_redirect_urls = ["http://127.0.0.1:8081/**"]

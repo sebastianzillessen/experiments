@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "packliste",
-    "kinderbetreuung-lohn"
+    "kinderbetreuung-lohn",
+    "family-planner"
   ],
   "scripts": {
     "build": "bash build.sh",
@@ -13,7 +14,10 @@
     "build:packliste": "npm -w packliste run build",
     "test:kinderbetreuung": "npm test -w kinderbetreuung-lohn",
     "test:kinderbetreuung:ui": "npm run test:ui -w kinderbetreuung-lohn",
-    "hoko:demo": "node hoko-cli/demo-submit.mjs"
+    "hoko:demo": "node hoko-cli/demo-submit.mjs",
+    "dev:family-planner": "npm -w @experiments/family-planner run dev",
+    "build:family-planner": "npm -w @experiments/family-planner run build",
+    "test:family-planner": "npm test -w @experiments/family-planner"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260520.1"

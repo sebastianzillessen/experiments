@@ -64,6 +64,14 @@ const SALAERLI_HOSTS = new Set([
 ]);
 const SALAERLI_PREFIX = "/kinderbetreuung-lohn";
 
+// planer.zillessen.dev serves the Familienplaner from the subdomain root.
+// Its service worker takes scope "/", which only works at this hostname —
+// the /family-planner/ path below the experiments host stays the fallback.
+const PLANER_HOSTS = new Set([
+  "planer.zillessen.dev",
+]);
+const PLANER_PREFIX = "/family-planner";
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -91,6 +99,9 @@ function serveAssets(request: Request, env: Env, url: URL): Promise<Response> {
   }
   if (SALAERLI_HOSTS.has(host) && !url.pathname.startsWith(SALAERLI_PREFIX)) {
     return fetchWithPrefix(request, env, url, SALAERLI_PREFIX);
+  }
+  if (PLANER_HOSTS.has(host) && !url.pathname.startsWith(PLANER_PREFIX)) {
+    return fetchWithPrefix(request, env, url, PLANER_PREFIX);
   }
   return env.ASSETS.fetch(request);
 }

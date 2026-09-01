@@ -1,0 +1,300 @@
+/* Familienplaner — the look of the paper sheet it replaces: warm paper, ruled
+   lines, a colour per person. Light only on purpose; a planner on the kitchen
+   wall is a bright thing, and the print stylesheet at the end keeps it that
+   way on paper. */
+
+:root {
+  --paper: #faf7f0;
+  --paper-alt: #f2ede1;
+  --ink: #23201b;
+  --ink-soft: #6f675a;
+  --rule: #ddd5c4;
+  --rule-strong: #c4b9a2;
+  --accent: #2f6f5e;
+  --accent-ink: #ffffff;
+  --danger: #a33a2a;
+  --today: #fff5d6;
+  --radius: 10px;
+  --shadow: 0 2px 8px rgba(35, 32, 27, .12);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1 { font-size: 1.3rem; margin: 0; }
+h2 { font-size: 1.05rem; }
+h3 { font-size: .95rem; margin: 18px 0 6px; }
+
+.muted { color: var(--ink-soft); }
+.hint { color: var(--ink-soft); font-size: .82rem; margin: 2px 0; }
+.danger-text { color: var(--danger); }
+.grow { flex: 1; min-width: 0; }
+.pre { white-space: pre-wrap; }
+.boot { padding: 40px; text-align: center; color: var(--ink-soft); }
+
+/* --- controls ---------------------------------------------------------- */
+
+input, select, button, textarea { font: inherit; }
+
+input[type="text"], input[type="email"], input[type="password"],
+input[type="date"], input[type="time"], input:not([type]), select {
+  padding: 10px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  min-width: 0;
+}
+input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid var(--rule-strong); border-radius: 8px; background: #fff; }
+
+.btn {
+  padding: 11px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:disabled { opacity: .6; cursor: default; }
+.btn-secondary { background: #fff; color: var(--accent); }
+.btn-danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+
+.icon-btn {
+  border: 1px solid var(--rule-strong);
+  background: #fff;
+  color: var(--ink);
+  border-radius: var(--radius);
+  width: 38px; height: 38px;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+.icon-btn:disabled { opacity: .5; }
+
+.linklike {
+  background: none; border: none; padding: 4px 6px;
+  color: var(--accent); cursor: pointer; font-size: .85rem; text-decoration: underline;
+}
+.linklike.danger { color: var(--danger); }
+
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.stack label { font-size: .85rem; font-weight: 600; margin-top: 6px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > input { flex: 1; }
+.row-sep { color: var(--ink-soft); }
+.radios label { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; }
+
+.notice { padding: 10px 12px; border-radius: var(--radius); margin: 10px 0; font-size: .9rem; }
+.notice.success { background: #e7f1e9; border: 1px solid #b9d5be; }
+.notice.warn { background: #fdf3d8; border: 1px solid #e6cf95; }
+.notice.info { background: #e8eef5; border: 1px solid #bccde0; }
+.notice.danger { background: #f8e6e2; border: 1px solid #e0b2a8; color: #6d2418; }
+
+.segmented { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; background: #fff; }
+.segmented button { border: none; background: none; padding: 9px 14px; cursor: pointer; color: var(--ink-soft); }
+.segmented button.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; flex: none; }
+
+.role-badge { font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-strong); color: var(--ink-soft); background: #fff; }
+.role-badge.owner { border-color: var(--accent); color: var(--accent); }
+.role-badge.editor { border-color: #3b5f9e; color: #3b5f9e; }
+
+/* --- auth screens ------------------------------------------------------ */
+
+.auth-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+.auth-card {
+  width: min(440px, 100%);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 28px 24px;
+}
+.auth-card h1 { text-align: center; }
+.auth-card > .muted { text-align: center; margin: 4px 0 18px; }
+.auth-card form { margin: 0 0 4px; }
+.divider { text-align: center; color: var(--ink-soft); font-size: .82rem; margin: 16px 0 10px; }
+.invite-link { display: block; word-break: break-all; font-size: .78rem; margin-bottom: 6px; }
+
+/* --- planner chrome ---------------------------------------------------- */
+
+.planner { min-height: 100dvh; display: flex; flex-direction: column; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px;
+  background: var(--paper-alt);
+  border-bottom: 1px solid var(--rule-strong);
+  position: sticky; top: 0; z-index: 5;
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.topbar-left h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+
+.rangebar { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; }
+.range-title {
+  background: none; border: none; font-size: 1rem; font-weight: 600; color: var(--ink);
+  cursor: pointer; letter-spacing: .01em;
+}
+
+/* --- the table --------------------------------------------------------- */
+
+.table-wrap { overflow-x: auto; padding: 0 10px 24px; }
+
+.planner-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.planner-table th, .planner-table td {
+  border: 1px solid var(--rule);
+  vertical-align: top;
+  padding: 4px;
+  text-align: left;
+}
+.planner-table thead th {
+  background: var(--paper-alt);
+  font-size: .85rem;
+  white-space: nowrap;
+  position: sticky; top: 58px; z-index: 3;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.planner-table .col-day {
+  width: 92px; min-width: 92px;
+  background: var(--paper-alt);
+  font-size: .85rem; font-weight: 600; white-space: nowrap;
+  position: sticky; left: 0; z-index: 2;
+}
+.planner-table tbody tr.is-weekend td, .planner-table tbody tr.is-weekend .col-day { background: var(--paper-alt); }
+.planner-table tbody tr.is-today td, .planner-table tbody tr.is-today .col-day { background: var(--today); }
+.planner-table tbody td { min-width: 130px; }
+
+.cell { display: flex; flex-direction: column; gap: 3px; min-height: 34px; }
+.cell-add {
+  align-self: flex-start;
+  border: 1px dashed var(--rule-strong); background: none; color: var(--ink-soft);
+  border-radius: 8px; padding: 0 8px; cursor: pointer; font-size: .8rem; line-height: 1.6;
+  opacity: 0; transition: opacity .12s;
+}
+td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
+
+.chip {
+  display: flex; align-items: baseline; gap: 4px;
+  width: 100%; text-align: left;
+  padding: 4px 7px;
+  border: 1px solid var(--rule); border-left: 3px solid var(--rule-strong);
+  border-radius: 7px;
+  background: #fff; color: var(--ink);
+  font-size: .84rem; cursor: pointer;
+}
+.chip:hover { background: var(--paper-alt); }
+.chip .dot { align-self: center; margin-right: 0; }
+.chip-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
+.chip-title { overflow: hidden; text-overflow: ellipsis; }
+.chip.manual { border-left-color: var(--accent); }
+
+/* --- phone list layout ------------------------------------------------- */
+
+.day-list { padding: 0 12px 90px; display: flex; flex-direction: column; gap: 10px; }
+.day-card { background: #fff; border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 12px; }
+.day-card.is-today { background: var(--today); }
+.day-card.is-weekend { background: var(--paper-alt); }
+.day-card h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px; font-size: .95rem; }
+.day-card .empty { margin: 0; font-size: .85rem; }
+.day-person { display: flex; gap: 8px; padding: 4px 0; border-top: 1px solid var(--rule); }
+.person-tag { font-size: .8rem; color: var(--ink-soft); width: 84px; flex: none; display: flex; align-items: center; }
+
+/* --- floating add ------------------------------------------------------ */
+
+.fab {
+  position: fixed; right: 18px; bottom: 18px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
+  border: none; font-size: 1.5rem; cursor: pointer;
+  box-shadow: var(--shadow); z-index: 6;
+}
+
+.userbar {
+  margin-top: auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-top: 1px solid var(--rule);
+  color: var(--ink-soft); font-size: .82rem;
+}
+
+/* --- sheets ------------------------------------------------------------ */
+
+.sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(35, 32, 27, .45);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 20;
+}
+.sheet {
+  background: var(--paper); width: min(520px, 100%);
+  max-height: 92dvh; overflow-y: auto;
+  border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
+}
+.sheet.wide { width: min(720px, 100%); }
+.sheet-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--rule);
+  position: sticky; top: 0; background: var(--paper);
+}
+.sheet-head h2 { margin: 0; }
+.sheet-body { padding: 16px; }
+.sheet-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+@media (min-width: 761px) {
+  .sheet-backdrop { align-items: center; }
+  .sheet { border-radius: 16px; }
+}
+
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.person-chip {
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--rule-strong); background: #fff; color: var(--ink);
+  cursor: pointer; font-size: .88rem;
+}
+.person-chip.selected { color: #fff; font-weight: 600; }
+
+.detail { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+.detail dt { font-size: .8rem; color: var(--ink-soft); }
+.detail dd { margin: 0; }
+
+.settings-tabs { margin-bottom: 14px; }
+.settings-list { list-style: none; padding: 0; margin: 8px 0; }
+.settings-list li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.settings-list li.stacked { display: block; }
+.settings-list .row-line { display: flex; align-items: center; gap: 8px; }
+
+/* --- update prompt ----------------------------------------------------- */
+
+.update-prompt {
+  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 30;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--ink); color: #fff;
+  padding: 12px 14px; border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.update-prompt button { background: #fff; color: var(--ink); border: none; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+
+/* --- print: the week goes on the fridge -------------------------------- */
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+  .table-wrap { overflow: visible; padding: 0; }
+  .planner-table thead th { position: static; }
+  .planner-table .col-day { position: static; }
+  .chip { border-left-width: 2px; }
+}
