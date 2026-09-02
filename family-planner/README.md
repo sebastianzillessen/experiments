@@ -44,6 +44,15 @@ Backend. Läuft auf **https://planer.zillessen.dev**.
   bewusst **nicht** „Zimmer 12“, „KW 37“, „Zimmer 3-5“, „Lilly bis 16:00 Hort“
   oder ein Datum wie „1.10.“. Was erkannt wurde, steht unter dem Feld und lässt
   sich mit einem Tipp verwerfen.
+- **Wiederkehrende Einträge.** „Kita jeden Freitag für Lars und Miriam“ wird
+  einmal erfasst: wöchentlich, mit Wochentagen (auch mehrere: Mo + Do), einem
+  Intervall (jede / alle 2, 3, 4 Wochen) und optionalem Enddatum. Ohne Enddatum
+  läuft die Serie weiter. Beim Bearbeiten und Löschen fragt die App „Nur diesen
+  Termin“ oder „Alle Termine“ — ein einzelner Feiertag fällt so aus der Serie,
+  ohne sie zu zerstören. Erkannt wird die Wiederholung auch direkt im Titel:
+  „Kita jeden Freitag 8-16“, „Hort freitags“, „Putzen jeden 2. Freitag“,
+  „montags und donnerstags“ (aber nicht „Montagsmarkt“ und nicht „Freitag
+  Zahnarzt“ — das ist ein Datum, keine Serie).
 - **Mehrere Betrachter.** Eine Familie hat beliebig viele Zugänge mit
   unterschiedlichen Rechten; eingeladen wird per Link.
 - **Zeitformat pro Familie.** Einstellungen → Anzeige schaltet zwischen
@@ -124,7 +133,8 @@ jede Policy ist über `fp_role_in(family_id)` gebunden.
 ```
 fp_families ─┬─ fp_memberships (user_id, role)        ← Zugänge
              ├─ fp_people                              ← Spalten des Planers
-             ├─ fp_events ── fp_event_people           ← selbst erfasst
+             ├─ fp_events ─┬─ fp_event_people           ← selbst erfasst
+             │              └─ fp_event_exceptions      ← einzeln entfernte Termine
              ├─ fp_calendars ─┬─ fp_calendar_secrets   ← keine Policy!
              │                └─ fp_calendar_cache     ← abgerufene Termine
              ├─ fp_calendar_assignments                ← manuelle Korrekturen
@@ -133,7 +143,14 @@ fp_families ─┬─ fp_memberships (user_id, role)        ← Zugänge
 
 Ganztägige Einträge nutzen `start_date`/`end_date` (Ende **inklusive**, wie ein
 Mensch einen Planer liest), Termine mit Uhrzeit zusätzlich
-`starts_at`/`ends_at`. Der Cache hält pro Kalender **eine** JSONB-Zeile mit dem
+`starts_at`/`ends_at`. Eine Serie ist **eine** Zeile: `repeat_freq`,
+`repeat_interval`, `repeat_weekdays`, `repeat_until` beschreiben die Regel,
+`starts_at`/`ends_at` den ersten Termin. Aufgelöst wird sie im Client, nur für
+den sichtbaren Zeitraum — und zwar mit `expandRule()` aus dem ICS-Parser, damit
+es nur eine Wiederholungslogik im Projekt gibt. Die Uhrzeit jedes Termins wird
+aus der Wandzeit neu gerechnet, damit 14:00 auch nach der Zeitumstellung 14:00
+bleibt. Ein einzeln geänderter Termin ist eine Ausnahme plus ein eigenständiger
+Eintrag; so bleibt die Auflösung frei von Sonderfällen. Der Cache hält pro Kalender **eine** JSONB-Zeile mit dem
 aufgelösten Zeitfenster (−92 bis +400 Tage) — der Planer liest immer ein ganzes
 Fenster, der Sync schreibt es in einem Rutsch, Betrachter brauchen kein
 Schreibrecht.
@@ -165,8 +182,9 @@ Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
 Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
 Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
 Kalender-URL inklusive `webcal://` und SSRF-Schutz, beide Zeitformate, das
-Lesen von Zeiten aus dem Titel und das Entfernen der Namen aus der Anzeige
-(125 Tests).
+Lesen von Zeiten **und Wiederholungen** aus dem Titel, das Auflösen von Serien
+inklusive Zeitumstellung und das Entfernen der Namen aus der Anzeige
+(157 Tests).
 
 Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
 erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.

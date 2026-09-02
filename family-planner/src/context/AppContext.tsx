@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase, hadAuthErrorInUrl, getPendingInviteToken, clearPendingInviteToken } from '../supabaseClient.ts';
 import { localToIso } from '../lib/dates.ts';
 import { calendarEventsToPlanner } from '../lib/merge.ts';
+import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
   Assignment, Calendar, CachedEvent, Family, Member, OpenInvite, Person, PlannerEvent, Role, TimeFormat,
@@ -34,7 +35,15 @@ export type NewEventInput = {
   startTime?: string;
   endTime?: string;
   personIds: string[];
+  /** null = einmalig. */
+  repeat?: RepeatRule | null;
 };
+
+/**
+ * Reicht eine Änderung an einer Serie nur bis zu diesem einen Termin, oder
+ * gilt sie für alle?
+ */
+export type EditScope = 'occurrence' | 'series';
 
 type AppContextValue = {
   screen: Screen;
@@ -45,8 +54,11 @@ type AppContextValue = {
   isOwner: boolean;
   people: Person[];
   calendars: Calendar[];
-  /** Manual entries and imported occurrences, already merged. */
-  events: PlannerEvent[];
+  /** Selbst erfasste Einträge, noch als Serie — der Planer löst sie für den
+   *  sichtbaren Zeitraum auf. */
+  manualSeries: ManualSeries[];
+  /** Termine aus den verbundenen Kalendern, bereits aufgelöst. */
+  calendarEvents: PlannerEvent[];
   members: Member[];
   openInvites: OpenInvite[];
   sync: SyncState;
@@ -59,8 +71,8 @@ type AppContextValue = {
   /** Resolves to null on success, or the error message to show. */
   createFamily: (name: string, people: string[]) => Promise<string | null>;
   addEvent: (input: NewEventInput) => Promise<boolean>;
-  updateEvent: (id: string, input: NewEventInput) => Promise<boolean>;
-  deleteEvent: (id: string) => Promise<boolean>;
+  updateEvent: (id: string, input: NewEventInput, scope: EditScope, occurrence: string | null) => Promise<boolean>;
+  deleteEvent: (id: string, scope: EditScope, occurrence: string | null) => Promise<boolean>;
   addPerson: (name: string) => Promise<boolean>;
   updatePerson: (id: string, patch: Partial<Pick<Person, 'name' | 'shortName' | 'color' | 'aliases' | 'sortOrder'>>) => Promise<boolean>;
   deletePerson: (id: string) => Promise<boolean>;
@@ -92,7 +104,12 @@ type ManualRow = {
   end_date: string;
   starts_at: string | null;
   ends_at: string | null;
+  repeat_freq: string | null;
+  repeat_interval: number | null;
+  repeat_weekdays: number[] | null;
+  repeat_until: string | null;
   fp_event_people: { person_id: string }[] | null;
+  fp_event_exceptions: { occurrence: string }[] | null;
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -101,7 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [family, setFamily] = useState<Family | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [manualEvents, setManualEvents] = useState<PlannerEvent[]>([]);
+  const [manualSeries, setManualSeries] = useState<ManualSeries[]>([]);
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [caches, setCaches] = useState<CalendarCacheEntry[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -137,22 +154,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     archivedAt: (r.archived_at as string) ?? null,
   }));
 
-  const manualToPlanner = useCallback((rows: ManualRow[], peopleList: Person[]): PlannerEvent[] => {
+  const manualToSeries = useCallback((rows: ManualRow[], peopleList: Person[]): ManualSeries[] => {
     const colorOf = (ids: string[]) => peopleList.find(p => p.id === ids[0])?.color ?? NEUTRAL_COLOR;
     return rows.map(row => {
       const personIds = (row.fp_event_people ?? []).map(l => l.person_id);
       return {
-        key: `man:${row.id}`,
-        source: 'manual' as const,
         id: row.id,
-        calendarId: null,
-        calendarLabel: null,
-        uid: null,
-        occurrence: null,
         title: row.title,
-        // A manual entry shows exactly what was typed — the author chose both
-        // the words and the people, so nothing is second-guessed here.
-        displayTitle: row.title,
         notes: row.notes ?? '',
         allDay: row.all_day,
         startDate: row.start_date,
@@ -161,7 +169,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         endsAt: row.ends_at,
         personIds,
         color: colorOf(personIds),
-        autoAssigned: false,
+        repeat: row.repeat_freq === 'weekly'
+          ? {
+              freq: 'weekly' as const,
+              interval: row.repeat_interval ?? 1,
+              weekdays: row.repeat_weekdays ?? [],
+              until: row.repeat_until,
+            }
+          : null,
+        exceptions: (row.fp_event_exceptions ?? []).map(e => e.occurrence),
       };
     });
   }, []);
@@ -170,7 +186,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes] = await Promise.all([
       supabase.from('fp_people').select('*').eq('family_id', fam.id).is('archived_at', null).order('sort_order'),
       supabase.from('fp_events')
-        .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, fp_event_people(person_id)')
+        .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, '
+          + 'repeat_freq, repeat_interval, repeat_weekdays, repeat_until, '
+          + 'fp_event_people(person_id), fp_event_exceptions(occurrence)')
         .eq('family_id', fam.id).order('start_date'),
       supabase.from('fp_calendars').select('*').eq('family_id', fam.id).order('created_at'),
       supabase.from('fp_calendar_cache').select('calendar_id, events').eq('family_id', fam.id),
@@ -179,7 +197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
     setPeople(nextPeople);
-    setManualEvents(manualToPlanner((eventsRes.data ?? []) as unknown as ManualRow[], nextPeople));
+    setManualSeries(manualToSeries((eventsRes.data ?? []) as unknown as ManualRow[], nextPeople));
     setCalendars((calendarsRes.data ?? []).map(c => ({
       id: c.id,
       label: c.label,
@@ -219,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMembers([]);
       setOpenInvites([]);
     }
-  }, [manualToPlanner]);
+  }, [manualToSeries]);
 
   const onSignedIn = useCallback(async (u: User) => {
     userRef.current = u;
@@ -299,7 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setFamily(null);
         setRole(null);
         setPeople([]);
-        setManualEvents([]);
+        setManualSeries([]);
         setCalendars([]);
         setCaches([]);
         setAssignments([]);
@@ -400,6 +418,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       end_date: input.endDate < input.startDate ? input.startDate : input.endDate,
       starts_at: null as string | null,
       ends_at: null as string | null,
+      repeat_freq: input.repeat ? input.repeat.freq : null,
+      repeat_interval: input.repeat ? input.repeat.interval : 1,
+      repeat_weekdays: input.repeat ? input.repeat.weekdays : [],
+      repeat_until: input.repeat ? input.repeat.until : null,
     };
     if (!input.allDay && input.startTime && input.endTime) {
       base.starts_at = localToIso(base.start_date, input.startTime, tz);
@@ -425,13 +447,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [eventPayload, fail, reload, writeEventPeople]);
 
-  const updateEvent = useCallback(async (id: string, input: NewEventInput) => {
+  const updateEvent = useCallback(async (
+    id: string, input: NewEventInput, scope: EditScope, occurrence: string | null
+  ) => {
     try {
       const payload = eventPayload(input);
+
+      // Nur dieser Termin: den einen aus der Serie nehmen und daneben einen
+      // eigenständigen Eintrag anlegen. Die Serie selbst bleibt unangetastet,
+      // und die Auflösung braucht keinen Sonderfall für geänderte Termine.
+      if (scope === 'occurrence' && occurrence) {
+        const { error: skipErr } = await supabase.from('fp_event_exceptions')
+          .upsert({ event_id: id, occurrence, created_by: userRef.current?.id },
+            { onConflict: 'event_id,occurrence' });
+        if (skipErr) throw skipErr;
+
+        const { data, error } = await supabase.from('fp_events')
+          .insert({
+            ...payload,
+            repeat_freq: null, repeat_interval: 1, repeat_weekdays: [], repeat_until: null,
+            created_by: userRef.current?.id,
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        await writeEventPeople(data.id, input.personIds);
+        await reload();
+        return true;
+      }
+
       const { error } = await supabase.from('fp_events').update({
         title: payload.title, notes: payload.notes, all_day: payload.all_day,
         start_date: payload.start_date, end_date: payload.end_date,
         starts_at: payload.starts_at, ends_at: payload.ends_at,
+        repeat_freq: payload.repeat_freq, repeat_interval: payload.repeat_interval,
+        repeat_weekdays: payload.repeat_weekdays, repeat_until: payload.repeat_until,
       }).eq('id', id);
       if (error) throw error;
       await writeEventPeople(id, input.personIds);
@@ -442,10 +492,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [eventPayload, fail, reload, writeEventPeople]);
 
-  const deleteEvent = useCallback(async (id: string) => {
+  const deleteEvent = useCallback(async (
+    id: string, scope: EditScope, occurrence: string | null
+  ) => {
     try {
-      const { error } = await supabase.from('fp_events').delete().eq('id', id);
-      if (error) throw error;
+      if (scope === 'occurrence' && occurrence) {
+        const { error } = await supabase.from('fp_event_exceptions')
+          .upsert({ event_id: id, occurrence, created_by: userRef.current?.id },
+            { onConflict: 'event_id,occurrence' });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('fp_events').delete().eq('id', id);
+        if (error) throw error;
+      }
       await reload();
       return true;
     } catch (e) {
@@ -651,13 +710,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /* ------------------------------------------------------------------ */
 
-  const events = useMemo(
-    () => [...manualEvents, ...calendarEventsToPlanner(caches, calendars, people, assignments)],
-    [manualEvents, caches, calendars, people, assignments]
+  const calendarEvents = useMemo(
+    () => calendarEventsToPlanner(caches, calendars, people, assignments),
+    [caches, calendars, people, assignments]
   );
 
   const value: AppContextValue = {
-    screen, user, family, role, canEdit, isOwner, people, calendars, events,
+    screen, user, family, role, canEdit, isOwner, people, calendars,
+    manualSeries, calendarEvents,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
