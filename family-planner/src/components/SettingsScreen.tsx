@@ -184,7 +184,11 @@ function CalendarForm({ calendar, onClose }: { calendar: Calendar | null; onClos
 
         <label htmlFor="c-url">ICS-Adresse (geheime iCal-URL)</label>
         <input id="c-url" value={url} onChange={e => setUrl(e.target.value)} autoComplete="off"
-          placeholder={calendar ? `${calendar.urlPreview} — leer lassen, um sie zu behalten` : 'https://calendar.google.com/calendar/ical/…/basic.ics'} />
+          placeholder={calendar ? `${calendar.urlPreview} — leer lassen, um sie zu behalten` : 'https://… oder webcal://…'} />
+        <p className="hint">
+          Google: „Geheime Adresse im iCal-Format“. iCloud: den geteilten Kalender veröffentlichen
+          und den <code>webcal://</code>-Link einsetzen — der wird automatisch auf https umgestellt.
+        </p>
         <p className="hint">
           🔒 Die Adresse wird nur serverseitig gespeichert und nie an Mitglieder ausgeliefert —
           auch dir wird sie nach dem Speichern nicht mehr angezeigt.

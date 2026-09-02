@@ -23,9 +23,9 @@ export function CreateFamilyScreen() {
     }
     setBusy(true);
     const people = peopleText.split(',').map(p => p.trim()).filter(Boolean);
-    const ok = await createFamily(clean, people);
+    const failure = await createFamily(clean, people);
     setBusy(false);
-    if (!ok) setError('Die Familie konnte nicht angelegt werden. Bitte später erneut versuchen.');
+    setError(failure);
   }
 
   return (

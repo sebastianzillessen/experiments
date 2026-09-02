@@ -165,12 +165,18 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
   padding: 4px;
   text-align: left;
 }
+/* NOT position: sticky. `.table-wrap` sets overflow-x: auto, which makes
+   overflow-y compute to auto as well — the wrapper is therefore its own scroll
+   container, and a sticky header resolves its `top` against that container
+   instead of the viewport. With no height limit on the wrapper it never
+   scrolls, so the header would park itself permanently in the middle of the
+   table. The day column below is a different case: it sticks on the axis the
+   wrapper really does scroll. */
 .planner-table thead th {
   background: var(--paper-alt);
   font-size: .85rem;
   white-space: nowrap;
-  position: sticky; top: 58px; z-index: 3;
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 2px solid var(--rule-strong);
 }
 .planner-table .col-day {
   width: 92px; min-width: 92px;
@@ -178,6 +184,9 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
   font-size: .85rem; font-weight: 600; white-space: nowrap;
   position: sticky; left: 0; z-index: 2;
 }
+/* The corner cell sits in both sticky contexts — keep it above the row it
+   would otherwise be painted under while the table scrolls sideways. */
+.planner-table thead .col-day { z-index: 3; }
 .planner-table tbody tr.is-weekend td, .planner-table tbody tr.is-weekend .col-day { background: var(--paper-alt); }
 .planner-table tbody tr.is-today td, .planner-table tbody tr.is-today .col-day { background: var(--today); }
 .planner-table tbody td { min-width: 130px; }
@@ -294,7 +303,6 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   .no-print { display: none !important; }
   body { background: #fff; }
   .table-wrap { overflow: visible; padding: 0; }
-  .planner-table thead th { position: static; }
   .planner-table .col-day { position: static; }
   .chip { border-left-width: 2px; }
 }

@@ -15,7 +15,8 @@ Backend. Läuft auf **https://planer.zillessen.dev**.
   hervorgehoben, Wochenenden sind abgesetzt. Auf dem Handy wird aus der Tabelle
   eine Liste pro Tag; gedruckt passt die Woche auf ein Blatt.
 - **Kalender-Anbindung (ICS).** Der Owner hinterlegt die geheime iCal-Adresse
-  des gemeinsamen Kalenders. Eine Supabase Edge Function ruft ihn serverseitig
+  des gemeinsamen Kalenders — `https://…` oder ein `webcal://`-Link, wie ihn
+  iCloud und Apple Kalender ausgeben (wird serverseitig auf https umgestellt). Eine Supabase Edge Function ruft ihn serverseitig
   ab (kein CORS-Problem, keine Adresse im Browser), löst Serientermine auf und
   legt das Ergebnis zwischengespeichert ab — mehrere Betrachter kosten einen
   Abruf, nicht einen pro Person.
@@ -82,12 +83,16 @@ Familienkalender, ohne Login. Deshalb verlässt sie den Server nie wieder:
    prüfen → Secret mit Service-Role lesen → abrufen. Die URL taucht weder in
    der Antwort noch im Log noch in `last_error` auf; Fehlermeldungen werden
    vorher von URLs und Hostnamen bereinigt.
-5. **SSRF-Schutz.** Nur `https://` (und `webcal://` → https). Localhost,
+5. **SSRF-Schutz.** Nur `https://` (und `webcal://`/`webcals://` → https,
+   als Textersetzung *vor* dem Parsen: der `protocol`-Setter der URL-API
+   weigert sich, ein Nicht-Spezial-Schema wie `webcal` auf `https` zu
+   ändern, und tut es stillschweigend nicht). Localhost,
    `*.local`, private IPv4-Bereiche und IPv6-Loopback werden abgelehnt,
    dazu Timeout (15 s) und Grössenlimit (5 MB).
 6. **Zugangsdaten** werden nur als HTTP-Basic-Auth über TLS gesendet und sind
    in der Oberfläche schreibgeschützt (leer lassen = unverändert).
-7. **Einladungslinks** sind 24 zufällige Bytes, einmal verwendbar.
+7. **Einladungslinks** sind 64 zufällige Hex-Zeichen (zwei v4-UUIDs, ~244 Bit),
+   einmal verwendbar.
    `fp_invite_info(token)` ist zwar ohne Login aufrufbar, verrät aber nur den
    Familiennamen zu einem Token, das der Aufrufer ohnehin schon hat.
 
@@ -139,10 +144,25 @@ npm run build      # tsc -b && vite build → dist/
 
 Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
 Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
-Zusammenführen beider Quellen in die Tabellenzellen (64 Tests).
+Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
+Kalender-URL inklusive `webcal://` und SSRF-Schutz (73 Tests).
 
 Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
 erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.
+
+## Vorschau-Deployments
+
+Cloudflare baut **jeden Branch**. Der Branch-Preview serviert die App unter dem
+Pfad `/family-planner/` (die Host-Umschreibung greift nur für
+`planer.zillessen.dev`). Zwei Dinge dabei beachten:
+
+- Die Datenbank wird **nicht** pro Branch deployt — Migrationen und Edge
+  Function laufen erst beim Push auf `main` (oder manuell über *Actions →
+  Family Planner — Supabase → Run workflow*). Fehlen sie, meldet die App beim
+  Anlegen der Familie, dass `fp_create_family` fehlt.
+- Anmelden per Link setzt voraus, dass die Preview-URL in Supabase unter
+  Auth → Redirect URLs steht. Die Anmeldung per Passwort funktioniert auf
+  jedem Host ohne zusätzliche Konfiguration.
 
 ## Deployment
 

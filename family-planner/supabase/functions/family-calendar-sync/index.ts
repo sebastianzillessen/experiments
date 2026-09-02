@@ -23,6 +23,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 import { addDaysToKey, expandIcs, toDateKey, wallClockIn } from './ics.ts';
+import { normalizeCalendarUrl } from './url.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -59,34 +60,6 @@ function sanitizeError(e: unknown): string {
     .replace(/[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, '[URL]')
     .replace(/\b[\w.-]+\.(com|net|org|ch|de|io|dev)\b\S*/gi, '[Host]')
     .slice(0, 200);
-}
-
-const PRIVATE_HOST = /^(localhost|.*\.local|.*\.internal)$/i;
-const PRIVATE_IPV4 = /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
-
-/**
- * Accept only public https endpoints. webcal:// is the same feed with a
- * different scheme name, so it is rewritten rather than rejected. This blocks
- * the obvious SSRF shapes (file://, http://, link-local metadata services);
- * a hostname that only resolves to a private address at DNS time is out of
- * reach here, which is why the function holds no other credentials.
- */
-function assertSafeUrl(raw: string): string {
-  let url: URL;
-  try {
-    url = new URL(raw.trim());
-  } catch {
-    throw new Error('Ungültige Kalender-URL');
-  }
-  if (url.protocol === 'webcal:') url.protocol = 'https:';
-  if (url.protocol !== 'https:') {
-    throw new Error('Nur https-Kalender-URLs werden unterstützt');
-  }
-  const host = url.hostname.toLowerCase();
-  if (PRIVATE_HOST.test(host) || PRIVATE_IPV4.test(host) || host === '::1' || host.startsWith('[fd')) {
-    throw new Error('Diese Adresse ist nicht erreichbar');
-  }
-  return url.toString();
 }
 
 async function fetchIcs(url: string, username: string | null, password: string | null, etag: string | null) {
@@ -209,7 +182,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (secretErr || !secret) throw new Error('Keine Kalender-Adresse hinterlegt');
 
-      const url = assertSafeUrl(secret.url);
+      const url = normalizeCalendarUrl(secret.url);
       const fetched = await fetchIcs(url, secret.username, secret.password, cache?.etag ?? null);
 
       if (fetched.notModified) {
