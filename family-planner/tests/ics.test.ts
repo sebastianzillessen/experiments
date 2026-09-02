@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addDaysToKey, expandIcs, expandRule, parseDuration, parseRRule, unfold, zonedToUtc,
+  addDaysToKey, expandIcs, expandRule, parseDuration, parseRRule, resolveZone, unfold, zonedToUtc,
 } from '../supabase/functions/family-calendar-sync/ics.ts';
 
 const TZ = 'Europe/Zurich';
@@ -260,5 +260,71 @@ describe('expandRule', () => {
     const keys = expandRule('2026-01-01', rule, '2026-01-01', '2026-12-31', 10);
     expect(keys).toHaveLength(10);
     expect(keys[9]).toBe(addDaysToKey('2026-01-01', 9));
+  });
+});
+
+describe('time zone identifiers in the wild', () => {
+  it('accepts IANA names', () => {
+    expect(resolveZone('Europe/Zurich')).toEqual({ kind: 'iana', id: 'Europe/Zurich' });
+    expect(resolveZone('UTC')).toEqual({ kind: 'iana', id: 'UTC' });
+  });
+
+  it('reads fixed offsets, however the feed spells them', () => {
+    expect(resolveZone('GMT+0200')).toEqual({ kind: 'offset', minutes: 120 });
+    expect(resolveZone('UTC+02:00')).toEqual({ kind: 'offset', minutes: 120 });
+    expect(resolveZone('GMT-0530')).toEqual({ kind: 'offset', minutes: -330 });
+    expect(resolveZone('(UTC+01:00) Amsterdam, Berlin, Bern')).toEqual({ kind: 'offset', minutes: 60 });
+  });
+
+  it('maps the Windows zone names Outlook exports', () => {
+    expect(resolveZone('W. Europe Standard Time')).toEqual({ kind: 'iana', id: 'Europe/Berlin' });
+    expect(resolveZone('Pacific Standard Time')).toEqual({ kind: 'iana', id: 'America/Los_Angeles' });
+  });
+
+  it('reports an unusable identifier instead of throwing', () => {
+    expect(resolveZone('Customized Time Zone')).toBeNull();
+    expect(resolveZone('')).toBeNull();
+    expect(resolveZone(null)).toBeNull();
+  });
+
+  it('expands an event whose TZID is a bare offset (the iCloud/Outlook case)', () => {
+    // Before this was handled, "Invalid time zone specified: GMT+0200" from
+    // Intl aborted the entire sync.
+    const ics = calendar(vevent([
+      'UID:offset@example.com', 'SUMMARY:Elternabend',
+      'DTSTART;TZID=GMT+0200:20260908T190000',
+      'DTEND;TZID=GMT+0200:20260908T203000',
+    ]));
+    const [event] = expandIcs(ics, { from: '2026-09-01', to: '2026-09-30', tz: TZ });
+    expect(event.startsAt).toBe('2026-09-08T17:00:00.000Z');
+    expect(event.endsAt).toBe('2026-09-08T18:30:00.000Z');
+    expect(event.startDate).toBe('2026-09-08');
+  });
+
+  it('falls back to the calendar zone for a TZID it cannot make sense of', () => {
+    const ics = calendar(vevent([
+      'UID:junk@example.com', 'SUMMARY:Turnen',
+      'DTSTART;TZID=Customized Time Zone:20260908T140000',
+      'DTEND;TZID=Customized Time Zone:20260908T150000',
+    ]));
+    const [event] = expandIcs(ics, { from: '2026-09-01', to: '2026-09-30', tz: TZ });
+    // Read as 14:00 Zurich (CEST), not thrown away and not read as UTC.
+    expect(event.startsAt).toBe('2026-09-08T12:00:00.000Z');
+  });
+
+  it('keeps the rest of the calendar when one event is unreadable', () => {
+    const ics = calendar(
+      vevent([
+        'UID:broken@example.com', 'SUMMARY:Kaputt',
+        'DTSTART;TZID=Europe/Zurich:not-a-timestamp',
+      ]),
+      vevent([
+        'UID:fine@example.com', 'SUMMARY:Kita Miri',
+        'DTSTART;TZID=Europe/Zurich:20260908T080000',
+        'DTEND;TZID=Europe/Zurich:20260908T160000',
+      ]),
+    );
+    const events = expandIcs(ics, { from: '2026-09-01', to: '2026-09-30', tz: TZ });
+    expect(events.map(e => e.title)).toEqual(['Kita Miri']);
   });
 });

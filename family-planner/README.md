@@ -145,7 +145,7 @@ npm run build      # tsc -b && vite build → dist/
 Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
 Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
 Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
-Kalender-URL inklusive `webcal://` und SSRF-Schutz (73 Tests).
+Kalender-URL inklusive `webcal://` und SSRF-Schutz (80 Tests).
 
 Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
 erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.
