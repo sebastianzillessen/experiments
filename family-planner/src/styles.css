@@ -236,12 +236,19 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   box-shadow: var(--shadow); z-index: 6;
 }
 
+/* Family name left, build in the middle, sign-out right. */
 .userbar {
   margin-top: auto;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 16px; border-top: 1px solid var(--rule);
   color: var(--ink-soft); font-size: .82rem;
 }
+
+.app-version { color: var(--ink-soft); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.app-version a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.app-version a:hover { color: var(--accent); }
+
+.auth-footer { text-align: center; margin-top: 18px; }
 
 /* --- sheets ------------------------------------------------------------ */
 
@@ -268,6 +275,17 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   .sheet-backdrop { align-items: center; }
   .sheet { border-radius: 16px; }
 }
+
+/* A radio row that reads as one option per line: control, label, example. */
+.choice {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--rule-strong);
+  border-radius: var(--radius); background: #fff; cursor: pointer;
+  font-weight: 400;
+}
+.choice:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.choice:has(input:disabled) { opacity: .7; cursor: default; }
+.choice .muted { font-variant-numeric: tabular-nums; font-size: .85rem; }
 
 .chips-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .person-chip {

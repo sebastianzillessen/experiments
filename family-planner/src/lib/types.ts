@@ -87,11 +87,15 @@ export type PlannerEvent = {
   autoAssigned: boolean;
 };
 
+/** How the family reads a clock. Applies to every time the app renders itself. */
+export type TimeFormat = '24h' | '12h';
+
 export type Family = {
   id: string;
   name: string;
   timezone: string;
   weekStart: number;
+  timeFormat: TimeFormat;
 };
 
 export type Member = {

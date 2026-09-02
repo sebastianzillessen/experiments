@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient.ts';
 import { useApp } from '../context/AppContext.tsx';
 import { ROLE_LABELS } from '../lib/types.ts';
 import type { Role } from '../lib/types.ts';
+import { AppVersion } from './AppVersion.tsx';
 
 // Same three ways in as Salärli — magic link, password, new account — against
 // the same Supabase project, so an existing login works here immediately.
@@ -170,6 +171,8 @@ export function LoginScreen() {
 
         {info && <div className="notice success">{info}</div>}
         {authError && <div className="notice danger" id="auth-error">{authError}</div>}
+
+        <div className="auth-footer"><AppVersion /></div>
       </div>
     </div>
   );

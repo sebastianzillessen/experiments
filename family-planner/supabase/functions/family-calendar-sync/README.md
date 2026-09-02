@@ -37,10 +37,19 @@ lesen alle Familienmitglieder.
 
 Abhängigkeitsfreier iCalendar-Leser (RFC 5545): Zeilenfaltung,
 `DTSTART`/`DTEND`/`DURATION`, ganztägige Termine (`VALUE=DATE`, `DTEND`
-exklusiv → inklusives Enddatum), `TZID`-Wandzeiten über `Intl` nach UTC,
+exklusiv → inklusives Enddatum), `TZID`-Wandzeiten nach UTC,
 `RRULE` (DAILY/WEEKLY/MONTHLY/YEARLY mit INTERVAL, COUNT, UNTIL, BYDAY inkl.
 Ordinalzahl, BYMONTHDAY, BYMONTH), `EXDATE`, `RECURRENCE-ID`-Ausnahmen,
 `STATUS:CANCELLED`.
+
+Zeitzonen sind der unzuverlässigste Teil eines fremden Feeds. `resolveZone()`
+nimmt deshalb nicht nur IANA-Namen, sondern auch feste Offsets (`GMT+0200`,
+`(UTC+01:00) Amsterdam, Berlin`) und die Windows-Namen aus Outlook
+(`W. Europe Standard Time`); alles andere fällt auf die Zeitzone der Familie
+zurück. Ungeprüft an `Intl.DateTimeFormat` weitergereicht, warf so ein TZID
+einen `RangeError` und riss den kompletten Abruf mit sich. Aus demselben Grund
+wird jeder Termin einzeln expandiert: ein unlesbarer Eintrag kostet diesen
+Eintrag, nicht den Kalender.
 
 Bewusst frei von Deno-/Browser-APIs, damit die vitest-Suite des Frontends
 (`family-planner/tests/ics.test.ts`) exakt denselben Code prüft.

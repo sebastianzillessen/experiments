@@ -11,7 +11,7 @@ import { localToIso } from '../lib/dates.ts';
 import { calendarEventsToPlanner } from '../lib/merge.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
-  Assignment, Calendar, CachedEvent, Family, Member, OpenInvite, Person, PlannerEvent, Role,
+  Assignment, Calendar, CachedEvent, Family, Member, OpenInvite, Person, PlannerEvent, Role, TimeFormat,
 } from '../lib/types.ts';
 
 const NEUTRAL_COLOR = '#6b7280';
@@ -68,6 +68,7 @@ type AppContextValue = {
   upsertCalendar: (input: { id?: string; label: string; url: string; username: string; password: string; color: string; enabled: boolean }) => Promise<boolean>;
   deleteCalendar: (id: string) => Promise<boolean>;
   refreshCalendars: (force: boolean) => Promise<void>;
+  setTimeFormat: (format: TimeFormat) => Promise<boolean>;
   createLinkInvite: (role: Role) => Promise<string | null>;
   updateMemberRole: (userId: string, role: Role) => Promise<boolean>;
   removeMember: (userId: string) => Promise<boolean>;
@@ -249,7 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const { data: fam } = await supabase
       .from('fp_families')
-      .select('id, name, timezone, week_start')
+      .select('id, name, timezone, week_start, time_format')
       .eq('id', membership.family_id)
       .maybeSingle();
     if (!fam) {
@@ -258,7 +259,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const nextFamily: Family = {
-      id: fam.id, name: fam.name, timezone: fam.timezone || 'Europe/Zurich', weekStart: fam.week_start ?? 1,
+      id: fam.id,
+      name: fam.name,
+      timezone: fam.timezone || 'Europe/Zurich',
+      weekStart: fam.week_start ?? 1,
+      timeFormat: fam.time_format === '12h' ? '12h' : '24h',
     };
     const nextRole = membership.role as Role;
     familyRef.current = nextFamily;
@@ -570,6 +575,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [reload]);
 
+  // Family-wide display setting; RLS lets only the owner through.
+  const setTimeFormat = useCallback(async (format: TimeFormat) => {
+    const fam = familyRef.current;
+    if (!fam) return false;
+    try {
+      const { error } = await supabase.from('fp_families')
+        .update({ time_format: format }).eq('id', fam.id);
+      if (error) throw error;
+      const next = { ...fam, timeFormat: format };
+      familyRef.current = next;
+      setFamily(next);
+      return true;
+    } catch (e) {
+      return fail(e, 'Zeitformat konnte nicht geändert werden');
+    }
+  }, [fail]);
+
   const createLinkInvite = useCallback(async (inviteRole: Role) => {
     try {
       const fam = familyRef.current!;
@@ -637,7 +659,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
     addPerson, updatePerson, deletePerson, setAssignment,
-    upsertCalendar, deleteCalendar, refreshCalendars,
+    upsertCalendar, deleteCalendar, refreshCalendars, setTimeFormat,
     createLinkInvite, updateMemberRole, removeMember, reload,
   };
 

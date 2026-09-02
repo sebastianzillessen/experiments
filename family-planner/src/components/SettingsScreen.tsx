@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { relativeStamp } from '../lib/dates.ts';
 import { ROLE_LABELS } from '../lib/types.ts';
-import type { Calendar, Person, Role } from '../lib/types.ts';
+import type { Calendar, Person, Role, TimeFormat } from '../lib/types.ts';
 import { Sheet } from './Sheet.tsx';
 
-type Tab = 'people' | 'calendars' | 'access';
+type Tab = 'people' | 'calendars' | 'access' | 'display';
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const { isOwner } = useApp();
@@ -20,11 +20,14 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           onClick={() => setTab('calendars')}>Kalender</button>
         <button role="tab" aria-selected={tab === 'access'} className={tab === 'access' ? 'active' : ''}
           onClick={() => setTab('access')}>Zugriff</button>
+        <button role="tab" aria-selected={tab === 'display'} className={tab === 'display' ? 'active' : ''}
+          onClick={() => setTab('display')}>Anzeige</button>
       </div>
 
       {tab === 'people' && <PeopleSettings />}
       {tab === 'calendars' && (isOwner ? <CalendarSettings /> : <OwnerOnly what="Kalender" />)}
       {tab === 'access' && (isOwner ? <AccessSettings /> : <OwnerOnly what="Zugriffsrechte" />)}
+      {tab === 'display' && <DisplaySettings />}
     </Sheet>
   );
 }
@@ -138,7 +141,7 @@ function CalendarSettings() {
               <button className="linklike danger" onClick={() => deleteCalendar(c.id)}>entfernen</button>
             </div>
             <div className="hint">
-              zuletzt synchronisiert: {relativeStamp(c.lastSyncedAt, tz)}
+              zuletzt synchronisiert: {relativeStamp(c.lastSyncedAt, tz, Date.now(), family?.timeFormat ?? '24h')}
               {!c.enabled && ' · deaktiviert'}
               {c.lastError && <span className="danger-text"> · Fehler: {c.lastError}</span>}
             </div>
@@ -287,6 +290,49 @@ function AccessSettings() {
           </ul>
         </>
       )}
+    </>
+  );
+}
+
+/* --------------------------------------------------------------- display */
+
+function DisplaySettings() {
+  const { family, isOwner, setTimeFormat } = useApp();
+  const [busy, setBusy] = useState(false);
+  const current = family?.timeFormat ?? '24h';
+
+  async function choose(format: TimeFormat) {
+    if (format === current) return;
+    setBusy(true);
+    await setTimeFormat(format);
+    setBusy(false);
+  }
+
+  const options: { value: TimeFormat; label: string; example: string }[] = [
+    { value: '24h', label: '24 Stunden', example: '14:00–15:15' },
+    { value: '12h', label: 'AM / PM', example: '2:00–3:15 PM' },
+  ];
+
+  return (
+    <>
+      <h3>Zeitformat</h3>
+      <p className="hint">Gilt für die ganze Familie — jede/r sieht die Zeiten gleich.</p>
+      <div className="stack">
+        {options.map(o => (
+          <label key={o.value} className="choice">
+            <input type="radio" name="time-format" checked={current === o.value}
+              disabled={!isOwner || busy} onChange={() => choose(o.value)} />
+            <span className="grow">{o.label}</span>
+            <span className="muted">{o.example}</span>
+          </label>
+        ))}
+      </div>
+      {!isOwner && <p className="hint">Ändern kann das nur der Owner der Familie.</p>}
+      <p className="hint">
+        Die Uhrzeit-Auswahl beim Erfassen ist die des Betriebssystems — welches Format sie zeigt,
+        entscheidet dein Gerät (iOS: Einstellungen → Allgemein → Datum &amp; Uhrzeit → 24-Stunden-Zeit).
+        Alles, was der Planer selbst schreibt, folgt der Einstellung hier.
+      </p>
     </>
   );
 }

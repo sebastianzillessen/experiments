@@ -3,6 +3,7 @@
 // arithmetic stays in UTC-midnight space and never drifts across DST.
 
 import { addDaysToKey, dateKeyToMs, toDateKey, wallClockIn } from '../../supabase/functions/family-calendar-sync/ics.ts';
+import type { TimeFormat } from './types.ts';
 
 export { addDaysToKey, dateKeyToMs, toDateKey };
 
@@ -99,26 +100,56 @@ export function weekLabel(startKey: string): string {
   return `KW ${isoWeekNumber(startKey)} · ${range}`;
 }
 
-/** "14:00" in the family's zone. */
-export function timeLabel(iso: string, tz: string): string {
+/**
+ * "14:00" — always 24h, always zero-padded. This is the wire format of an
+ * <input type="time"> value, so it must NOT follow the family's display
+ * preference; use timeLabel() for anything a person reads.
+ */
+export function timeValue(iso: string, tz: string): string {
   const w = wallClockIn(Date.parse(iso), tz);
   return `${String(w.hh).padStart(2, '0')}:${String(w.mm).padStart(2, '0')}`;
 }
 
-/** "14:00–15:15", or "ab 14:00" when start and end are the same. */
-export function timeRangeLabel(startsAt: string | null, endsAt: string | null, tz: string): string {
+/** "14:00" or "2:00 PM", in the family's zone and clock format. */
+export function timeLabel(iso: string, tz: string, format: TimeFormat = '24h'): string {
+  const w = wallClockIn(Date.parse(iso), tz);
+  return formatClock(w.hh, w.mm, format);
+}
+
+export function formatClock(hh: number, mm: number, format: TimeFormat): string {
+  const minutes = String(mm).padStart(2, '0');
+  if (format === '12h') {
+    return `${hh % 12 || 12}:${minutes} ${hh < 12 ? 'AM' : 'PM'}`;
+  }
+  return `${String(hh).padStart(2, '0')}:${minutes}`;
+}
+
+/**
+ * "14:00–15:15", or "ab 14:00" when there is no distinct end. In 12h form the
+ * shared suffix is written once: "2:00–3:15 PM", but "11:30 AM–1:00 PM".
+ */
+export function timeRangeLabel(
+  startsAt: string | null, endsAt: string | null, tz: string, format: TimeFormat = '24h'
+): string {
   if (!startsAt) return '';
-  const start = timeLabel(startsAt, tz);
+  const start = timeLabel(startsAt, tz, format);
   if (!endsAt || endsAt === startsAt) return start;
-  return `${start}–${timeLabel(endsAt, tz)}`;
+  const end = timeLabel(endsAt, tz, format);
+  if (format === '12h') {
+    const suffix = start.slice(-2);
+    if (suffix === end.slice(-2)) return `${start.slice(0, -3)}–${end}`;
+  }
+  return `${start}–${end}`;
 }
 
 /** "heute 07:42" / "gestern 22:10" / "31.8. 09:00" — for sync timestamps. */
-export function relativeStamp(iso: string | null, tz: string, now: number = Date.now()): string {
+export function relativeStamp(
+  iso: string | null, tz: string, now: number = Date.now(), format: TimeFormat = '24h'
+): string {
   if (!iso) return 'noch nie';
   const key = todayKey(tz, Date.parse(iso));
   const today = todayKey(tz, now);
-  const time = timeLabel(iso, tz);
+  const time = timeLabel(iso, tz, format);
   if (key === today) return `heute ${time}`;
   if (key === addDaysToKey(today, -1)) return `gestern ${time}`;
   const [, m, d] = key.split('-').map(Number);

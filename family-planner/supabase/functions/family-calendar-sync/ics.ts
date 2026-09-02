@@ -68,31 +68,119 @@ const WEEKDAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 // Time zone helpers
 // ---------------------------------------------------------------------------
 
-const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
+/**
+ * A zone the parser can actually compute with. Feeds are not disciplined about
+ * TZID: besides IANA names, calendars in the wild emit fixed offsets
+ * ("GMT+0200", "(UTC+01:00) Amsterdam, Berlin"), Windows zone names
+ * ("W. Europe Standard Time") and outright junk. Handing any of those to
+ * Intl.DateTimeFormat throws a RangeError ("Invalid time zone specified:
+ * GMT+0200") and, before this was resolved here, took the whole sync with it.
+ */
+type Zone = { kind: 'iana'; id: string } | { kind: 'offset'; minutes: number };
 
-function partsFormatter(tz: string): Intl.DateTimeFormat {
-  let fmt = offsetFormatters.get(tz);
+const UTC_ZONE: Zone = { kind: 'offset', minutes: 0 };
+
+// The Windows/Outlook names common in European and US family calendars. Not
+// the full CLDR table on purpose — anything missing still resolves through the
+// offset branch or falls back to the calendar's own zone.
+const WINDOWS_ZONES: Record<string, string> = {
+  'utc': 'UTC',
+  'gmt standard time': 'Europe/London',
+  'greenwich standard time': 'Europe/London',
+  'w. europe standard time': 'Europe/Berlin',
+  'central europe standard time': 'Europe/Budapest',
+  'central european standard time': 'Europe/Warsaw',
+  'romance standard time': 'Europe/Paris',
+  'e. europe standard time': 'Europe/Bucharest',
+  'gtb standard time': 'Europe/Athens',
+  'fle standard time': 'Europe/Helsinki',
+  'russian standard time': 'Europe/Moscow',
+  'eastern standard time': 'America/New_York',
+  'central standard time': 'America/Chicago',
+  'mountain standard time': 'America/Denver',
+  'pacific standard time': 'America/Los_Angeles',
+};
+
+const zoneCache = new Map<string, Zone | null>();
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function isIntlZone(id: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: id });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** null when the identifier means nothing to us — the caller picks a fallback. */
+export function resolveZone(raw: string | null | undefined): Zone | null {
+  const id = (raw ?? '').trim();
+  if (!id) return null;
+  const cached = zoneCache.get(id);
+  if (cached !== undefined) return cached;
+  const zone = computeZone(id);
+  zoneCache.set(id, zone);
+  return zone;
+}
+
+function computeZone(id: string): Zone | null {
+  // A name the runtime knows (every IANA zone, plus "UTC" and Etc/GMT±n).
+  if (isIntlZone(id)) return { kind: 'iana', id };
+
+  // A fixed offset, however it is spelled: GMT+0200, UTC+02:00, +0200,
+  // "(UTC+01:00) Amsterdam, Berlin, Bern". Such a feed has already given up
+  // on DST for this event, so a constant offset is the faithful reading.
+  const offset = id.match(/(?:^|\()\s*(?:GMT|UTC)?\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?/i);
+  if (offset) {
+    const minutes = (offset[1] === '-' ? -1 : 1) * (Number(offset[2]) * 60 + Number(offset[3] ?? 0));
+    if (Math.abs(minutes) <= 14 * 60) return { kind: 'offset', minutes };
+  }
+
+  const windows = WINDOWS_ZONES[id.toLowerCase()];
+  if (windows) return { kind: 'iana', id: windows };
+
+  if (/^(gmt|utc|z)$/i.test(id)) return UTC_ZONE;
+
+  return null;
+}
+
+function partsFormatter(id: string): Intl.DateTimeFormat {
+  let fmt = formatters.get(id);
   if (!fmt) {
     fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz, hourCycle: 'h23',
+      timeZone: id, hourCycle: 'h23',
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
-    offsetFormatters.set(tz, fmt);
+    formatters.set(id, fmt);
   }
   return fmt;
 }
 
-/** The wall clock shown in `tz` at the given instant. */
-export function wallClockIn(utcMs: number, tz: string): { y: number; m: number; d: number; hh: number; mm: number; ss: number } {
-  const parts = partsFormatter(tz).formatToParts(new Date(utcMs));
+type Parts = { y: number; m: number; d: number; hh: number; mm: number; ss: number };
+
+function wallClockInZone(utcMs: number, zone: Zone): Parts {
+  if (zone.kind === 'offset') {
+    const shifted = new Date(utcMs + zone.minutes * 60_000);
+    return {
+      y: shifted.getUTCFullYear(), m: shifted.getUTCMonth() + 1, d: shifted.getUTCDate(),
+      hh: shifted.getUTCHours(), mm: shifted.getUTCMinutes(), ss: shifted.getUTCSeconds()
+    };
+  }
+  const parts = partsFormatter(zone.id).formatToParts(new Date(utcMs));
   const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
   return { y: get('year'), m: get('month'), d: get('day'), hh: get('hour'), mm: get('minute'), ss: get('second') };
 }
 
+/** The wall clock shown in `tz` at the given instant. Unknown zone → UTC. */
+export function wallClockIn(utcMs: number, tz: string): Parts {
+  return wallClockInZone(utcMs, resolveZone(tz) ?? UTC_ZONE);
+}
+
 /** Zone offset in milliseconds (east of UTC positive) at the given instant. */
-function offsetAt(utcMs: number, tz: string): number {
-  const w = wallClockIn(utcMs, tz);
+function offsetAt(utcMs: number, zone: Zone): number {
+  const w = wallClockInZone(utcMs, zone);
   return Date.UTC(w.y, w.m - 1, w.d, w.hh, w.mm, w.ss) - Math.floor(utcMs / 1000) * 1000;
 }
 
@@ -101,9 +189,11 @@ function offsetAt(utcMs: number, tz: string): number {
  * inside a DST gap, where the later offset is used (same as most calendars).
  */
 export function zonedToUtc(y: number, m: number, d: number, hh: number, mm: number, ss: number, tz: string): number {
+  const zone = resolveZone(tz) ?? UTC_ZONE;
   const naive = Date.UTC(y, m - 1, d, hh, mm, ss);
-  let utc = naive - offsetAt(naive, tz);
-  utc = naive - offsetAt(utc, tz);
+  if (zone.kind === 'offset') return naive - zone.minutes * 60_000;
+  let utc = naive - offsetAt(naive, zone);
+  utc = naive - offsetAt(utc, zone);
   return utc;
 }
 
@@ -260,7 +350,9 @@ function parseWallClock(prop: RawProp, defaultTz: string): WallClock | null {
   }
   return {
     y: +y, m: +mo, d: +d, hh: +(hh ?? 0), mm: +(mm ?? 0), ss: +(ss ?? 0),
-    tz: z ? 'UTC' : (prop.params.TZID || defaultTz),
+    // An unusable TZID (junk, or a name we cannot map) falls back to the
+    // calendar's zone rather than throwing deep inside Intl.
+    tz: z ? 'UTC' : (resolveZone(prop.params.TZID) ? prop.params.TZID : defaultTz),
     allDay: false
   };
 }
@@ -496,8 +588,46 @@ export function expandIcs(text: string, opts: ExpandOptions): IcsEvent[] {
 
   for (const ev of masters) {
     if (ev.status === 'CANCELLED') continue;
+    try {
+      expandMaster(ev, tz, from, to, maxEvents, overrides, emitEvent);
+    } catch (e) {
+      // A single unreadable event costs that event, not the whole calendar.
+      console.warn('[ics] skipping event', ev.uid, e);
+    }
+    if (out.length >= maxEvents) break;
+  }
+
+  // Overrides whose master never produced the occurrence (moved out of window
+  // by the master's own rule) still belong on the plan.
+  for (const [, perUid] of overrides) {
+    for (const [, ev] of perUid) {
+      if (ev.status === 'CANCELLED') continue;
+      try {
+        const wc = ev.dtstart ? parseWallClock(ev.dtstart, tz) : null;
+        if (!wc) continue;
+        emitEvent(ev, toDateKey(wc.y, wc.m, wc.d), 0);
+      } catch (e) {
+        console.warn('[ics] skipping override', ev.uid, e);
+      }
+    }
+  }
+
+  out.sort((a, b) => (a.startDate + (a.startsAt ?? '')).localeCompare(b.startDate + (b.startsAt ?? '')));
+  return out.slice(0, maxEvents);
+}
+
+/** Every occurrence of one master event, honouring EXDATE and overrides. */
+function expandMaster(
+  ev: RawEvent,
+  tz: string,
+  from: string,
+  to: string,
+  maxEvents: number,
+  overrides: Map<string, Map<string, RawEvent>>,
+  emitEvent: (ev: RawEvent, occurrenceKey: string, shiftDays: number) => void
+): void {
     const start = ev.dtstart ? parseWallClock(ev.dtstart, tz) : null;
-    if (!start) continue;
+    if (!start) return;
     const startKey = toDateKey(start.y, start.m, start.d);
     const rule = ev.rrule ? parseRRule(ev.rrule) : null;
 
@@ -525,22 +655,6 @@ export function expandIcs(text: string, opts: ExpandOptions): IcsEvent[] {
       const shiftDays = Math.round((dateKeyToMs(key) - dateKeyToMs(startKey)) / DAY_MS);
       emitEvent(ev, key, shiftDays);
     }
-    if (out.length >= maxEvents) break;
-  }
-
-  // Overrides whose master never produced the occurrence (moved out of window
-  // by the master's own rule) still belong on the plan.
-  for (const [, perUid] of overrides) {
-    for (const [, ev] of perUid) {
-      if (ev.status === 'CANCELLED') continue;
-      const wc = ev.dtstart ? parseWallClock(ev.dtstart, tz) : null;
-      if (!wc) continue;
-      emitEvent(ev, toDateKey(wc.y, wc.m, wc.d), 0);
-    }
-  }
-
-  out.sort((a, b) => (a.startDate + (a.startsAt ?? '')).localeCompare(b.startDate + (b.startsAt ?? '')));
-  return out.slice(0, maxEvents);
 }
 
 /** How many days the event covers, used to widen the recurrence search window. */
