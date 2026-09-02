@@ -56,7 +56,8 @@ type AppContextValue = {
   setLoginWarning: (msg: string | null) => void;
   inviteToken: string | null;
 
-  createFamily: (name: string, people: string[]) => Promise<boolean>;
+  /** Resolves to null on success, or the error message to show. */
+  createFamily: (name: string, people: string[]) => Promise<string | null>;
   addEvent: (input: NewEventInput) => Promise<boolean>;
   updateEvent: (id: string, input: NewEventInput) => Promise<boolean>;
   deleteEvent: (id: string) => Promise<boolean>;
@@ -356,11 +357,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       const u = userRef.current;
       if (u) await onSignedIn(u);
-      return true;
+      return null;
     } catch (e) {
-      return fail(e, 'Familie konnte nicht angelegt werden');
+      const err = e as { message?: string; code?: string };
+      console.warn('fp_create_family failed', e);
+      // PGRST202 = the function does not exist: the migrations have not been
+      // applied to this Supabase project yet. Say so instead of "try later".
+      if (err.code === 'PGRST202' || /fp_create_family/.test(err.message || '')) {
+        return 'Die Datenbank des Familienplaners ist auf diesem Server noch nicht eingerichtet '
+          + '(fp_create_family fehlt). Die Migrationen laufen beim Merge auf main.';
+      }
+      return 'Familie konnte nicht angelegt werden: ' + (err.message || String(e));
     }
-  }, [fail, onSignedIn]);
+  }, [onSignedIn]);
 
   const writeEventPeople = useCallback(async (eventId: string, personIds: string[]) => {
     await supabase.from('fp_event_people').delete().eq('event_id', eventId);
