@@ -12,6 +12,7 @@ import { QuickAddSheet } from './QuickAddSheet.tsx';
 import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
+import { AppVersion } from './AppVersion.tsx';
 
 type View = 'week' | 'month';
 
@@ -134,6 +135,7 @@ export function Planner() {
 
       <footer className="userbar no-print">
         <span>{family?.name}</span>
+        <AppVersion />
         <button className="linklike" onClick={() => supabase.auth.signOut()}>Abmelden</button>
       </footer>
 

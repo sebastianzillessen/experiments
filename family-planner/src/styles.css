@@ -236,12 +236,19 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   box-shadow: var(--shadow); z-index: 6;
 }
 
+/* Family name left, build in the middle, sign-out right. */
 .userbar {
   margin-top: auto;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 16px; border-top: 1px solid var(--rule);
   color: var(--ink-soft); font-size: .82rem;
 }
+
+.app-version { color: var(--ink-soft); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.app-version a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.app-version a:hover { color: var(--accent); }
+
+.auth-footer { text-align: center; margin-top: 18px; }
 
 /* --- sheets ------------------------------------------------------------ */
 
