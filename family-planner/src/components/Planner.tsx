@@ -160,10 +160,10 @@ function EventChip({ event, tz, timeFormat, onClick }: {
 }) {
   const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
   return (
-    <button className={`chip ${event.source}`} onClick={onClick} title={event.notes || event.title}>
+    <button className={`chip ${event.source}`} onClick={onClick} title={event.title}>
       <span className="dot" style={{ background: event.color }} aria-hidden="true" />
       {time && <span className="chip-time">{time}</span>}
-      <span className="chip-title">{event.title}</span>
+      <span className="chip-title">{event.displayTitle || event.title}</span>
     </button>
   );
 }

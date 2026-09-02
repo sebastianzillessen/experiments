@@ -74,6 +74,12 @@ export type PlannerEvent = {
   uid: string | null;
   occurrence: string | null;
   title: string;
+  /**
+   * What the chip shows: for an imported event the title minus the names of
+   * the people it is filed under ("Caro LQ" in Caro's column reads "LQ").
+   * The detail sheet always shows the full `title`.
+   */
+  displayTitle: string;
   notes: string;
   allDay: boolean;
   /** Inclusive local day range. */

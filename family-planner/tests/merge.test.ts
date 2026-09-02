@@ -28,7 +28,7 @@ function cached(title: string, extra: Partial<CachedEvent> = {}): CachedEvent {
 function manual(id: string, extra: Partial<PlannerEvent> = {}): PlannerEvent {
   return {
     key: `man:${id}`, source: 'manual', id, calendarId: null, calendarLabel: null,
-    uid: null, occurrence: null, title: id, notes: '', allDay: true,
+    uid: null, occurrence: null, title: id, displayTitle: id, notes: '', allDay: true,
     startDate: '2026-09-08', endDate: '2026-09-08', startsAt: null, endsAt: null,
     personIds: [], color: '#111', autoAssigned: false,
     ...extra,
@@ -122,5 +122,71 @@ describe('buildCells', () => {
       manual('Arzt', { allDay: false, startsAt: '2026-09-08T09:00:00.000Z', personIds: ['p-lilly'] }),
     ]);
     expect(cells.get('2026-09-08')!.get('p-lilly')!.map(e => e.title)).toEqual(['Kiga', 'Arzt', 'Sport']);
+  });
+});
+
+describe('stripping the person out of an imported title', () => {
+  const CARO = person('p-caro', 'Caro');
+  const LARS = person('p-lars', 'Lars');
+
+  function displayed(title: string, people: Person[], assignments: Assignment[] = []): string {
+    const caches = [{ calendarId: 'cal-1', events: [cached(title)] }];
+    const [event] = calendarEventsToPlanner(caches, [CALENDAR], people, assignments);
+    return event.displayTitle;
+  }
+
+  it('drops the name once the entry sits in that person\'s column', () => {
+    expect(displayed('Caro LQ', [CARO])).toBe('LQ');
+  });
+
+  it('drops a bracketed name and the empty brackets with it', () => {
+    expect(displayed('[Caro] Reitstunde', [CARO])).toBe('Reitstunde');
+    expect(displayed('(Caro) Reitstunde', [CARO])).toBe('Reitstunde');
+  });
+
+  it('drops every assigned name from a shared entry', () => {
+    expect(displayed('Kita Miri/Lars', [MIRI, LARS])).toBe('Kita');
+  });
+
+  it('takes the word joining two names with them', () => {
+    const miriam = person('p-miriam', 'Miriam');
+    expect(displayed('Zusätzliche Betreuung Lars und Miriam KiTa', [LARS, miriam]))
+      .toBe('Zusätzliche Betreuung KiTa');
+    expect(displayed('Caro + Basti HO', [person('p-caro', 'Caro'), person('p-basti', 'Basti')]))
+      .toBe('HO');
+    expect(displayed('Schwimmen mit Lilly und Miri', [LILLY, MIRI])).toBe('Schwimmen');
+  });
+
+  it('keeps a joining word that is not between two names', () => {
+    expect(displayed('Lilly und Oma backen', [LILLY])).toBe('Oma backen');
+  });
+
+  it('drops an alias, not just the name', () => {
+    const lilly = { ...LILLY, aliases: ['Lillian'] };
+    expect(displayed('Lillian Mittagessen Hort', [lilly])).toBe('Mittagessen Hort');
+  });
+
+  it('keeps the title when the name is all there is', () => {
+    expect(displayed('Caro', [CARO])).toBe('Caro');
+  });
+
+  it('leaves an unmatched title alone', () => {
+    expect(displayed('Brunch bei Oma', [CARO])).toBe('Brunch bei Oma');
+  });
+
+  it('leaves the full title on the event for the detail sheet', () => {
+    const caches = [{ calendarId: 'cal-1', events: [cached('Caro LQ')] }];
+    const [event] = calendarEventsToPlanner(caches, [CALENDAR], [CARO], []);
+    expect(event.title).toBe('Caro LQ');
+    expect(event.displayTitle).toBe('LQ');
+  });
+
+  it('strips the names of a manual override, not of the automatic match', () => {
+    const override: Assignment = {
+      calendarId: 'cal-1', uid: 'uid-Caro LQ', occurrence: '2026-09-08',
+      personIds: ['p-lars'], hidden: false,
+    };
+    // Moved to Lars, so "Caro" is no longer a name in that column and stays.
+    expect(displayed('Caro LQ', [CARO, LARS], [override])).toBe('Caro LQ');
   });
 });

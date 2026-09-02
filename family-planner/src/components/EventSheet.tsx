@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
+import { aliasCandidates, eventText } from '../lib/assign.ts';
 import { dayLabel, timeRangeLabel } from '../lib/dates.ts';
 import type { PlannerEvent } from '../lib/types.ts';
 import { Sheet } from './Sheet.tsx';
@@ -11,12 +12,21 @@ import { QuickAddSheet } from './QuickAddSheet.tsx';
  * that can be changed here are who it belongs to and whether it shows at all.
  */
 export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: () => void }) {
-  const { canEdit, people, family, deleteEvent, setAssignment } = useApp();
+  const { canEdit, people, family, deleteEvent, setAssignment, updatePerson } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const timeFormat = family?.timeFormat ?? '24h';
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [assigned, setAssigned] = useState<string[]>(event.personIds);
+  const [aliasAdded, setAliasAdded] = useState<string | null>(null);
+
+  // Only one person can own a new spelling, so the offer appears once the
+  // choice is unambiguous.
+  const aliasTarget = assigned.length === 1 ? people.find(p => p.id === assigned[0]) ?? null : null;
+  const candidates = useMemo(
+    () => aliasCandidates(eventText({ title: event.title, location: '', description: '' }), people),
+    [event.title, people]
+  );
 
   if (editing && event.source === 'manual') {
     return <QuickAddSheet existing={event} onClose={() => { setEditing(false); onClose(); }} />;
@@ -87,6 +97,35 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
               </button>
             ))}
           </div>
+          {aliasTarget && candidates.length > 0 && (
+            <div className="alias-offer">
+              <p className="hint">
+                Welches Wort steht künftig für {aliasTarget.name}? Termine mit diesem Wort landen
+                dann automatisch in dieser Spalte.
+              </p>
+              <div className="chips-row">
+                {candidates.map(word => (
+                  <button type="button" key={word} className="person-chip" disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      const ok = await updatePerson(aliasTarget.id, {
+                        aliases: [...aliasTarget.aliases, word],
+                      });
+                      setBusy(false);
+                      if (ok) setAliasAdded(word);
+                    }}>
+                    {word}
+                  </button>
+                ))}
+              </div>
+              {aliasAdded && (
+                <div className="notice success">
+                  „{aliasAdded}“ zählt jetzt als {aliasTarget.name}.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="sheet-actions">
             <button className="btn btn-secondary" onClick={() => saveAssignment([], true)} disabled={busy}>
               Im Planer ausblenden

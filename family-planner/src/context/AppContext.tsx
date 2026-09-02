@@ -150,6 +150,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         uid: null,
         occurrence: null,
         title: row.title,
+        // A manual entry shows exactly what was typed — the author chose both
+        // the words and the people, so nothing is second-guessed here.
+        displayTitle: row.title,
         notes: row.notes ?? '',
         allDay: row.all_day,
         startDate: row.start_date,

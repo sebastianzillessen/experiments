@@ -2,7 +2,7 @@
 // occurrences — into one list of planner events, then into the cells of the
 // day × person table.
 
-import { autoAssign } from './assign.ts';
+import { autoAssign, stripPeopleNames } from './assign.ts';
 import { daysBetween } from './dates.ts';
 import { FAMILY_COLUMN } from './types.ts';
 import type { Assignment, CachedEvent, Calendar, Person, PlannerEvent } from './types.ts';
@@ -45,6 +45,8 @@ export function calendarEventsToPlanner(
       if (override?.hidden) continue;
 
       const personIds = override ? override.personIds : autoAssign(event, people);
+      const assigned = people.filter(p => personIds.includes(p.id));
+      const title = event.title || '(ohne Titel)';
       out.push({
         key: `cal:${cache.calendarId}:${event.uid}:${event.occurrence}`,
         source: 'calendar',
@@ -53,7 +55,9 @@ export function calendarEventsToPlanner(
         calendarLabel: calendar.label,
         uid: event.uid,
         occurrence: event.occurrence,
-        title: event.title || '(ohne Titel)',
+        title,
+        // The column says who it is for, so the chip drops the name.
+        displayTitle: stripPeopleNames(title, assigned),
         notes: event.description || '',
         allDay: event.allDay,
         startDate: event.startDate,
