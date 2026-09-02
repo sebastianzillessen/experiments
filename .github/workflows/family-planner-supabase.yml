@@ -1,0 +1,61 @@
+name: Family Planner — Supabase
+
+# Applies the Familienplaner migrations and deploys its Edge Function to the
+# shared Supabase project. Uses the same secrets as supabase-migrate.yml:
+#   - SUPABASE_ACCESS_TOKEN
+#   - SUPABASE_DB_PASSWORD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'family-planner/supabase/**'
+      - '.github/workflows/family-planner-supabase.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Shares the lock with the Salärli migration job: both push to one database.
+  group: supabase-migrate
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: tbknudbcgaarqixweizj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      # `supabase db push` refuses to run when the remote migration history
+      # contains versions that are missing locally — and the two experiments
+      # keep their migrations in their own folders. So push from a temporary
+      # project that holds BOTH histories: everything Salärli already applied
+      # is then "known", and only the new fp_* migrations are pending.
+      - name: Assemble the combined migration history
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fp-project/supabase/migrations
+          cp family-planner/supabase/config.toml /tmp/fp-project/supabase/config.toml
+          cp kinderbetreuung-lohn/supabase/migrations/*.sql /tmp/fp-project/supabase/migrations/
+          cp family-planner/supabase/migrations/*.sql /tmp/fp-project/supabase/migrations/
+          ls -1 /tmp/fp-project/supabase/migrations/
+
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        working-directory: /tmp/fp-project
+
+      - name: Push migrations
+        run: supabase db push --include-all
+        working-directory: /tmp/fp-project
+
+      - name: Deploy the calendar sync function
+        run: supabase functions deploy family-calendar-sync --project-ref "$SUPABASE_PROJECT_ID"
+        working-directory: family-planner
