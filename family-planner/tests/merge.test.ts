@@ -115,6 +115,68 @@ describe('buildCells', () => {
     expect(cells.get('2026-09-08')!.get(FAMILY_COLUMN)!.map(e => e.title)).toEqual(['Hort']);
   });
 
+  it('sorts an entry running over midnight by the time on its chip', () => {
+    // Reported from the real plan: an 18:00–6:00 entry continues into the next
+    // day, so on that day it used to sort by its absolute start (yesterday
+    // 18:00) and jumped ahead of the 8 o'clock course.
+    const overnight = manual('Nachts allein', {
+      allDay: false,
+      startDate: '2026-09-08', endDate: '2026-09-09',
+      startsAt: '2026-09-08T16:00:00.000Z',   // 18:00 Zurich
+      endsAt: '2026-09-09T04:00:00.000Z',     // 06:00 Zurich the next morning
+      personIds: ['p-lilly'],
+    });
+    const kurs = manual('Kurs', {
+      allDay: false,
+      startDate: '2026-09-09', endDate: '2026-09-09',
+      startsAt: '2026-09-09T06:00:00.000Z',   // 08:00 Zurich
+      endsAt: '2026-09-09T10:00:00.000Z',
+      personIds: ['p-lilly'],
+    });
+    const ho = manual('HO', { startDate: '2026-09-09', endDate: '2026-09-09', personIds: ['p-lilly'] });
+
+    const cells = buildCells(['2026-09-09'], PEOPLE, [overnight, kurs, ho], 'Europe/Zurich');
+    expect(cells.get('2026-09-09')!.get('p-lilly')!.map(e => e.title))
+      .toEqual(['HO', 'Kurs', 'Nachts allein']);
+  });
+
+  it('still sorts the same entry first on the day it starts', () => {
+    const overnight = manual('Nachts allein', {
+      allDay: false,
+      startDate: '2026-09-08', endDate: '2026-09-09',
+      startsAt: '2026-09-08T16:00:00.000Z',
+      endsAt: '2026-09-09T04:00:00.000Z',
+      personIds: ['p-lilly'],
+    });
+    const abend = manual('Abendessen', {
+      allDay: false,
+      startDate: '2026-09-08', endDate: '2026-09-08',
+      startsAt: '2026-09-08T17:00:00.000Z',   // 19:00 Zurich
+      endsAt: '2026-09-08T18:00:00.000Z',
+      personIds: ['p-lilly'],
+    });
+    const cells = buildCells(['2026-09-08'], PEOPLE, [abend, overnight], 'Europe/Zurich');
+    expect(cells.get('2026-09-08')!.get('p-lilly')!.map(e => e.title))
+      .toEqual(['Nachts allein', 'Abendessen']);
+  });
+
+  it('sorts by the local clock, not by the UTC instant', () => {
+    // 23:30 UTC is 01:30 the next morning in Zurich — the early entry.
+    const nightUtc = manual('Nachtzug', {
+      allDay: false, startDate: '2026-09-09', endDate: '2026-09-09',
+      startsAt: '2026-09-08T23:30:00.000Z', endsAt: '2026-09-09T00:30:00.000Z',
+      personIds: ['p-lilly'],
+    });
+    const morning = manual('Frühstück', {
+      allDay: false, startDate: '2026-09-09', endDate: '2026-09-09',
+      startsAt: '2026-09-09T05:00:00.000Z', endsAt: '2026-09-09T06:00:00.000Z',
+      personIds: ['p-lilly'],
+    });
+    const cells = buildCells(['2026-09-09'], PEOPLE, [morning, nightUtc], 'Europe/Zurich');
+    expect(cells.get('2026-09-09')!.get('p-lilly')!.map(e => e.title))
+      .toEqual(['Nachtzug', 'Frühstück']);
+  });
+
   it('sorts all-day entries before timed ones, then by clock', () => {
     const cells = buildCells(days, PEOPLE, [
       manual('Sport', { allDay: false, startsAt: '2026-09-08T14:00:00.000Z', personIds: ['p-lilly'] }),

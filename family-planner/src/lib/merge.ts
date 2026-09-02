@@ -4,6 +4,7 @@
 
 import { autoAssign, stripPeopleNames } from './assign.ts';
 import { daysBetween } from './dates.ts';
+import { wallClockIn } from '../../supabase/functions/family-calendar-sync/ics.ts';
 import { FAMILY_COLUMN } from './types.ts';
 import type { Assignment, CachedEvent, Calendar, Person, PlannerEvent } from './types.ts';
 
@@ -82,7 +83,8 @@ export function calendarEventsToPlanner(
 export function buildCells(
   days: string[],
   people: Person[],
-  events: PlannerEvent[]
+  events: PlannerEvent[],
+  tz = 'Europe/Zurich'
 ): Map<string, Map<string, PlannerEvent[]>> {
   const from = days[0];
   const to = days[days.length - 1];
@@ -109,17 +111,46 @@ export function buildCells(
     }
   }
 
+  // Sortiert wird nach der Uhrzeit, die auf dem Chip steht — nicht nach dem
+  // absoluten Zeitpunkt. Ein Eintrag über Mitternacht (18:00–6:00) beginnt
+  // absolut gesehen am Vortag und stünde sonst am Folgetag vor allem anderen,
+  // obwohl dort „18:00" angeschrieben ist.
+  const startMinutes = new Map<string, number>();
+  for (const event of events) {
+    if (event.allDay || !event.startsAt) continue;
+    const clock = wallClockIn(Date.parse(event.startsAt), tz);
+    startMinutes.set(event.key, clock.hh * 60 + clock.mm);
+  }
+
   for (const row of cells.values()) {
-    for (const list of row.values()) list.sort(compareEvents);
+    for (const list of row.values()) {
+      list.sort((a, b) => compareEvents(a, b, startMinutes));
+    }
   }
   return cells;
 }
 
-export function compareEvents(a: PlannerEvent, b: PlannerEvent): number {
+/**
+ * Ganztägige Einträge zuerst, danach nach angeschriebener Startzeit, zuletzt
+ * alphabetisch. `startMinutes` hält die Minuten seit Mitternacht pro Eintrag;
+ * ohne die Tabelle bleibt der absolute Zeitpunkt der Vergleichswert (nur für
+ * Aufrufer, die keine Zeitzone kennen).
+ */
+export function compareEvents(
+  a: PlannerEvent, b: PlannerEvent, startMinutes?: Map<string, number>
+): number {
   if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-  if (a.startsAt && b.startsAt && a.startsAt !== b.startsAt) {
+
+  if (startMinutes) {
+    const aStart = startMinutes.get(a.key);
+    const bStart = startMinutes.get(b.key);
+    if (aStart !== undefined && bStart !== undefined && aStart !== bStart) {
+      return aStart - bStart;
+    }
+  } else if (a.startsAt && b.startsAt && a.startsAt !== b.startsAt) {
     return a.startsAt < b.startsAt ? -1 : 1;
   }
+
   return a.title.localeCompare(b.title, 'de');
 }
 

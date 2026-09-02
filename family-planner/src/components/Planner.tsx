@@ -56,7 +56,7 @@ export function Planner() {
     ],
     [manualSeries, calendarEvents, days, tz]
   );
-  const cells = useMemo(() => buildCells(days, people, events), [days, people, events]);
+  const cells = useMemo(() => buildCells(days, people, events, tz), [days, people, events, tz]);
   const today = todayKey(tz);
 
   function step(delta: number) {
