@@ -73,3 +73,116 @@ export function eventText(event: Pick<CachedEvent, 'title' | 'location' | 'descr
 export function autoAssign(event: CachedEvent, people: Person[]): string[] {
   return matchPeople(eventText(event), people);
 }
+
+/**
+ * Remove the people's own names from an event's text.
+ *
+ * A calendar entry says who it is for — "Caro LQ", "[Caro] Reitstunde",
+ * "Kita Miri/Lars" — but once it sits in Caro's column that word is noise.
+ * The column already answers "who", so the chip only has to answer "what".
+ * Matching is the same as autoAssign(): whole words, case- and
+ * diacritic-insensitive, and multi-word aliases ("Oma Meier") count as one.
+ *
+ * Returns the original text unchanged when nothing matches, and also when
+ * stripping would leave nothing behind — an entry titled just "Caro" keeps
+ * its name rather than becoming an empty chip.
+ */
+export function stripPeopleNames(text: string, people: Person[]): string {
+  if (!text || people.length === 0) return text;
+
+  const matchers = new Set<string>();
+  let longest = 1;
+  for (const person of people) {
+    for (const matcher of matchersFor(person)) {
+      matchers.add(matcher);
+      longest = Math.max(longest, matcher.split(/\s+/).length);
+    }
+  }
+  if (matchers.size === 0) return text;
+
+  const words = [...text.matchAll(/[\p{L}\p{N}]+/gu)].map(m => ({
+    start: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+    normalized: normalize(m[0]),
+  }));
+
+  // Longest first, so "Oma Meier" wins over a bare "Oma".
+  const consumed = new Set<number>();
+  const cuts: { start: number; end: number }[] = [];
+  for (let size = longest; size >= 1; size--) {
+    for (let i = 0; i + size <= words.length; i++) {
+      let free = true;
+      for (let k = 0; k < size && free; k++) free = !consumed.has(i + k);
+      if (!free) continue;
+      const phrase = words.slice(i, i + size).map(w => w.normalized).join(' ');
+      if (!matchers.has(phrase)) continue;
+      cuts.push({ start: words[i].start, end: words[i + size - 1].end });
+      for (let k = 0; k < size; k++) consumed.add(i + k);
+    }
+  }
+  if (cuts.length === 0) return text;
+
+  // Two names next to each other ("Lars und Miriam", "Miri/Lars", "Caro +
+  // Basti") are one span: take the word joining them along with the names,
+  // otherwise the conjunction is left stranded mid-sentence.
+  cuts.sort((a, b) => a.start - b.start);
+  const merged: { start: number; end: number }[] = [];
+  for (const cut of cuts) {
+    const previous = merged[merged.length - 1];
+    if (previous && JOINER.test(text.slice(previous.end, cut.start))) {
+      previous.end = cut.end;
+    } else {
+      merged.push({ ...cut });
+    }
+  }
+
+  let stripped = text;
+  for (const cut of merged.reverse()) {
+    stripped = `${stripped.slice(0, cut.start)} ${stripped.slice(cut.end)}`;
+  }
+
+  const tidied = tidyLeftovers(stripped);
+  return tidied || text;
+}
+
+/** What may sit between two names and still be part of the same enumeration. */
+const JOINER = /^\s*(?:und|and|u\.|&|\+|,|\/|·|-|–|—|\bmit\b|\bwith\b)\s*$/i;
+
+/** Clean up the brackets, slashes and conjunctions a removed name leaves behind. */
+function tidyLeftovers(text: string): string {
+  return text
+    .replace(/\(\s*\)|\[\s*\]|\{\s*\}/g, ' ')
+    .replace(/\s+([,;.!?])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s/+&,;:·\-–—]+|[\s/+&,;:·\-–—]+$/g, '')
+    .replace(/^(?:und|and|mit|with|u\.)\s+|\s+(?:und|and|mit|with|u\.)$/gi, '')
+    .replace(/^[\s/+&,;:·\-–—]+|[\s/+&,;:·\-–—]+$/g, '')
+    .trim();
+}
+
+/**
+ * Words from an event that could become an alias for a person — everything
+ * that is not already a known name. Offered as chips when someone moves an
+ * entry to the right person by hand, so "Lillian Mittagessen Hort" only has
+ * to be corrected once.
+ *
+ * Deliberately not guessed: the app cannot tell "Lillian" from "Mittagessen",
+ * so it lists both and lets the person pick.
+ */
+export function aliasCandidates(text: string, people: Person[], limit = 8): string[] {
+  const known = new Set<string>();
+  for (const person of people) for (const matcher of matchersFor(person)) known.add(matcher);
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const match of text.matchAll(/[\p{L}][\p{L}\-']*/gu)) {
+    const word = match[0];
+    if (word.length < 3) continue;
+    const key = normalize(word);
+    if (known.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(word);
+    if (out.length >= limit) break;
+  }
+  return out;
+}

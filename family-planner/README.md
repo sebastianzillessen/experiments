@@ -21,16 +21,29 @@ Backend. Läuft auf **https://planer.zillessen.dev**.
   legt das Ergebnis zwischengespeichert ab — mehrere Betrachter kosten einen
   Abruf, nicht einen pro Person.
 - **Automatische Zuordnung.** Termine wandern anhand der Namen im Text in die
-  Spalten: „Kita Miri/Lars“ erscheint bei Miri **und** bei Lars. Erkannt wird
+  Spalten: „Kita Miri/Lars“ erscheint bei Miri **und** bei Lars. In der Spalte
+  fällt der Name dann weg — „Caro LQ“ steht bei Caro als *LQ*, „[Caro]
+  Reitstunde“ als *Reitstunde*, „Zusätzliche Betreuung Lars und Miriam KiTa“ bei
+  beiden als *Zusätzliche Betreuung KiTa*. Die Spalte beantwortet das Wer, der
+  Chip nur noch das Was; im Detail steht weiterhin der volle Text. Erkannt wird
   auf Wortgrenzen und ohne Rücksicht auf Gross-/Kleinschreibung oder Umlaute,
   also trifft „Lars“ nicht „Larsson“. Pro Person lassen sich weitere
-  Schreibweisen hinterlegen („Lasse“, „L.“). Passt etwas nicht, wird die
+  Schreibweisen hinterlegen („Lasse“, „L.“, „Lillian“) — beim Umhängen eines
+  Termins bietet die Detailansicht die Wörter des Termins direkt als
+  Aliasnamen an, sodass „Lillian Mittagessen Hort“ nur einmal korrigiert
+  werden muss. Passt etwas nicht, wird die
   Zuordnung für diesen Termin überschrieben oder er wird ausgeblendet — der
   Kalender selbst bleibt unverändert.
 - **Schnelles Erfassen.** Titel, Personen (Mehrfachauswahl), Datum — fertig.
   Ganztägig ist die Voreinstellung, „von–bis“ blendet die Zeitfelder ein.
   Mehrtägige Einträge (Ferien) laufen über alle betroffenen Tage. Ein Tipp auf
   eine leere Zelle legt Tag *und* Person schon fest.
+- **Zeit direkt im Titel.** „Zahnarzt 14-15“ wird zu einem Eintrag *Zahnarzt*
+  von 14:00 bis 15:00. Erkannt werden `14-15`, `16:10-16:55`, `16.10-16.55`,
+  `14 bis 15:15`, `9-10 Uhr`, `14 Uhr 30`, `2-3pm`, `ab 15`, `um 18` — und
+  bewusst **nicht** „Zimmer 12“, „KW 37“, „Zimmer 3-5“, „Lilly bis 16:00 Hort“
+  oder ein Datum wie „1.10.“. Was erkannt wurde, steht unter dem Feld und lässt
+  sich mit einem Tipp verwerfen.
 - **Mehrere Betrachter.** Eine Familie hat beliebig viele Zugänge mit
   unterschiedlichen Rechten; eingeladen wird per Link.
 - **Zeitformat pro Familie.** Einstellungen → Anzeige schaltet zwischen
@@ -151,8 +164,9 @@ npm run build      # tsc -b && vite build → dist/
 Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
 Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
 Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
-Kalender-URL inklusive `webcal://` und SSRF-Schutz sowie beide Zeitformate
-(89 Tests).
+Kalender-URL inklusive `webcal://` und SSRF-Schutz, beide Zeitformate, das
+Lesen von Zeiten aus dem Titel und das Entfernen der Namen aus der Anzeige
+(125 Tests).
 
 Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
 erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.

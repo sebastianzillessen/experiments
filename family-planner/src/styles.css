@@ -295,6 +295,9 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 }
 .person-chip.selected { color: #fff; font-weight: 600; }
 
+.parsed-time { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 0; }
+.alias-offer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+
 .detail { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 .detail dt { font-size: .8rem; color: var(--ink-soft); }
 .detail dd { margin: 0; }

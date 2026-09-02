@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import type { NewEventInput } from '../context/AppContext.tsx';
 import type { PlannerEvent } from '../lib/types.ts';
-import { timeValue } from '../lib/dates.ts';
+import { formatClock, timeValue } from '../lib/dates.ts';
+import { parseTitleTime } from '../lib/parseTitleTime.ts';
 import { Sheet } from './Sheet.tsx';
 
 export type QuickAddPrefill = {
@@ -40,6 +41,28 @@ export function QuickAddSheet({ prefill, existing, onClose }: {
     existing ? existing.personIds : (prefill?.personId ? [prefill.personId] : []));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Zahnarzt 14-15" carries its own time. It is read while typing, shown
+  // below the field, and applied on save — never by rewriting the field under
+  // the cursor. Touching a time field, or dismissing the hint, hands control
+  // back to the person typing.
+  const [timesTouched, setTimesTouched] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const suggestion = useMemo(
+    () => (timesTouched || dismissed ? null : parseTitleTime(title)),
+    [title, timesTouched, dismissed]
+  );
+
+  useEffect(() => {
+    if (!suggestion) return;
+    setAllDay(false);
+    setStartTime(suggestion.startTime);
+    setEndTime(suggestion.endTime);
+  }, [suggestion]);
+
+  const showTime = (value: string) => {
+    const [hh, mm] = value.split(':').map(Number);
+    return formatClock(hh, mm, family?.timeFormat ?? '24h');
+  };
 
   function togglePerson(id: string) {
     setSelected(prev => (prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]));
@@ -57,13 +80,13 @@ export function QuickAddSheet({ prefill, existing, onClose }: {
       return;
     }
     const input: NewEventInput = {
-      title,
+      title: suggestion ? suggestion.title : title,
       notes,
-      allDay,
+      allDay: suggestion ? false : allDay,
       startDate,
       endDate: endDate || startDate,
-      startTime,
-      endTime,
+      startTime: suggestion ? suggestion.startTime : startTime,
+      endTime: suggestion ? suggestion.endTime : endTime,
       personIds: selected,
     };
     setBusy(true);
@@ -77,8 +100,21 @@ export function QuickAddSheet({ prefill, existing, onClose }: {
     <Sheet title={existing ? 'Eintrag bearbeiten' : 'Neuer Eintrag'} onClose={onClose}>
       <form className="stack" onSubmit={onSubmit} noValidate>
         <label htmlFor="qa-title">Was?</label>
-        <input id="qa-title" value={title} autoFocus placeholder="z. B. Zahnarzt Lilly"
+        <input id="qa-title" value={title} autoFocus placeholder="z. B. Zahnarzt Lilly 14-15"
           onChange={e => setTitle(e.target.value)} />
+        {suggestion && (
+          <div className="notice info parsed-time" id="qa-parsed-time">
+            <span className="grow">
+              Zeit erkannt: <strong>
+                {showTime(suggestion.startTime)}
+                {suggestion.endTime !== suggestion.startTime && `–${showTime(suggestion.endTime)}`}
+              </strong> · Titel wird „{suggestion.title}“
+            </span>
+            <button type="button" className="linklike" onClick={() => setDismissed(true)}>
+              doch nicht
+            </button>
+          </div>
+        )}
 
         <label>Wer?</label>
         <div className="chips-row">
@@ -112,9 +148,11 @@ export function QuickAddSheet({ prefill, existing, onClose }: {
           // Firefox follow the operating system and ignore it. The value is
           // 24h either way, so nothing downstream depends on what is shown.
           <div className="row" lang={family?.timeFormat === '12h' ? 'en-US' : 'de-CH'}>
-            <input id="qa-start-time" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
+            <input id="qa-start-time" type="time" value={startTime}
+              onChange={e => { setTimesTouched(true); setStartTime(e.target.value); }} />
             <span className="row-sep">–</span>
-            <input id="qa-end-time" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
+            <input id="qa-end-time" type="time" value={endTime}
+              onChange={e => { setTimesTouched(true); setEndTime(e.target.value); }} />
           </div>
         )}
 
