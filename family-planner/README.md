@@ -33,6 +33,12 @@ Backend. Läuft auf **https://planer.zillessen.dev**.
   eine leere Zelle legt Tag *und* Person schon fest.
 - **Mehrere Betrachter.** Eine Familie hat beliebig viele Zugänge mit
   unterschiedlichen Rechten; eingeladen wird per Link.
+- **Zeitformat pro Familie.** Einstellungen → Anzeige schaltet zwischen
+  24 Stunden (`14:00–15:15`) und AM/PM (`2:00–3:15 PM`). Das gilt für alles,
+  was der Planer selbst schreibt. Die Uhrzeit-Auswahl beim Erfassen ist ein
+  natives Bedienelement des Browsers — welches Format sie zeigt, entscheidet
+  das Betriebssystem (unter iOS: Einstellungen → Allgemein → Datum & Uhrzeit →
+  24-Stunden-Zeit); der gespeicherte Wert ist ohnehin immer derselbe.
 
 ## Rollen
 
@@ -145,7 +151,8 @@ npm run build      # tsc -b && vite build → dist/
 Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
 Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
 Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
-Kalender-URL inklusive `webcal://` und SSRF-Schutz (80 Tests).
+Kalender-URL inklusive `webcal://` und SSRF-Schutz sowie beide Zeitformate
+(89 Tests).
 
 Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
 erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.

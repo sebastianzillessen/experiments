@@ -13,6 +13,7 @@ import { QuickAddSheet } from './QuickAddSheet.tsx';
 export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: () => void }) {
   const { canEdit, people, family, deleteEvent, setAssignment } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
+  const timeFormat = family?.timeFormat ?? '24h';
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [assigned, setAssigned] = useState<string[]>(event.personIds);
@@ -24,7 +25,7 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
   const when = event.startDate === event.endDate
     ? dayLabel(event.startDate)
     : `${dayLabel(event.startDate)} – ${dayLabel(event.endDate)}`;
-  const time = event.allDay ? 'ganztägig' : timeRangeLabel(event.startsAt, event.endsAt, tz);
+  const time = event.allDay ? 'ganztägig' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
 
   async function onDelete() {
     if (!event.id) return;

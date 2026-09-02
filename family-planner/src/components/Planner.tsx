@@ -7,7 +7,7 @@ import {
 } from '../lib/dates.ts';
 import { buildCells } from '../lib/merge.ts';
 import { FAMILY_COLUMN, ROLE_LABELS } from '../lib/types.ts';
-import type { PlannerEvent } from '../lib/types.ts';
+import type { PlannerEvent, TimeFormat } from '../lib/types.ts';
 import { QuickAddSheet } from './QuickAddSheet.tsx';
 import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
@@ -33,6 +33,7 @@ export function Planner() {
   const { family, role, people, events, canEdit, sync, refreshCalendars } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const weekStart = family?.weekStart ?? 1;
+  const timeFormat = family?.timeFormat ?? '24h';
 
   const [view, setView] = useState<View>('week');
   const [anchor, setAnchor] = useState(() => todayKey(tz));
@@ -86,7 +87,7 @@ export function Planner() {
       {sync.busy && <div className="notice info no-print">Kalender werden abgerufen …</div>}
 
       {narrow ? (
-        <DayList days={days} today={today} tz={tz} cells={cells} columns={columns}
+        <DayList days={days} today={today} tz={tz} timeFormat={timeFormat} cells={cells} columns={columns}
           onPick={setSelected} onAdd={(day, personId) => setQuickAdd({ date: day, personId })} canEdit={canEdit} />
       ) : (
         <div className="table-wrap">
@@ -115,7 +116,8 @@ export function Planner() {
                     <td key={col.id}>
                       <div className="cell">
                         {(cells.get(day)?.get(col.id) ?? []).map(ev => (
-                          <EventChip key={ev.key + day} event={ev} tz={tz} onClick={() => setSelected(ev)} />
+                          <EventChip key={ev.key + day} event={ev} tz={tz} timeFormat={timeFormat}
+                            onClick={() => setSelected(ev)} />
                         ))}
                         {canEdit && (
                           <button className="cell-add" aria-label={`Eintrag am ${dayLabel(day)} für ${col.name}`}
@@ -153,8 +155,10 @@ export function Planner() {
   );
 }
 
-function EventChip({ event, tz, onClick }: { event: PlannerEvent; tz: string; onClick: () => void }) {
-  const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz);
+function EventChip({ event, tz, timeFormat, onClick }: {
+  event: PlannerEvent; tz: string; timeFormat: TimeFormat; onClick: () => void;
+}) {
+  const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
   return (
     <button className={`chip ${event.source}`} onClick={onClick} title={event.notes || event.title}>
       <span className="dot" style={{ background: event.color }} aria-hidden="true" />
@@ -167,10 +171,11 @@ function EventChip({ event, tz, onClick }: { event: PlannerEvent; tz: string; on
 type Column = { id: string; name: string; color: string };
 
 /** Phone layout: one card per day, the people inside it. */
-function DayList({ days, today, tz, cells, columns, onPick, onAdd, canEdit }: {
+function DayList({ days, today, tz, timeFormat, cells, columns, onPick, onAdd, canEdit }: {
   days: string[];
   today: string;
   tz: string;
+  timeFormat: TimeFormat;
   cells: Map<string, Map<string, PlannerEvent[]>>;
   columns: Column[];
   onPick: (ev: PlannerEvent) => void;
@@ -199,7 +204,8 @@ function DayList({ days, today, tz, cells, columns, onPick, onAdd, canEdit }: {
                 </span>
                 <div className="cell">
                   {(row?.get(col.id) ?? []).map(ev => (
-                    <EventChip key={ev.key + day} event={ev} tz={tz} onClick={() => onPick(ev)} />
+                    <EventChip key={ev.key + day} event={ev} tz={tz} timeFormat={timeFormat}
+                      onClick={() => onPick(ev)} />
                   ))}
                 </div>
               </div>

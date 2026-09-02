@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addMonths, dayLabel, daysBetween, isoWeekNumber, isWeekend, localToIso, monthDays,
-  relativeStamp, startOfWeek, timeRangeLabel, todayKey, weekDays, weekLabel,
+  addMonths, dayLabel, daysBetween, formatClock, isoWeekNumber, isWeekend, localToIso, monthDays,
+  relativeStamp, startOfWeek, timeLabel, timeRangeLabel, timeValue, todayKey, weekDays, weekLabel,
 } from '../src/lib/dates.ts';
 
 const TZ = 'Europe/Zurich';
@@ -106,5 +106,56 @@ describe('daysBetween', () => {
 
   it('returns nothing when the event is outside the window', () => {
     expect(daysBetween('2026-08-01', '2026-08-05', '2026-09-07', '2026-09-13')).toEqual([]);
+  });
+});
+
+describe('clock format', () => {
+  it('writes 24h times zero-padded', () => {
+    expect(formatClock(9, 5, '24h')).toBe('09:05');
+    expect(formatClock(14, 0, '24h')).toBe('14:00');
+    expect(formatClock(0, 30, '24h')).toBe('00:30');
+  });
+
+  it('writes AM/PM times the way a clock is read aloud', () => {
+    expect(formatClock(9, 5, '12h')).toBe('9:05 AM');
+    expect(formatClock(14, 0, '12h')).toBe('2:00 PM');
+    expect(formatClock(0, 30, '12h')).toBe('12:30 AM');   // midnight is 12, not 0
+    expect(formatClock(12, 0, '12h')).toBe('12:00 PM');   // noon is PM
+    expect(formatClock(23, 59, '12h')).toBe('11:59 PM');
+  });
+
+  it('labels an instant in the family zone and format', () => {
+    expect(timeLabel('2026-09-08T12:00:00.000Z', TZ, '24h')).toBe('14:00');
+    expect(timeLabel('2026-09-08T12:00:00.000Z', TZ, '12h')).toBe('2:00 PM');
+  });
+
+  it('writes a shared AM/PM suffix only once', () => {
+    expect(timeRangeLabel('2026-09-08T12:00:00.000Z', '2026-09-08T13:15:00.000Z', TZ, '12h'))
+      .toBe('2:00–3:15 PM');
+  });
+
+  it('keeps both suffixes when the range crosses noon', () => {
+    expect(timeRangeLabel('2026-09-08T09:30:00.000Z', '2026-09-08T11:00:00.000Z', TZ, '12h'))
+      .toBe('11:30 AM–1:00 PM');
+  });
+
+  it('follows the format for a single time too', () => {
+    expect(timeRangeLabel('2026-09-08T12:00:00.000Z', null, TZ, '12h')).toBe('2:00 PM');
+  });
+
+  it('defaults to 24h when no format is given', () => {
+    expect(timeRangeLabel('2026-09-08T12:00:00.000Z', null, TZ)).toBe('14:00');
+  });
+
+  it('formats sync stamps in the chosen format', () => {
+    const now = Date.parse('2026-09-09T09:00:00Z');
+    expect(relativeStamp('2026-09-09T05:42:00Z', TZ, now, '12h')).toBe('heute 7:42 AM');
+  });
+
+  it('keeps time input values at 24h whatever the family prefers', () => {
+    // <input type="time"> only accepts "HH:MM"; seeding it with "2:00 PM"
+    // would silently blank the field.
+    expect(timeValue('2026-09-08T12:00:00.000Z', TZ)).toBe('14:00');
+    expect(timeValue('2026-09-08T05:05:00.000Z', TZ)).toBe('07:05');
   });
 });

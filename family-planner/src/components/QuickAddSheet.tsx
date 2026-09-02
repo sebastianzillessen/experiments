@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import type { NewEventInput } from '../context/AppContext.tsx';
 import type { PlannerEvent } from '../lib/types.ts';
-import { timeLabel } from '../lib/dates.ts';
+import { timeValue } from '../lib/dates.ts';
 import { Sheet } from './Sheet.tsx';
 
 export type QuickAddPrefill = {
@@ -30,10 +30,12 @@ export function QuickAddSheet({ prefill, existing, onClose }: {
   const [startDate, setStartDate] = useState(existing?.startDate ?? prefill?.date ?? '');
   const [endDate, setEndDate] = useState(existing?.endDate ?? prefill?.date ?? '');
   const [allDay, setAllDay] = useState(existing ? existing.allDay : true);
+  // An <input type="time"> value is always 24h "HH:MM" regardless of how the
+  // browser displays it — never seed it with the family's display format.
   const [startTime, setStartTime] = useState(
-    existing?.startsAt ? timeLabel(existing.startsAt, tz) : '09:00');
+    existing?.startsAt ? timeValue(existing.startsAt, tz) : '09:00');
   const [endTime, setEndTime] = useState(
-    existing?.endsAt ? timeLabel(existing.endsAt, tz) : '10:00');
+    existing?.endsAt ? timeValue(existing.endsAt, tz) : '10:00');
   const [selected, setSelected] = useState<string[]>(
     existing ? existing.personIds : (prefill?.personId ? [prefill.personId] : []));
   const [busy, setBusy] = useState(false);
@@ -106,7 +108,10 @@ export function QuickAddSheet({ prefill, existing, onClose }: {
           <label><input type="radio" name="qa-mode" checked={!allDay} onChange={() => setAllDay(false)} /> von–bis</label>
         </div>
         {!allDay && (
-          <div className="row">
+          // lang nudges Chrome towards the family's clock format; Safari and
+          // Firefox follow the operating system and ignore it. The value is
+          // 24h either way, so nothing downstream depends on what is shown.
+          <div className="row" lang={family?.timeFormat === '12h' ? 'en-US' : 'de-CH'}>
             <input id="qa-start-time" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
             <span className="row-sep">–</span>
             <input id="qa-end-time" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
