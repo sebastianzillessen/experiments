@@ -6,6 +6,7 @@ import {
   startOfMonth, startOfWeek, timeRangeLabel, todayKey, weekDays, weekLabel,
 } from '../lib/dates.ts';
 import { buildCells } from '../lib/merge.ts';
+import { expandManualSeries } from '../lib/recurrence.ts';
 import { FAMILY_COLUMN, ROLE_LABELS } from '../lib/types.ts';
 import type { PlannerEvent, TimeFormat } from '../lib/types.ts';
 import { QuickAddSheet } from './QuickAddSheet.tsx';
@@ -30,7 +31,7 @@ function useIsNarrow(): boolean {
 }
 
 export function Planner() {
-  const { family, role, people, events, canEdit, sync, refreshCalendars } = useApp();
+  const { family, role, people, manualSeries, calendarEvents, canEdit, sync, refreshCalendars } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const weekStart = family?.weekStart ?? 1;
   const timeFormat = family?.timeFormat ?? '24h';
@@ -45,6 +46,15 @@ export function Planner() {
   const days = useMemo(
     () => (view === 'week' ? weekDays(startOfWeek(anchor, weekStart)) : monthDays(anchor)),
     [view, anchor, weekStart]
+  );
+  // Serien werden genau für die sichtbaren Tage aufgelöst — höchstens 31 Tage,
+  // also kostet eine offene Wiederholung nichts.
+  const events = useMemo(
+    () => [
+      ...expandManualSeries(manualSeries, days[0], days[days.length - 1], tz),
+      ...calendarEvents,
+    ],
+    [manualSeries, calendarEvents, days, tz]
   );
   const cells = useMemo(() => buildCells(days, people, events), [days, people, events]);
   const today = todayKey(tz);
@@ -164,6 +174,7 @@ function EventChip({ event, tz, timeFormat, onClick }: {
       <span className="dot" style={{ background: event.color }} aria-hidden="true" />
       {time && <span className="chip-time">{time}</span>}
       <span className="chip-title">{event.displayTitle || event.title}</span>
+      {event.repeat && <span className="chip-repeat" aria-label="wiederholt sich">↻</span>}
     </button>
   );
 }

@@ -30,7 +30,7 @@ function manual(id: string, extra: Partial<PlannerEvent> = {}): PlannerEvent {
     key: `man:${id}`, source: 'manual', id, calendarId: null, calendarLabel: null,
     uid: null, occurrence: null, title: id, displayTitle: id, notes: '', allDay: true,
     startDate: '2026-09-08', endDate: '2026-09-08', startsAt: null, endsAt: null,
-    personIds: [], color: '#111', autoAssigned: false,
+    personIds: [], color: '#111', autoAssigned: false, repeat: null,
     ...extra,
   };
 }

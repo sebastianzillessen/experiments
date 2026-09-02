@@ -91,6 +91,12 @@ export type PlannerEvent = {
   color: string;
   /** True when personIds came from name matching rather than a person's choice. */
   autoAssigned: boolean;
+  /**
+   * The series rule when this is one occurrence of a recurring entry, so the
+   * detail sheet can name it and offer "nur diesen Termin" vs "alle Termine".
+   * Imported calendar events arrive already expanded and carry null.
+   */
+  repeat: import('./recurrence.ts').RepeatRule | null;
 };
 
 /** How the family reads a clock. Applies to every time the app renders itself. */

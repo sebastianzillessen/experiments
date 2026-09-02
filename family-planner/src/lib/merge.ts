@@ -67,6 +67,8 @@ export function calendarEventsToPlanner(
         personIds,
         color: calendar.color,
         autoAssigned: !override,
+        // Serien aus dem Kalender werden serverseitig aufgelöst.
+        repeat: null,
       });
     }
   }

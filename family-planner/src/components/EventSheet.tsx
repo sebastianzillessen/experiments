@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { aliasCandidates, eventText } from '../lib/assign.ts';
 import { dayLabel, timeRangeLabel } from '../lib/dates.ts';
+import { describeRepeat } from '../lib/recurrence.ts';
 import type { PlannerEvent } from '../lib/types.ts';
+import type { EditScope } from '../context/AppContext.tsx';
 import { Sheet } from './Sheet.tsx';
 import { QuickAddSheet } from './QuickAddSheet.tsx';
 
@@ -15,7 +17,7 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
   const { canEdit, people, family, deleteEvent, setAssignment, updatePerson } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const timeFormat = family?.timeFormat ?? '24h';
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<EditScope | null>(null);
   const [busy, setBusy] = useState(false);
   const [assigned, setAssigned] = useState<string[]>(event.personIds);
   const [aliasAdded, setAliasAdded] = useState<string | null>(null);
@@ -29,7 +31,10 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
   );
 
   if (editing && event.source === 'manual') {
-    return <QuickAddSheet existing={event} onClose={() => { setEditing(false); onClose(); }} />;
+    return (
+      <QuickAddSheet existing={event} scope={editing}
+        onClose={() => { setEditing(null); onClose(); }} />
+    );
   }
 
   const when = event.startDate === event.endDate
@@ -37,10 +42,10 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
     : `${dayLabel(event.startDate)} – ${dayLabel(event.endDate)}`;
   const time = event.allDay ? 'ganztägig' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
 
-  async function onDelete() {
+  async function onDelete(scope: EditScope) {
     if (!event.id) return;
     setBusy(true);
-    const ok = await deleteEvent(event.id);
+    const ok = await deleteEvent(event.id, scope, event.occurrence);
     setBusy(false);
     if (ok) onClose();
   }
@@ -71,13 +76,35 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
         </dd>
         <dt>Quelle</dt>
         <dd>{event.source === 'manual' ? 'Selbst eingetragen' : `Kalender „${event.calendarLabel}“`}</dd>
+        {event.repeat && (<><dt>Serie</dt><dd>{describeRepeat(event.repeat)}</dd></>)}
         {event.notes && (<><dt>Notiz</dt><dd className="pre">{event.notes}</dd></>)}
       </dl>
 
-      {canEdit && event.source === 'manual' && (
+      {canEdit && event.source === 'manual' && !event.repeat && (
         <div className="sheet-actions">
-          <button className="btn btn-danger" onClick={onDelete} disabled={busy}>Löschen</button>
-          <button className="btn" onClick={() => setEditing(true)} disabled={busy}>Bearbeiten</button>
+          <button className="btn btn-danger" onClick={() => onDelete('series')} disabled={busy}>Löschen</button>
+          <button className="btn" onClick={() => setEditing('series')} disabled={busy}>Bearbeiten</button>
+        </div>
+      )}
+
+      {canEdit && event.source === 'manual' && event.repeat && (
+        // Ein Termin aus einer Serie: die Frage ist nicht ob, sondern wie weit.
+        <div className="scope-actions">
+          <p className="hint">Dieser Eintrag gehört zu einer Serie.</p>
+          <div className="scope-row">
+            <span className="scope-label">Bearbeiten</span>
+            <button className="btn btn-secondary" disabled={busy}
+              onClick={() => setEditing('occurrence')}>Nur diesen Termin</button>
+            <button className="btn btn-secondary" disabled={busy}
+              onClick={() => setEditing('series')}>Alle Termine</button>
+          </div>
+          <div className="scope-row">
+            <span className="scope-label">Löschen</span>
+            <button className="btn btn-danger" disabled={busy}
+              onClick={() => onDelete('occurrence')}>Nur diesen Termin</button>
+            <button className="btn btn-danger" disabled={busy}
+              onClick={() => onDelete('series')}>Alle Termine</button>
+          </div>
         </div>
       )}
 

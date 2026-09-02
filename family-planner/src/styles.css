@@ -214,6 +214,7 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .chip-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
 .chip.manual { border-left-color: var(--accent); }
+.chip-repeat { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
 
 /* --- phone list layout ------------------------------------------------- */
 
@@ -296,6 +297,11 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .person-chip.selected { color: #fff; font-weight: 600; }
 
 .parsed-time { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 0; }
+.scope-actions { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.scope-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.scope-label { width: 92px; flex: none; font-size: .85rem; font-weight: 600; }
+.scope-row .btn { padding: 8px 12px; font-size: .85rem; font-weight: 400; }
+
 .alias-offer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
 
 .detail { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
