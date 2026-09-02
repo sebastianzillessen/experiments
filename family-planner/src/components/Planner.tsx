@@ -170,8 +170,10 @@ function EventChip({ event, tz, timeFormat, onClick }: {
 }) {
   const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
   return (
-    <button className={`chip ${event.source}`} onClick={onClick} title={event.title}>
-      <span className="dot" style={{ background: event.color }} aria-hidden="true" />
+    // Die Farbe sitzt im linken Rand statt in einem eigenen Punkt — dieselbe
+    // Information, aber ohne die Breite, die in einer Tabellenzelle knapp ist.
+    <button className={`chip ${event.source}`} onClick={onClick} title={event.title}
+      style={{ borderLeftColor: event.color }}>
       {time && <span className="chip-time">{time}</span>}
       <span className="chip-title">{event.displayTitle || event.title}</span>
       {event.repeat && <span className="chip-repeat" aria-label="wiederholt sich">↻</span>}
