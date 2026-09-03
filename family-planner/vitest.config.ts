@@ -7,12 +7,4 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
   },
-  resolve: {
-    alias: {
-      // Die Edge Function importiert `jose` als URL (so lädt Deno sie beim
-      // Deploy); unter vitest zeigt derselbe Import auf das npm-Paket, damit
-      // die Tests exakt den ausgelieferten Code prüfen.
-      'https://esm.sh/jose@6.2.10': 'jose',
-    },
-  },
 });

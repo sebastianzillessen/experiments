@@ -2,3 +2,7 @@ config.js
 dist/
 dev-dist/
 node_modules/
+
+# Von einem lokalen `deno check` erzeugt; der Deploy löst die Versionen aus
+# deno.json auf, ein Lockfile aus einer Teilprüfung würde ihn nur stören.
+deno.lock

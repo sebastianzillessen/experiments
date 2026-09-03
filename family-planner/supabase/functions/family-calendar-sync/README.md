@@ -65,8 +65,10 @@ supabase secrets set CALENDAR_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
 ```
 
 Damit werden Kalender-Adresse und Zugangsdaten verschlüsselt abgelegt (JWE,
-`dir` + `A256GCM`, über `jose`). Der Schlüssel liegt bewusst hier und nicht in
-der Datenbank — das ist der ganze Punkt: ein Datenbank-Dump enthält dann nur
+`dir` + `A256GCM`, über `jose` — Version festgelegt im Import-Map
+`deno.json` neben dieser Datei, damit `crypto.ts` unter Deno und unter vitest
+denselben schlichten Import `from 'jose'` benutzt). Der Schlüssel liegt
+bewusst hier und nicht in der Datenbank — das ist der ganze Punkt: ein Datenbank-Dump enthält dann nur
 Container ohne Schlüssel.
 
 **Ohne den Schlüssel**: Bestehende Kalender werden weiter abgerufen (Klartext

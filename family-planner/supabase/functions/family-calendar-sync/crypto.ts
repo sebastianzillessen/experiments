@@ -11,9 +11,10 @@
 // mitbringt. Wir schreiben hier weder Primitiven noch ein eigenes Format.
 //
 // Frei von Deno-spezifischen APIs, damit die vitest-Suite exakt denselben Code
-// prüft (vitest löst den Import über einen Alias auf das npm-Paket auf).
+// prüft. Der Import ist ein blosser Paketname: Node nimmt ihn aus
+// node_modules (package.json), Deno aus dem Import-Map in deno.json daneben.
 
-import { CompactEncrypt, compactDecrypt, decodeProtectedHeader } from 'https://esm.sh/jose@6.2.10';
+import { CompactEncrypt, compactDecrypt, decodeProtectedHeader } from 'jose';
 
 /** dir = der Schlüssel verschlüsselt direkt, ohne zweite Schlüsselschicht. */
 const ALG = 'dir';

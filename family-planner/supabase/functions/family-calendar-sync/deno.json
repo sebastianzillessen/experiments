@@ -1,0 +1,6 @@
+{
+  "//": "Import map der Edge Function. Deno hat kein node_modules; damit derselbe Import in crypto.ts unter Deno (Deploy) und unter Node (vitest, tsc) funktioniert, steht die Version hier statt als URL im Code. Der Supabase-CLI liest diese Datei beim Deploy.",
+  "imports": {
+    "jose": "npm:jose@6.2.10"
+  }
+}
