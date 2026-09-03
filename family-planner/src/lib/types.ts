@@ -92,9 +92,9 @@ export type PlannerEvent = {
   /** True when personIds came from name matching rather than a person's choice. */
   autoAssigned: boolean;
   /**
-   * The series rule when this is one occurrence of a recurring entry, so the
-   * detail sheet can name it and offer "nur diesen Termin" vs "alle Termine".
-   * Imported calendar events arrive already expanded and carry null.
+   * The series rule when this is one date of a recurring entry, so the detail
+   * sheet can offer "this date" against "all dates". Imported events arrive
+   * already expanded and carry null.
    */
   repeat: import('./recurrence.ts').RepeatRule | null;
 };

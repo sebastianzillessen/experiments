@@ -35,13 +35,12 @@ export type NewEventInput = {
   startTime?: string;
   endTime?: string;
   personIds: string[];
-  /** null = einmalig. */
+  /** null = one-off. */
   repeat?: RepeatRule | null;
 };
 
 /**
- * Reicht eine Änderung an einer Serie nur bis zu diesem einen Termin, oder
- * gilt sie für alle?
+ * Does a change to a series touch only this one date, or all of them?
  */
 export type EditScope = 'occurrence' | 'series';
 
@@ -54,10 +53,9 @@ type AppContextValue = {
   isOwner: boolean;
   people: Person[];
   calendars: Calendar[];
-  /** Selbst erfasste Einträge, noch als Serie — der Planer löst sie für den
-   *  sichtbaren Zeitraum auf. */
+  /** Own entries, still as a series. The planner expands them per view. */
   manualSeries: ManualSeries[];
-  /** Termine aus den verbundenen Kalendern, bereits aufgelöst. */
+  /** Events from the connected calendars, already expanded. */
   calendarEvents: PlannerEvent[];
   members: Member[];
   openInvites: OpenInvite[];
@@ -453,9 +451,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const payload = eventPayload(input);
 
-      // Nur dieser Termin: den einen aus der Serie nehmen und daneben einen
-      // eigenständigen Eintrag anlegen. Die Serie selbst bleibt unangetastet,
-      // und die Auflösung braucht keinen Sonderfall für geänderte Termine.
+      // This date only: drop it from the series and add a standalone entry
+      // next to it. The series stays as it is, so expanding it needs no
+      // special case for changed dates.
       if (scope === 'occurrence' && occurrence) {
         const { error: skipErr } = await supabase.from('fp_event_exceptions')
           .upsert({ event_id: id, occurrence, created_by: userRef.current?.id },
@@ -585,8 +583,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const upsertCalendar = useCallback(async (input: { id?: string; label: string; url: string; username: string; password: string; color: string; enabled: boolean }) => {
     try {
       const fam = familyRef.current!;
-      // Adresse und Zugangsdaten gehen an die Edge Function, nicht an Postgres:
-      // nur sie hat den Schlüssel, mit dem sie verschlüsselt abgelegt werden.
       const { data, error } = await supabase.functions.invoke('family-calendar-sync', {
         body: {
           action: 'save',

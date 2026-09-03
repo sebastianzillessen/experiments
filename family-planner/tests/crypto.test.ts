@@ -3,7 +3,7 @@ import {
   decryptSecret, encryptSecret, isEncrypted,
 } from '../supabase/functions/family-calendar-sync/crypto.ts';
 
-/** 32 zufällige Bytes, wie `openssl rand -base64 32` sie liefert. */
+/** 32 random bytes, the way `openssl rand -base64 32` gives them. */
 function makeKey(): string {
   const raw = crypto.getRandomValues(new Uint8Array(32));
   return btoa(String.fromCharCode(...raw));

@@ -1,29 +1,21 @@
-// Verschlüsselung der Kalender-Zugangsdaten (Adresse, Benutzer, Passwort).
+// Encrypts the calendar address and login (user, password).
 //
-// Warum überhaupt: RLS hält Clients von fp_calendar_secrets fern, aber gegen
-// einen Datenbank-Dump oder einen abhandengekommenen Service-Role-Key hilft
-// sie nicht — dort stünden die Werte im Klartext. Der Schlüssel liegt deshalb
-// NICHT in der Datenbank, sondern als Secret der Edge Function
-// (CALENDAR_ENCRYPTION_KEY). Ein Dump allein nützt damit niemandem.
+// RLS keeps clients out of fp_calendar_secrets, but it does not help against
+// a database dump or a leaked service-role key. So the key lives in the Edge
+// Function secret CALENDAR_ENCRYPTION_KEY, not in the database. A dump alone
+// is then worth nothing.
 //
-// Gemacht wird das von `jose`: JWE compact (dir + A256GCM) — ein
-// standardisiertes Containerformat, das Algorithmus, IV und Auth-Tag selbst
-// mitbringt. Wir schreiben hier weder Primitiven noch ein eigenes Format.
+// Format is JWE compact (dir + A256GCM) from `jose`. It carries algorithm,
+// IV and auth tag itself, so we write no crypto and no format of our own.
 //
-// Frei von Deno-spezifischen APIs, damit die vitest-Suite exakt denselben Code
-// prüft. Der Import ist ein blosser Paketname: Node nimmt ihn aus
-// node_modules (package.json), Deno aus dem Import-Map in deno.json daneben.
+// No Deno-only APIs, so the vitest suite checks the very same code.
 
 import { CompactEncrypt, compactDecrypt, decodeProtectedHeader } from 'jose';
 
-/** dir = der Schlüssel verschlüsselt direkt, ohne zweite Schlüsselschicht. */
 const ALG = 'dir';
 const ENC = 'A256GCM';
 
-/**
- * Ist der Wert ein JWE — oder Klartext aus der Zeit vor der Verschlüsselung?
- * Ein JWE compact hat fünf Punkt-getrennte Teile und einen lesbaren Header.
- */
+/** True for a value we wrote, false for plaintext from before encryption. */
 export function isEncrypted(value: string | null | undefined): boolean {
   if (typeof value !== 'string' || value.split('.').length !== 5) return false;
   try {
@@ -49,7 +41,6 @@ function importKey(keyB64: string): Uint8Array {
   return raw;
 }
 
-/** Klartext → JWE. Der IV kommt pro Aufruf frisch aus der Bibliothek. */
 export async function encryptSecret(plain: string, keyB64: string): Promise<string> {
   const key = importKey(keyB64);
   return new CompactEncrypt(new TextEncoder().encode(plain))
@@ -58,10 +49,9 @@ export async function encryptSecret(plain: string, keyB64: string): Promise<stri
 }
 
 /**
- * Umkehrung — mit zwei bewussten Zugeständnissen an die Migration:
- * `null` bleibt `null`, und ein Wert, der kein JWE ist, wird unverändert
- * zurückgegeben (Bestand aus der Zeit vor der Verschlüsselung, den der Sync
- * beim nächsten Lauf verschlüsselt zurückschreibt).
+ * Two concessions to migration: `null` stays `null`, and anything that is not
+ * a JWE is handed back as is. Those are rows from before encryption, which the
+ * sync writes back encrypted on its next run.
  */
 export async function decryptSecret(
   value: string | null | undefined, keyB64: string | null | undefined
@@ -77,9 +67,6 @@ export async function decryptSecret(
     const { plaintext } = await compactDecrypt(value, importKey(keyB64));
     return new TextDecoder().decode(plaintext);
   } catch (e) {
-    // Ein defekter Schlüssel soll als solcher gemeldet werden; alles andere
-    // scheitert an der Authentifizierung von GCM — falscher Schlüssel und
-    // manipulierter Ciphertext sind beide nicht zu entschlüsseln.
     if (e instanceof Error && /base64|32 Bytes/.test(e.message)) throw e;
     throw new Error('Zugangsdaten konnten nicht entschlüsselt werden');
   }

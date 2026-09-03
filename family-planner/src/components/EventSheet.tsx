@@ -88,7 +88,6 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
       )}
 
       {canEdit && event.source === 'manual' && event.repeat && (
-        // Ein Termin aus einer Serie: die Frage ist nicht ob, sondern wie weit.
         <div className="scope-actions">
           <p className="hint">Dieser Eintrag gehört zu einer Serie.</p>
           <div className="scope-row">

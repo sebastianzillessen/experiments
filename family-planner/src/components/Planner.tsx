@@ -47,8 +47,6 @@ export function Planner() {
     () => (view === 'week' ? weekDays(startOfWeek(anchor, weekStart)) : monthDays(anchor)),
     [view, anchor, weekStart]
   );
-  // Serien werden genau für die sichtbaren Tage aufgelöst — höchstens 31 Tage,
-  // also kostet eine offene Wiederholung nichts.
   const events = useMemo(
     () => [
       ...expandManualSeries(manualSeries, days[0], days[days.length - 1], tz),
@@ -170,10 +168,12 @@ function EventChip({ event, tz, timeFormat, onClick }: {
 }) {
   const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
   return (
-    // Der linke Rand sagt, woher der Eintrag kommt: grün = selbst erfasst,
-    // sandfarben = aus dem Kalender. Die Personenfarbe steht im Spaltenkopf,
-    // also braucht der Chip dafür keinen eigenen Punkt.
-    <button className={`chip ${event.source}`} onClick={onClick} title={event.title}>
+    <button
+      className={`chip ${event.source}`}
+      style={event.source === 'calendar' ? { borderLeftColor: event.color } : undefined}
+      onClick={onClick}
+      title={event.title}
+    >
       {time && <span className="chip-time">{time}</span>}
       <span className="chip-title">{event.displayTitle || event.title}</span>
       {event.repeat && <span className="chip-repeat" aria-label="wiederholt sich">↻</span>}

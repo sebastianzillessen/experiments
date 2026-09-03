@@ -1,235 +1,230 @@
 # Familienplaner
 
-Der Wochenplan der Familie als Tabelle: **Zeilen = Tage, Spalten = Personen** —
-genau wie auf dem Papierblatt, das sonst am Kühlschrank hängt. Termine aus dem
-gemeinsamen Kalender landen automatisch in der richtigen Spalte, neue Einträge
-sind in wenigen Sekunden erfasst.
+The family's week as a table: **rows = days, columns = people** — the same
+shape as the paper sheet on the fridge. Events from the shared calendar land in
+the right column on their own, and a new entry takes a few seconds.
 
-React + Vite + TypeScript, PWA (installierbar auf dem Homescreen), Supabase als
-Backend. Läuft auf **https://planer.zillessen.dev**.
+React + Vite + TypeScript, PWA (installable on the home screen), Supabase as
+the backend. Runs on **https://planer.zillessen.dev**.
 
-## Funktionen
+The user interface is German; the code and its comments are English.
 
-- **Wochen- und Monatsansicht.** Die Woche ist die Standardansicht (KW, Mo–So),
-  der Monat zeigt dieselbe Tabelle mit allen Tagen des Monats. Heute ist
-  hervorgehoben, Wochenenden sind abgesetzt. Auf dem Handy wird aus der Tabelle
-  eine Liste pro Tag; gedruckt passt die Woche auf ein Blatt.
-- **Kalender-Anbindung (ICS).** Der Owner hinterlegt die geheime iCal-Adresse
-  des gemeinsamen Kalenders — `https://…` oder ein `webcal://`-Link, wie ihn
-  iCloud und Apple Kalender ausgeben (wird serverseitig auf https umgestellt). Eine Supabase Edge Function ruft ihn serverseitig
-  ab (kein CORS-Problem, keine Adresse im Browser), löst Serientermine auf und
-  legt das Ergebnis zwischengespeichert ab — mehrere Betrachter kosten einen
-  Abruf, nicht einen pro Person.
-- **Automatische Zuordnung.** Termine wandern anhand der Namen im Text in die
-  Spalten: „Kita Miri/Lars“ erscheint bei Miri **und** bei Lars. In der Spalte
-  fällt der Name dann weg — „Caro LQ“ steht bei Caro als *LQ*, „[Caro]
-  Reitstunde“ als *Reitstunde*, „Zusätzliche Betreuung Lars und Miriam KiTa“ bei
-  beiden als *Zusätzliche Betreuung KiTa*. Die Spalte beantwortet das Wer, der
-  Chip nur noch das Was; im Detail steht weiterhin der volle Text. Erkannt wird
-  auf Wortgrenzen und ohne Rücksicht auf Gross-/Kleinschreibung oder Umlaute,
-  also trifft „Lars“ nicht „Larsson“. Pro Person lassen sich weitere
-  Schreibweisen hinterlegen („Lasse“, „L.“, „Lillian“) — beim Umhängen eines
-  Termins bietet die Detailansicht die Wörter des Termins direkt als
-  Aliasnamen an, sodass „Lillian Mittagessen Hort“ nur einmal korrigiert
-  werden muss. Passt etwas nicht, wird die
-  Zuordnung für diesen Termin überschrieben oder er wird ausgeblendet — der
-  Kalender selbst bleibt unverändert.
-- **Schnelles Erfassen.** Titel, Personen (Mehrfachauswahl), Datum — fertig.
-  Ganztägig ist die Voreinstellung, „von–bis“ blendet die Zeitfelder ein.
-  Mehrtägige Einträge (Ferien) laufen über alle betroffenen Tage. Ein Tipp auf
-  eine leere Zelle legt Tag *und* Person schon fest.
-- **Zeit direkt im Titel.** „Zahnarzt 14-15“ wird zu einem Eintrag *Zahnarzt*
-  von 14:00 bis 15:00. Erkannt werden `14-15`, `16:10-16:55`, `16.10-16.55`,
-  `14 bis 15:15`, `9-10 Uhr`, `14 Uhr 30`, `2-3pm`, `ab 15`, `um 18` — und
-  bewusst **nicht** „Zimmer 12“, „KW 37“, „Zimmer 3-5“, „Lilly bis 16:00 Hort“
-  oder ein Datum wie „1.10.“. Was erkannt wurde, steht unter dem Feld und lässt
-  sich mit einem Tipp verwerfen.
-- **Wiederkehrende Einträge.** „Kita jeden Freitag für Lars und Miriam“ wird
-  einmal erfasst: wöchentlich, mit Wochentagen (auch mehrere: Mo + Do), einem
-  Intervall (jede / alle 2, 3, 4 Wochen) und optionalem Enddatum. Ohne Enddatum
-  läuft die Serie weiter. Beim Bearbeiten und Löschen fragt die App „Nur diesen
-  Termin“ oder „Alle Termine“ — ein einzelner Feiertag fällt so aus der Serie,
-  ohne sie zu zerstören. Erkannt wird die Wiederholung auch direkt im Titel:
-  „Kita jeden Freitag 8-16“, „Hort freitags“, „Putzen jeden 2. Freitag“,
-  „montags und donnerstags“ (aber nicht „Montagsmarkt“ und nicht „Freitag
-  Zahnarzt“ — das ist ein Datum, keine Serie).
-- **Mehrere Betrachter.** Eine Familie hat beliebig viele Zugänge mit
-  unterschiedlichen Rechten; eingeladen wird per Link.
-- **Zeitformat pro Familie.** Einstellungen → Anzeige schaltet zwischen
-  24 Stunden (`14:00–15:15`) und AM/PM (`2:00–3:15 PM`). Das gilt für alles,
-  was der Planer selbst schreibt. Die Uhrzeit-Auswahl beim Erfassen ist ein
-  natives Bedienelement des Browsers — welches Format sie zeigt, entscheidet
-  das Betriebssystem (unter iOS: Einstellungen → Allgemein → Datum & Uhrzeit →
-  24-Stunden-Zeit); der gespeicherte Wert ist ohnehin immer derselbe.
+## Features
 
-## Rollen
+- **Week and month view.** The week is the default (calendar week, Mon–Sun);
+  the month shows the same table with every day of the month. Today is
+  highlighted, weekends are set apart. On a phone the table becomes one list
+  per day, and printed the week fits on one sheet.
+- **Calendar connection (ICS).** The owner enters the secret iCal address of
+  the shared calendar — `https://…` or a `webcal://` link as iCloud and Apple
+  Calendar hand it out (turned into https on the server). A Supabase Edge
+  Function fetches it server side (no CORS problem, no address in the
+  browser), expands recurring events and caches the result. Several viewers
+  cost one fetch, not one each.
+- **Automatic assignment.** Events move into the columns by the names in their
+  text: "Kita Miri/Lars" shows up for Miri **and** for Lars. In the column the
+  name then drops out — "Caro LQ" reads as *LQ* for Caro, "[Caro] Reitstunde"
+  as *Reitstunde*, "Zusätzliche Betreuung Lars und Miriam KiTa" as
+  *Zusätzliche Betreuung KiTa* for both. The column answers who, the chip only
+  what; the detail view still holds the full text. Matching is on word
+  boundaries and ignores case and umlauts, so "Lars" does not hit "Larsson".
+  Each person can carry further spellings ("Lasse", "L.", "Lillian"), and when
+  you move an event the detail view offers its words as aliases right away, so
+  "Lillian Mittagessen Hort" has to be corrected only once. If something is
+  still wrong, the assignment for that event is overridden or the event is
+  hidden. The calendar itself stays as it is.
+- **Quick entry.** Title, people (pick several), date — done. All-day is the
+  default, "von–bis" reveals the time fields. Entries over several days
+  (holidays) run across all days they touch. A tap on an empty cell already
+  fixes the day *and* the person.
+- **A time inside the title.** "Zahnarzt 14-15" becomes an entry *Zahnarzt*
+  from 14:00 to 15:00. Read are `14-15`, `16:10-16:55`, `16.10-16.55`,
+  `14 bis 15:15`, `9-10 Uhr`, `14 Uhr 30`, `2-3pm`, `ab 15`, `um 18` — and
+  deliberately **not** "Zimmer 12", "KW 37", "Zimmer 3-5", "Lilly bis 16:00
+  Hort" or a date like "1.10.". What was read stands under the field and one
+  tap throws it away.
+- **Recurring entries.** "Kita jeden Freitag für Lars und Miriam" is typed in
+  once: weekly, with weekdays (several too: Mon + Thu), an interval (every /
+  every 2nd, 3rd, 4th week) and an end date if you want one. Without an end
+  date the series runs on. When editing and deleting, the app asks "this date"
+  or "all dates", so a single holiday drops out without breaking the series.
+  The repetition is read from the title as well: "Kita jeden Freitag 8-16",
+  "Hort freitags", "Putzen jeden 2. Freitag", "montags und donnerstags" (but
+  not "Montagsmarkt" and not "Freitag Zahnarzt", which is a date, not a
+  series).
+- **Several viewers.** A family has any number of logins with different
+  rights; you invite by link.
+- **Time format per family.** Settings → Anzeige switches between 24 hours
+  (`14:00–15:15`) and AM/PM (`2:00–3:15 PM`). It applies to everything the
+  planner writes itself. The time picker for a new entry is a native browser
+  control, so the operating system decides what format it shows (on iOS:
+  Settings → General → Date & Time → 24-Hour Time). The stored value is the
+  same either way.
 
-Bewusst anders als bei Salärli (owner/admin/employee):
+## Roles
 
-| | Owner | Bearbeiter | Betrachter |
+Deliberately different from Salärli's owner/admin/employee:
+
+| | Owner | Editor | Viewer |
 |---|---|---|---|
-| Plan, Personen, Kalenderfarben sehen | ✓ | ✓ | ✓ |
-| Einträge anlegen/ändern/löschen, Zuordnung ändern | ✓ | ✓ | — |
-| Personen (Spalten) und Schreibweisen pflegen | ✓ | ✓ | — |
-| Kalender verbinden, Adresse/Zugangsdaten eingeben | ✓ | — | — |
-| Einladen, Rollen ändern, Familie umbenennen | ✓ | — | — |
-| Kalenderadresse oder Zugangsdaten **lesen** | — | — | — |
+| See the plan, people and calendar colours | ✓ | ✓ | ✓ |
+| Add, change, delete entries; change an assignment | ✓ | ✓ | — |
+| Keep people (columns) and their spellings | ✓ | ✓ | — |
+| Connect a calendar, enter address and login | ✓ | — | — |
+| Invite, change roles, rename the family | ✓ | — | — |
+| **Read** a calendar address or login | — | — | — |
 
-Betrachter sind für Grosseltern, Betreuung oder die grossen Kinder gedacht:
-Plan sehen, nichts verändern.
+Viewers are meant for grandparents, childcare or the older children: see the
+plan, change nothing.
 
 ## Login
 
-Gleiche Infrastruktur wie Salärli: **dasselbe Supabase-Projekt**, damit ein
-bestehender Login sofort funktioniert — Anmelde-Link (Magic Link), Passwort
-oder neues Konto. Getrennt sind nur die Daten: alle Tabellen dieser App heissen
-`fp_*` und haben mit den Haushalts-Tabellen von Salärli nichts zu tun.
+Same infrastructure as Salärli: **the same Supabase project**, so an existing
+login works right away — sign-in link (magic link), password or a new account.
+Only the data is apart: every table of this app is named `fp_*` and has
+nothing to do with Salärli's household tables.
 
-Es gibt **keinen** `auth.users`-Trigger: wer sich für Salärli registriert,
-bekommt keine leere Familie, und umgekehrt. Ein angemeldeter Nutzer ohne
-Familie sieht den Bildschirm „Familie anlegen“ (RPC `fp_create_family`), ein
-Eingeladener öffnet einfach seinen Link (`…?invite=<token>`).
+There is **no** `auth.users` trigger: signing up for Salärli does not create an
+empty family, and the other way round. A signed-in user without a family gets
+the "Familie anlegen" screen (RPC `fp_create_family`); an invited one simply
+opens their link (`…?invite=<token>`).
 
-## Sicherheit: wo die Kalender-Zugangsdaten liegen
+## Security: where the calendar credentials live
 
-Die geheime ICS-Adresse ist ein Passwort — wer sie hat, liest den ganzen
-Familienkalender, ohne Login. Deshalb verlässt sie den Server nie wieder:
+The secret ICS address is a password. Whoever holds it reads the whole family
+calendar without logging in. So it never leaves the server again:
 
-1. **`fp_calendar_secrets`** (URL, Benutzer, Passwort) steht dort
-   **verschlüsselt**: JWE mit `dir` + `A256GCM`, erzeugt von `jose`. Der
-   Schlüssel (`CALENDAR_ENCRYPTION_KEY`) liegt als Secret der Edge Function und
-   **nicht in der Datenbank** — ein Datenbank-Dump oder ein abhandengekommener
-   Service-Role-Key liefert damit nur Container ohne Schlüssel. Zusätzlich hat
-   die Tabelle RLS aktiviert und **bewusst keine einzige Policy**: `anon` und
-   `authenticated` sehen dort null Zeilen.
-2. **Schreiben** geht ausschliesslich über die Edge Function
-   (`{ action: 'save', … }`), die `owner` in dieser Familie verlangt,
-   verschlüsselt und dann mit dem Service-Role-Key schreibt. Die frühere RPC
-   `fp_upsert_calendar` ist entfernt — sie wäre ein Weg gewesen, Klartext in
-   die Tabelle zu bekommen. Bestand aus der Zeit davor bleibt lesbar und wird
-   beim nächsten Abruf verschlüsselt zurückgeschrieben.
-3. **Zurücklesen** gibt es nicht. Die Oberfläche zeigt nur
-   `fp_calendars.url_preview` — Host plus letzte Zeichen, z. B.
-   `calendar.google.com/…/basic.ics`. Beim Bearbeiten bedeutet ein leeres
-   URL-Feld „gespeicherte Adresse behalten“.
-4. **Abrufen** darf nur `family-calendar-sync`: JWT prüfen → Mitgliedschaft
-   prüfen → Secret mit Service-Role lesen → abrufen. Die URL taucht weder in
-   der Antwort noch im Log noch in `last_error` auf; Fehlermeldungen werden
-   vorher von URLs und Hostnamen bereinigt.
-5. **SSRF-Schutz.** Nur `https://` (und `webcal://`/`webcals://` → https,
-   als Textersetzung *vor* dem Parsen: der `protocol`-Setter der URL-API
-   weigert sich, ein Nicht-Spezial-Schema wie `webcal` auf `https` zu
-   ändern, und tut es stillschweigend nicht). Localhost,
-   `*.local`, private IPv4-Bereiche und IPv6-Loopback werden abgelehnt,
-   dazu Timeout (15 s) und Grössenlimit (5 MB).
-6. **Zugangsdaten** werden nur als HTTP-Basic-Auth über TLS gesendet und sind
-   in der Oberfläche schreibgeschützt (leer lassen = unverändert).
-7. **Einladungslinks** sind 64 zufällige Hex-Zeichen (zwei v4-UUIDs, ~244 Bit),
-   einmal verwendbar.
-   `fp_invite_info(token)` ist zwar ohne Login aufrufbar, verrät aber nur den
-   Familiennamen zu einem Token, das der Aufrufer ohnehin schon hat.
+1. **`fp_calendar_secrets`** (URL, user, password) holds those values
+   **encrypted**: JWE with `dir` + `A256GCM`, written by `jose`. The key
+   (`CALENDAR_ENCRYPTION_KEY`) is an Edge Function secret and **not in the
+   database**, so a database dump or a leaked service-role key yields
+   containers without a key. On top of that the table has RLS on and
+   **deliberately not a single policy**: `anon` and `authenticated` see zero
+   rows there.
+2. **Writing** goes only through the Edge Function (`{ action: 'save', … }`),
+   which requires `owner` in this family, encrypts, and then writes with the
+   service-role key. The earlier RPC `fp_upsert_calendar` is gone; it would
+   have been a way to get plaintext into the table. Rows from before stay
+   readable and are written back encrypted on the next fetch.
+3. **Reading back** does not exist. The interface shows only
+   `fp_calendars.url_preview` — host plus the last characters, e.g.
+   `calendar.google.com/…/basic.ics`. While editing, an empty URL field means
+   "keep the stored address".
+4. **Fetching** is for `family-calendar-sync` alone: check the JWT → check
+   membership → read the secret with the service role → fetch. The URL shows
+   up neither in the response nor in a log nor in `last_error`; error messages
+   are stripped of URLs and host names first.
+5. **SSRF guard.** Only `https://` (and `webcal://` / `webcals://` → https, as
+   a text replacement *before* parsing: the `protocol` setter of the URL API
+   refuses to turn a non-special scheme like `webcal` into `https`, and does
+   so silently). Localhost, `*.local`, private IPv4 ranges and IPv6 loopback
+   are rejected, plus a timeout (15 s) and a size cap (5 MB).
+6. **Credentials** are sent only as HTTP basic auth over TLS and are
+   write-only in the interface (leave empty = unchanged).
+7. **Invite links** are 64 random hex characters (two v4 UUIDs, ~244 bits),
+   usable once. `fp_invite_info(token)` can be called without a login but
+   tells only the family name for a token the caller already has.
 
-Ein Betrachter kann `fp_calendar_cache.events` seiner eigenen Familie lesen —
-genau dafür ist er da — aber nirgends schreiben und keine fremde Familie sehen:
-jede Policy ist über `fp_role_in(family_id)` gebunden.
+A viewer can read `fp_calendar_cache.events` of their own family — that is the
+point of them — but write nowhere and see no other family: every policy is
+bound through `fp_role_in(family_id)`.
 
-## Datenmodell
+## Data model
 
 ```
-fp_families ─┬─ fp_memberships (user_id, role)        ← Zugänge
-             ├─ fp_people                              ← Spalten des Planers
-             ├─ fp_events ─┬─ fp_event_people           ← selbst erfasst
-             │              └─ fp_event_exceptions      ← einzeln entfernte Termine
-             ├─ fp_calendars ─┬─ fp_calendar_secrets   ← keine Policy!
-             │                └─ fp_calendar_cache     ← abgerufene Termine
-             ├─ fp_calendar_assignments                ← manuelle Korrekturen
+fp_families ─┬─ fp_memberships (user_id, role)        ← logins
+             ├─ fp_people                              ← columns of the planner
+             ├─ fp_events ─┬─ fp_event_people          ← typed in
+             │             └─ fp_event_exceptions      ← single dates dropped
+             ├─ fp_calendars ─┬─ fp_calendar_secrets   ← no policy!
+             │                └─ fp_calendar_cache     ← fetched events
+             ├─ fp_calendar_assignments                ← manual corrections
              └─ fp_invites
 ```
 
-Ganztägige Einträge nutzen `start_date`/`end_date` (Ende **inklusive**, wie ein
-Mensch einen Planer liest), Termine mit Uhrzeit zusätzlich
-`starts_at`/`ends_at`. Eine Serie ist **eine** Zeile: `repeat_freq`,
-`repeat_interval`, `repeat_weekdays`, `repeat_until` beschreiben die Regel,
-`starts_at`/`ends_at` den ersten Termin. Aufgelöst wird sie im Client, nur für
-den sichtbaren Zeitraum — und zwar mit `expandRule()` aus dem ICS-Parser, damit
-es nur eine Wiederholungslogik im Projekt gibt. Die Uhrzeit jedes Termins wird
-aus der Wandzeit neu gerechnet, damit 14:00 auch nach der Zeitumstellung 14:00
-bleibt. Ein einzeln geänderter Termin ist eine Ausnahme plus ein eigenständiger
-Eintrag; so bleibt die Auflösung frei von Sonderfällen. Der Cache hält pro Kalender **eine** JSONB-Zeile mit dem
-aufgelösten Zeitfenster (−92 bis +400 Tage) — der Planer liest immer ein ganzes
-Fenster, der Sync schreibt es in einem Rutsch, Betrachter brauchen kein
-Schreibrecht.
+All-day entries use `start_date`/`end_date` (end **inclusive**, the way a
+person reads a planner); entries with a time add `starts_at`/`ends_at`. A
+series is **one** row: `repeat_freq`, `repeat_interval`, `repeat_weekdays` and
+`repeat_until` hold the rule, `starts_at`/`ends_at` the first date. It is
+expanded in the client for the days on screen only, and with `expandRule()`
+from the ICS parser, so the project has one repetition logic and not two. The
+time of each date is worked out again from the wall clock, so 14:00 stays
+14:00 after the clocks change. A single changed date is an exception plus a
+standalone entry, which keeps expanding free of special cases. The cache holds
+**one** JSONB row per calendar with the expanded window (−92 to +400 days):
+the planner always reads a whole window, the sync writes it in one go, and
+viewers need no write right.
 
 ## Setup
 
 ```bash
-npm install                        # im Repo-Root (npm workspaces)
-cp config.example.js config.js     # Supabase-URL + Publishable Key eintragen
+npm install                        # in the repo root (npm workspaces)
+cp config.example.js config.js     # enter the Supabase URL + publishable key
 npm run dev -w @experiments/family-planner
 ```
 
-Einmalig nötig:
+Needed once:
 
-- **Verschlüsselungsschlüssel setzen** — ohne ihn lässt sich kein Kalender
-  speichern:
+- **Set the encryption key.** Without it no calendar can be saved:
   ```bash
   supabase secrets set CALENDAR_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
     --project-ref tbknudbcgaarqixweizj
   ```
 - **Auth → URL Configuration → Redirect URLs**: `https://planer.zillessen.dev/**`
-- Cloudflare-Dashboard: Custom Domain `planer.zillessen.dev` auf den
-  `experiments`-Worker (der Worker leitet den Host auf `_site/family-planner/`).
+- Cloudflare dashboard: custom domain `planer.zillessen.dev` on the
+  `experiments` worker (the worker rewrites the host to `_site/family-planner/`).
 
-## Entwicklung
+## Development
 
 ```bash
-npm run dev        # Vite auf :8081
+npm run dev        # Vite on :8081
 npm run typecheck
-npm test           # vitest (reine Logik, kein Supabase nötig)
+npm test           # vitest (pure logic, no Supabase needed)
 npm run build      # tsc -b && vite build → dist/
 ```
 
-Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
-Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
-Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
-Kalender-URL inklusive `webcal://` und SSRF-Schutz, die Verschlüsselung der
-Zugangsdaten samt Migration von Klartext-Bestand, beide Zeitformate, das Lesen
-von Zeiten **und Wiederholungen** aus dem Titel, das Auflösen von Serien
-inklusive Zeitumstellung und das Entfernen der Namen aus der Anzeige
-(172 Tests).
+Tested is where the bugs sit: the ICS parser including time zones and
+recurrence rules, name matching, date arithmetic, merging both sources into
+the table cells, the calendar URL check including `webcal://` and the SSRF
+guard, the encryption of the credentials with its migration of old plaintext,
+both time formats, reading times **and repetitions** out of a title, expanding
+a series across a change of the clocks, and stripping names from the display
+(172 tests).
 
-Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
-erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.
+For production `build.sh` in the repo root builds it (`bash build.sh
+family-planner`) and writes `config.js` from `SUPABASE_URL` /
+`SUPABASE_PUBLISHABLE_KEY`.
 
-## Vorschau-Deployments
+## Preview deployments
 
-Cloudflare baut **jeden Branch**. Der Branch-Preview serviert die App unter dem
-Pfad `/family-planner/` (die Host-Umschreibung greift nur für
-`planer.zillessen.dev`). Zwei Dinge dabei beachten:
+Cloudflare builds **every branch**. The branch preview serves the app under the
+path `/family-planner/` (the host rewrite applies to `planer.zillessen.dev`
+only). Two things to keep in mind:
 
-- Die Datenbank wird **nicht** pro Branch deployt — Migrationen und Edge
-  Function laufen erst beim Push auf `main` (oder manuell über *Actions →
-  Family Planner — Supabase → Run workflow*). Fehlen sie, meldet die App beim
-  Anlegen der Familie, dass `fp_create_family` fehlt.
-- Anmelden per Link setzt voraus, dass die Preview-URL in Supabase unter
-  Auth → Redirect URLs steht. Die Anmeldung per Passwort funktioniert auf
-  jedem Host ohne zusätzliche Konfiguration.
+- The database is **not** deployed per branch. Migrations and the Edge
+  Function run on a push to `main` (or by hand under *Actions → Family Planner
+  — Supabase → Run workflow*). If they are missing, the app reports that
+  `fp_create_family` does not exist when you create the family.
+- Signing in by link needs the preview URL to be listed in Supabase under
+  Auth → Redirect URLs. Signing in with a password works on any host without
+  further configuration.
 
 ## Deployment
 
-- **Frontend**: Cloudflare Worker + Static Assets (siehe `wrangler.jsonc`).
-  `planer.zillessen.dev` wird intern auf `/family-planner` umgeschrieben.
-- **Datenbank & Edge Function**: `.github/workflows/family-planner-supabase.yml`
-  bei Push auf `main`. Weil `supabase db push` die vollständige
-  Migrationshistorie braucht, kopiert der Job die Migrationen beider
-  Experimente in ein temporäres Projektverzeichnis und pusht von dort.
+- **Frontend**: Cloudflare Worker + static assets (see `wrangler.jsonc`).
+  `planer.zillessen.dev` is rewritten internally to `/family-planner`.
+- **Database and Edge Function**:
+  `.github/workflows/family-planner-supabase.yml` on a push to `main`. Because
+  `supabase db push` needs the complete migration history, the job copies the
+  migrations of both experiments into a temporary project directory and pushes
+  from there.
 
-## Noch nicht umgesetzt
+## Not built yet
 
-Bewusst vorbereitet, aber nicht gebaut — in den Einstellungen als deaktivierte
-Einträge sichtbar:
+Prepared on purpose but not built — visible in the settings as disabled
+entries:
 
-- **Zurückschreiben** in den Kalender (aktuell ist die Anbindung nur lesend).
-- **Office-365-/Exchange-Kalender**. Das Feld `fp_calendars.kind` kennt den Typ
-  bereits; OAuth-Tokens kämen in dieselbe geschützte Secrets-Tabelle.
-- Serientermine bei selbst erfassten Einträgen, Benachrichtigungen.
+- **Writing back** into the calendar (the connection reads only today).
+- **Office 365 / Exchange calendars.** The field `fp_calendars.kind` already
+  knows the type; OAuth tokens would go into the same protected secrets table.
+- Notifications.

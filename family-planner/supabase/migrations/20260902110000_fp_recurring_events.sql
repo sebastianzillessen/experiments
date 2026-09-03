@@ -1,22 +1,20 @@
--- Wiederkehrende Einträge: eine Zeile beschreibt die ganze Serie.
+-- Recurring entries: one row describes the whole series.
 --
--- Der Wochenplan besteht zum grössten Teil aus Dingen, die jede Woche gleich
--- sind ("Kita jeden Freitag für Lars und Miriam"). Statt 40 Zeilen pro Schuljahr
--- trägt die Serie ihre Regel selbst; aufgelöst wird sie im Frontend, immer nur
--- für den sichtbaren Zeitraum.
+-- Most of a week plan is the same every week ("Kita every Friday for Lars and
+-- Miriam"). So the row carries its rule, and the frontend expands it for the
+-- days on screen.
 --
--- Nur 'weekly' — das deckt einen Familienplan ab. Die Spalte ist als Text
--- angelegt (nicht als Boolean), damit 'daily'/'monthly'/'yearly' später ohne
--- Formänderung dazukommen können.
+-- Only 'weekly' for now. The column is text, not a boolean, so 'daily',
+-- 'monthly' and 'yearly' can follow without a shape change.
 --
--- starts_at/ends_at beschreiben weiterhin den ERSTEN Termin der Serie; die
--- Uhrzeit jeder weiteren Wiederholung wird im Client aus der Wandzeit neu
--- berechnet, damit 14:00 auch über die Zeitumstellung hinweg 14:00 bleibt.
+-- starts_at/ends_at still describe the FIRST date of the series. The time of
+-- every later date is worked out in the client from the wall clock, so 14:00
+-- stays 14:00 across a change of the clocks.
 
 alter table public.fp_events
   add column if not exists repeat_freq text,
   add column if not exists repeat_interval int not null default 1,
-  -- 0 = Sonntag … 6 = Samstag, dieselbe Zählung wie Date#getUTCDay() und ics.ts.
+  -- 0 = Sunday … 6 = Saturday, the same count as Date#getUTCDay() and ics.ts.
   add column if not exists repeat_weekdays smallint[] not null default '{}',
   add column if not exists repeat_until date;
 
@@ -32,9 +30,9 @@ alter table public.fp_events add constraint fp_events_repeat_chk check (
   )
 );
 
--- Ein einzeln entfernter Termin einer Serie ("an dem Freitag ist Feiertag").
--- Ein einzeln *geänderter* Termin ist eine Ausnahme plus ein eigenständiger
--- Einzeleintrag — so bleibt die Auflösung frei von Sonderfällen.
+-- One date dropped from a series ("that Friday is a holiday"). A *changed*
+-- date is an exception plus a standalone entry, which keeps expanding free of
+-- special cases.
 create table if not exists public.fp_event_exceptions (
   event_id uuid not null references public.fp_events(id) on delete cascade,
   occurrence date not null,
@@ -45,7 +43,7 @@ create table if not exists public.fp_event_exceptions (
 
 alter table public.fp_event_exceptions enable row level security;
 
--- Rechte folgen dem Termin, exakt wie bei fp_event_people.
+-- Rights follow the entry, exactly as for fp_event_people.
 drop policy if exists "fp members read exceptions" on public.fp_event_exceptions;
 create policy "fp members read exceptions" on public.fp_event_exceptions for select
   using (public.fp_role_in(public.fp_event_family(event_id)) is not null);

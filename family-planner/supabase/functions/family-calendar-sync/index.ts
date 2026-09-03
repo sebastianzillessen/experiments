@@ -29,9 +29,6 @@ import { decryptSecret, encryptSecret, isEncrypted } from './crypto.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-// 32 Bytes base64 (openssl rand -base64 32), gesetzt via
-// `supabase secrets set CALENDAR_ENCRYPTION_KEY=…`. Bewusst NICHT in der
-// Datenbank: genau das trennt einen Datenbank-Dump von den Zugangsdaten.
 const ENCRYPTION_KEY = Deno.env.get('CALENDAR_ENCRYPTION_KEY') ?? null;
 
 // How far the cached window reaches. Wide enough to page back through the
@@ -66,10 +63,7 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-/**
- * Never let a URL (or anything that looks like one) escape through an error
- * message — last_error is readable by every family member.
- */
+/** last_error is readable by every member, so no URL may leak into it. */
 function sanitizeError(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e ?? 'Unbekannter Fehler');
   return raw
@@ -78,23 +72,14 @@ function sanitizeError(e: unknown): string {
     .slice(0, 200);
 }
 
-/**
- * Was die Oberfläche von einer Adresse zu sehen bekommt: Host und die letzten
- * Zeichen — genug, um den Kalender wiederzuerkennen, zu wenig, um ihn zu
- * abonnieren.
- */
-function urlPreview(url: string): string {
+function truncatedUrlPreview(url: string): string {
   const withoutScheme = url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
   const host = withoutScheme.split('/')[0];
   const path = withoutScheme.split('?')[0];
   return `${host}/…/${path.slice(-12)}`;
 }
 
-/**
- * Kalender anlegen oder ändern. Läuft hier und nicht mehr als SQL-RPC, damit
- * Adresse und Zugangsdaten verschlüsselt in die Datenbank gehen — im Klartext
- * sieht sie nur diese Funktion.
- */
+/** Runs here rather than as an SQL RPC so only this function sees plaintext. */
 async function saveCalendar(
   admin: ReturnType<typeof createClient>,
   familyId: string,
@@ -109,8 +94,6 @@ async function saveCalendar(
   const calendarId = body.calendar_id ?? null;
   const submittedUrl = (body.url ?? '').trim();
 
-  // Eine leere Adresse beim Bearbeiten heisst „gespeicherte behalten" — die
-  // Oberfläche bekommt sie nie zurück und kann sie darum nicht mitschicken.
   if (!calendarId && !submittedUrl) return jsonResponse({ error: 'Kalender-Adresse fehlt' }, 400);
 
   let normalizedUrl: string | null = null;
@@ -135,7 +118,7 @@ async function saveCalendar(
     color: body.color ?? '#8a7d64',
     enabled: body.enabled ?? true,
     last_error: null as string | null,
-    ...(normalizedUrl ? { url_preview: urlPreview(normalizedUrl) } : {}),
+    ...(normalizedUrl ? { url_preview: truncatedUrlPreview(normalizedUrl) } : {}),
   };
 
   if (id) {
@@ -293,8 +276,6 @@ Deno.serve(async (req) => {
       const password = await decryptSecret(secret.password, ENCRYPTION_KEY);
       if (!storedUrl) throw new Error('Keine Kalender-Adresse hinterlegt');
 
-      // Zeilen aus der Zeit vor der Verschlüsselung wandern beim ersten Abruf
-      // nach — ohne Migrationsskript, weil nur diese Funktion den Schlüssel hat.
       if (ENCRYPTION_KEY) {
         const stale: Record<string, string> = {};
         if (!isEncrypted(secret.url)) stale.url = await encryptSecret(storedUrl, ENCRYPTION_KEY);
