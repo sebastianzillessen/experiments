@@ -68,7 +68,7 @@ export function calendarEventsToPlanner(
         personIds,
         color: calendar.color,
         autoAssigned: !override,
-        // Serien aus dem Kalender werden serverseitig aufgelöst.
+        // Series from a calendar arrive already expanded.
         repeat: null,
       });
     }
@@ -111,10 +111,10 @@ export function buildCells(
     }
   }
 
-  // Sortiert wird nach der Uhrzeit, die auf dem Chip steht — nicht nach dem
-  // absoluten Zeitpunkt. Ein Eintrag über Mitternacht (18:00–6:00) beginnt
-  // absolut gesehen am Vortag und stünde sonst am Folgetag vor allem anderen,
-  // obwohl dort „18:00" angeschrieben ist.
+  // Sort by the time printed on the chip, not by the absolute instant. An
+  // entry across midnight (18:00-6:00) starts on the day before, so on the
+  // next day it would otherwise sort ahead of everything else even though it
+  // reads "18:00".
   const startMinutes = new Map<string, number>();
   for (const event of events) {
     if (event.allDay || !event.startsAt) continue;
@@ -131,10 +131,9 @@ export function buildCells(
 }
 
 /**
- * Ganztägige Einträge zuerst, danach nach angeschriebener Startzeit, zuletzt
- * alphabetisch. `startMinutes` hält die Minuten seit Mitternacht pro Eintrag;
- * ohne die Tabelle bleibt der absolute Zeitpunkt der Vergleichswert (nur für
- * Aufrufer, die keine Zeitzone kennen).
+ * All-day entries first, then by the start time on the chip, then by title.
+ * `startMinutes` holds minutes since midnight per entry. Without that map the
+ * absolute instant is compared instead, for callers that know no time zone.
  */
 export function compareEvents(
   a: PlannerEvent, b: PlannerEvent, startMinutes?: Map<string, number>

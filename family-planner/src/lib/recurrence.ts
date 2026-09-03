@@ -1,14 +1,12 @@
-// Wiederkehrende Einträge: eine Serie, aufgelöst für den sichtbaren Zeitraum.
+// Recurring entries: one series, expanded for the days on screen.
 //
-// Ein Familienplan besteht grösstenteils aus Wiederholungen ("Kita jeden
-// Freitag"), also trägt eine Zeile die Regel und der Planer rechnet daraus die
-// einzelnen Tage aus — nur für die höchstens 31 Tage, die gerade auf dem
-// Schirm sind. Eine offene Serie kostet damit nichts.
+// Most of a family plan repeats ("Kita every Friday"). So one row holds the
+// rule and the planner works out the single days from it, for the 31 days on
+// screen at most. An open-ended series therefore costs nothing.
 //
-// Die Regel selbst wird NICHT hier ausgerechnet: expandRule() aus dem
-// ICS-Parser kann das längst (WEEKLY mit BYDAY, INTERVAL, UNTIL, COUNT) und
-// ist dort ausführlich getestet. Hier wird nur die Regel in seine Form
-// gebracht und das Ergebnis in Planer-Einträge übersetzt.
+// The rule is not expanded here. expandRule() in the ICS parser already does
+// it (WEEKLY with BYDAY, INTERVAL, UNTIL, COUNT) and is well tested there.
+// This file only shapes the rule for it and turns the result into entries.
 
 import { expandRule } from '../../supabase/functions/family-calendar-sync/ics.ts';
 import { addDaysToKey, dateKeyToMs, localToIso, timeValue } from './dates.ts';
@@ -16,24 +14,24 @@ import type { PlannerEvent } from './types.ts';
 
 const DAY_MS = 86_400_000;
 
-/** Was wiederholt wird. Heute nur wöchentlich — siehe Migration. */
+/** How an entry repeats. Weekly only for now, as in the migration. */
 export type RepeatRule = {
   freq: 'weekly';
-  /** Jede n-te Woche. 1 = jede Woche. */
+  /** Every nth week. 1 = every week. */
   interval: number;
-  /** 0 = Sonntag … 6 = Samstag, wie Date#getUTCDay(). */
+  /** 0 = Sunday … 6 = Saturday, like Date#getUTCDay(). */
   weekdays: number[];
-  /** Letzter Tag, an dem die Serie noch stattfindet. null = offen. */
+  /** Last day the series still runs. null = open ended. */
   until: string | null;
 };
 
-/** Ein selbst erfasster Eintrag, so wie er in der Datenbank steht. */
+/** An entry someone typed in, in the shape the database holds it. */
 export type ManualSeries = {
   id: string;
   title: string;
   notes: string;
   allDay: boolean;
-  /** Erster Termin der Serie. */
+  /** First date of the series. */
   startDate: string;
   endDate: string;
   startsAt: string | null;
@@ -41,11 +39,11 @@ export type ManualSeries = {
   personIds: string[];
   color: string;
   repeat: RepeatRule | null;
-  /** Einzeln entfernte Termine (Datum des jeweiligen Vorkommens). */
+  /** Dates dropped one by one from the series. */
   exceptions: string[];
 };
 
-/** Sicherung gegen eine Regel, die zu viele Termine erzeugen würde. */
+/** Guard against a rule that would produce far too many dates. */
 const MAX_OCCURRENCES = 400;
 
 const WEEKDAY_LABELS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
@@ -59,7 +57,7 @@ export function describeRepeat(rule: RepeatRule): string {
   return `${every} ${days}${until}`;
 }
 
-/** Montag zuerst — der Planer beginnt die Woche am Montag. */
+/** Monday first: the planner starts its week there. */
 function weekOrder(weekday: number): number {
   return (weekday + 6) % 7;
 }
@@ -70,10 +68,10 @@ function formatDay(key: string): string {
 }
 
 /**
- * Alle Termine einer Serie im Fenster [from, to].
+ * Every date of a series inside [from, to].
  *
- * Ein Eintrag ohne Regel kommt unverändert zurück (sofern er das Fenster
- * berührt), damit der Aufrufer nicht zwei Wege kennen muss.
+ * An entry without a rule comes back as it is, as long as it touches the
+ * window. That way callers need only one path.
  */
 export function expandSeries(
   series: ManualSeries, from: string, to: string, tz: string
@@ -87,7 +85,7 @@ export function expandSeries(
     return [toPlannerEvent(series, series.startDate, spanDays, tz, false)];
   }
 
-  // Ein mehrtägiger Termin, der vor dem Fenster beginnt, reicht noch hinein.
+  // An entry spanning several days can start before the window and reach in.
   const searchFrom = addDaysToKey(from, -Math.min(spanDays, 60));
   const rule = {
     freq: 'WEEKLY',
@@ -108,7 +106,7 @@ export function expandSeries(
   return out;
 }
 
-/** Dasselbe für alle Serien einer Familie. */
+/** The same for every series of a family. */
 export function expandManualSeries(
   all: ManualSeries[], from: string, to: string, tz: string
 ): PlannerEvent[] {
@@ -120,8 +118,8 @@ function toPlannerEvent(
 ): PlannerEvent {
   const endDate = spanDays === 0 ? day : addDaysToKey(day, spanDays);
 
-  // Uhrzeiten werden pro Termin aus der Wandzeit neu gerechnet: 14:00 bleibt
-  // 14:00, auch in der Woche nach der Zeitumstellung.
+  // Times are worked out per date from the wall clock: 14:00 stays 14:00,
+  // also in the week after the clocks change.
   let startsAt: string | null = null;
   let endsAt: string | null = null;
   if (!series.allDay && series.startsAt && series.endsAt) {
@@ -136,7 +134,7 @@ function toPlannerEvent(
     calendarId: null,
     calendarLabel: null,
     uid: null,
-    // Adressiert genau diesen Termin, wenn nur er geändert oder entfernt wird.
+    // Names this one date, for when only it is changed or removed.
     occurrence: recurring ? day : null,
     title: series.title,
     displayTitle: series.title,

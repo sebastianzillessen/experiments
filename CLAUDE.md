@@ -16,5 +16,10 @@ experiments/
 - **One folder per experiment.** Every new experiment gets its own subfolder at the repo root (e.g. `my-new-experiment/`). Do not add code to existing experiment folders unless modifying that specific experiment.
 - **Standalone.** Each experiment must be runnable on its own — include its own dependency manifest (`package.json`, `requirements.txt`, `go.mod`, etc.) and any config it needs. Do not rely on root-level files or shared code between experiments.
 - **Any language/stack is fine.** Pick whatever fits the experiment best.
+- **English code, German UI where the app is German.** Identifiers, comments,
+  commit messages and documentation are English. Text a user reads stays in
+  whatever language that experiment's interface uses.
+- **Few comments, and short ones.** A comment says *why*, in plain words and
+  short sentences. If it only restates the code, drop it.
 - **Include a README.md** in each experiment folder explaining what it does, how to install dependencies, and how to run it.
 - **Keep the repo root clean.** Only repo-wide files (like this one) belong at the root. Avoid adding loose scripts or config files outside of experiment folders.

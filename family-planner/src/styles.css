@@ -12,7 +12,6 @@
   --rule-strong: #c4b9a2;
   --accent: #2f6f5e;
   --accent-ink: #ffffff;
-  /* Herkunft eines Eintrags: --accent = selbst erfasst, --imported = Kalender. */
   --imported: #8a7d64;
   --danger: #a33a2a;
   --today: #fff5d6;
@@ -202,9 +201,6 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 }
 td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 
-/* Der linke Rand sagt, woher der Eintrag kommt — selbst erfasst oder aus dem
-   Kalender. Ein zusätzlicher Farbpunkt kostete Breite, die in einer
-   Tabellenzelle knapp ist; die Personenfarbe steht ohnehin im Spaltenkopf. */
 .chip {
   display: flex; align-items: baseline; gap: 4px;
   width: 100%; text-align: left;
@@ -215,6 +211,7 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   font-size: .84rem; cursor: pointer;
 }
 .chip:hover { background: var(--paper-alt); }
+/* Imported chips override this inline with the calendar's own colour. */
 .chip.manual { border-left-color: var(--accent); }
 .chip-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
