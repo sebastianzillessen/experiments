@@ -12,6 +12,8 @@
   --rule-strong: #c4b9a2;
   --accent: #2f6f5e;
   --accent-ink: #ffffff;
+  /* Herkunft eines Eintrags: --accent = selbst erfasst, --imported = Kalender. */
+  --imported: #8a7d64;
   --danger: #a33a2a;
   --today: #fff5d6;
   --radius: 10px;
@@ -200,19 +202,20 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 }
 td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 
-/* Der linke Rand trägt die Farbe des Eintrags — Person bzw. Kalender. Ein
-   zusätzlicher Punkt sagte dasselbe und kostete Breite, die in einer
-   Tabellenzelle knapp ist. */
+/* Der linke Rand sagt, woher der Eintrag kommt — selbst erfasst oder aus dem
+   Kalender. Ein zusätzlicher Farbpunkt kostete Breite, die in einer
+   Tabellenzelle knapp ist; die Personenfarbe steht ohnehin im Spaltenkopf. */
 .chip {
   display: flex; align-items: baseline; gap: 4px;
   width: 100%; text-align: left;
   padding: 4px 7px;
-  border: 1px solid var(--rule); border-left: 4px solid var(--rule-strong);
+  border: 1px solid var(--rule); border-left: 4px solid var(--imported);
   border-radius: 7px;
   background: #fff; color: var(--ink);
   font-size: .84rem; cursor: pointer;
 }
 .chip:hover { background: var(--paper-alt); }
+.chip.manual { border-left-color: var(--accent); }
 .chip-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
 .chip-repeat { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
