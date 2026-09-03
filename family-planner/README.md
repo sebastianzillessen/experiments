@@ -95,14 +95,19 @@ Eingeladener öffnet einfach seinen Link (`…?invite=<token>`).
 Die geheime ICS-Adresse ist ein Passwort — wer sie hat, liest den ganzen
 Familienkalender, ohne Login. Deshalb verlässt sie den Server nie wieder:
 
-1. **`fp_calendar_secrets`** (URL, Benutzer, Passwort) hat RLS aktiviert und
-   **bewusst keine einzige Policy**. `anon` und `authenticated` sehen dort null
-   Zeilen — auch der Owner kann sie über die API nicht lesen. Zugriff hat nur
-   der `service_role`-Key (Edge Function) bzw. `security definer`-Funktionen.
-2. **Schreiben** geht ausschliesslich über `fp_upsert_calendar(...)`. Die
-   Funktion prüft selbst `fp_role_in(family) = 'owner'` (innerhalb von
-   `security definer` greift RLS nicht) und schreibt Metadaten und Secret in
-   einer Transaktion.
+1. **`fp_calendar_secrets`** (URL, Benutzer, Passwort) steht dort
+   **verschlüsselt**: JWE mit `dir` + `A256GCM`, erzeugt von `jose`. Der
+   Schlüssel (`CALENDAR_ENCRYPTION_KEY`) liegt als Secret der Edge Function und
+   **nicht in der Datenbank** — ein Datenbank-Dump oder ein abhandengekommener
+   Service-Role-Key liefert damit nur Container ohne Schlüssel. Zusätzlich hat
+   die Tabelle RLS aktiviert und **bewusst keine einzige Policy**: `anon` und
+   `authenticated` sehen dort null Zeilen.
+2. **Schreiben** geht ausschliesslich über die Edge Function
+   (`{ action: 'save', … }`), die `owner` in dieser Familie verlangt,
+   verschlüsselt und dann mit dem Service-Role-Key schreibt. Die frühere RPC
+   `fp_upsert_calendar` ist entfernt — sie wäre ein Weg gewesen, Klartext in
+   die Tabelle zu bekommen. Bestand aus der Zeit davor bleibt lesbar und wird
+   beim nächsten Abruf verschlüsselt zurückgeschrieben.
 3. **Zurücklesen** gibt es nicht. Die Oberfläche zeigt nur
    `fp_calendars.url_preview` — Host plus letzte Zeichen, z. B.
    `calendar.google.com/…/basic.ics`. Beim Bearbeiten bedeutet ein leeres
@@ -163,8 +168,14 @@ cp config.example.js config.js     # Supabase-URL + Publishable Key eintragen
 npm run dev -w @experiments/family-planner
 ```
 
-Einmalig im Supabase-Dashboard nötig:
+Einmalig nötig:
 
+- **Verschlüsselungsschlüssel setzen** — ohne ihn lässt sich kein Kalender
+  speichern:
+  ```bash
+  supabase secrets set CALENDAR_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
+    --project-ref tbknudbcgaarqixweizj
+  ```
 - **Auth → URL Configuration → Redirect URLs**: `https://planer.zillessen.dev/**`
 - Cloudflare-Dashboard: Custom Domain `planer.zillessen.dev` auf den
   `experiments`-Worker (der Worker leitet den Host auf `_site/family-planner/`).
@@ -181,10 +192,11 @@ npm run build      # tsc -b && vite build → dist/
 Getestet werden die Teile, in denen die Fehler stecken: ICS-Parser inklusive
 Zeitzonen und Serienregeln, Namenserkennung, Datumsarithmetik und das
 Zusammenführen beider Quellen in die Tabellenzellen sowie die Prüfung der
-Kalender-URL inklusive `webcal://` und SSRF-Schutz, beide Zeitformate, das
-Lesen von Zeiten **und Wiederholungen** aus dem Titel, das Auflösen von Serien
+Kalender-URL inklusive `webcal://` und SSRF-Schutz, die Verschlüsselung der
+Zugangsdaten samt Migration von Klartext-Bestand, beide Zeitformate, das Lesen
+von Zeiten **und Wiederholungen** aus dem Titel, das Auflösen von Serien
 inklusive Zeitumstellung und das Entfernen der Namen aus der Anzeige
-(157 Tests).
+(172 Tests).
 
 Produktiv baut `build.sh` im Repo-Root (`bash build.sh family-planner`) und
 erzeugt dabei `config.js` aus `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.

@@ -17,7 +17,14 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "types": ["vite/client", "vite-plugin-pwa/client"]
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+    "baseUrl": ".",
+    "paths": {
+      // Die Edge Function importiert `jose` als URL (so lädt Deno sie beim
+      // Deploy). Für Typecheck und Tests zeigt derselbe Import auf das
+      // npm-Paket — siehe denselben Alias in vitest.config.ts.
+      "https://esm.sh/jose@6.2.10": ["../node_modules/jose"]
+    }
   },
-  "include": ["src", "tests", "supabase/functions/family-calendar-sync/ics.ts"]
+  "include": ["src", "tests", "supabase/functions/family-calendar-sync/ics.ts", "supabase/functions/family-calendar-sync/crypto.ts", "supabase/functions/family-calendar-sync/url.ts"]
 }

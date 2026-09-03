@@ -22,6 +22,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react-swc": "^4.1.0",
+    "jose": "^6.2.10",
     "typescript": "^5.7.0",
     "vite": "^7.0.0",
     "vite-plugin-pwa": "^1.3.0",

@@ -56,8 +56,40 @@ Bewusst frei von Deno-/Browser-APIs, damit die vitest-Suite des Frontends
 
 ## Konfiguration
 
-Keine eigenen Secrets. `SUPABASE_URL`, `SUPABASE_ANON_KEY` und
-`SUPABASE_SERVICE_ROLE_KEY` stellt die Laufzeit bereit.
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` und `SUPABASE_SERVICE_ROLE_KEY` stellt die
+Laufzeit bereit. Dazu kommt **ein** eigenes Secret:
+
+```bash
+supabase secrets set CALENDAR_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
+  --project-ref tbknudbcgaarqixweizj
+```
+
+Damit werden Kalender-Adresse und Zugangsdaten verschlüsselt abgelegt (JWE,
+`dir` + `A256GCM`, über `jose`). Der Schlüssel liegt bewusst hier und nicht in
+der Datenbank — das ist der ganze Punkt: ein Datenbank-Dump enthält dann nur
+Container ohne Schlüssel.
+
+**Ohne den Schlüssel**: Bestehende Kalender werden weiter abgerufen (Klartext
+aus der Zeit davor wird erkannt), aber das *Speichern* eines Kalenders lehnt
+die Funktion mit einer klaren Meldung ab, statt still Klartext zu schreiben.
+
+**Schlüssel verloren** heisst: Adressen und Passwörter sind nicht
+wiederherstellbar und müssen einmal neu eingegeben werden. Die Termine im
+Zwischenspeicher bleiben unberührt.
+
+**Schlüssel wechseln** braucht heute einen kurzen Zwischenschritt — es gibt
+keine automatische Rotation: alten Schlüssel behalten, bis jeder Kalender
+einmal gespeichert wurde, dann umstellen. Bei einem Kalender ist Neueingeben
+schneller.
+
+## Speichern
+
+`{ action: 'save', family_id, calendar_id?, label, url, username, password,
+color, enabled }` legt einen Kalender an oder ändert ihn. Die Funktion prüft
+dieselbe Bedingung, die vorher die RPC `fp_upsert_calendar` geprüft hat —
+Rolle `owner` in dieser Familie — normalisiert die URL, verschlüsselt sie und
+schreibt sie mit dem Service-Role-Key. Eine leere URL beim Bearbeiten behält
+die gespeicherte.
 
 ## Deployment
 

@@ -24,10 +24,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 import { addDaysToKey, expandIcs, toDateKey, wallClockIn } from './ics.ts';
 import { normalizeCalendarUrl } from './url.ts';
+import { decryptSecret, encryptSecret, isEncrypted } from './crypto.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// 32 Bytes base64 (openssl rand -base64 32), gesetzt via
+// `supabase secrets set CALENDAR_ENCRYPTION_KEY=…`. Bewusst NICHT in der
+// Datenbank: genau das trennt einen Datenbank-Dump von den Zugangsdaten.
+const ENCRYPTION_KEY = Deno.env.get('CALENDAR_ENCRYPTION_KEY') ?? null;
 
 // How far the cached window reaches. Wide enough to page back through the
 // school year and forward through next summer's holidays.
@@ -36,6 +41,17 @@ const WINDOW_DAYS_AHEAD = 400;
 
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_BYTES = 5 * 1024 * 1024;
+
+type SyncBody = { action?: 'sync' | 'save'; family_id?: string; force?: boolean; calendar_id?: string };
+type SaveBody = {
+  calendar_id?: string;
+  label?: string;
+  url?: string;
+  username?: string;
+  password?: string;
+  color?: string;
+  enabled?: boolean;
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,6 +76,92 @@ function sanitizeError(e: unknown): string {
     .replace(/[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, '[URL]')
     .replace(/\b[\w.-]+\.(com|net|org|ch|de|io|dev)\b\S*/gi, '[Host]')
     .slice(0, 200);
+}
+
+/**
+ * Was die Oberfläche von einer Adresse zu sehen bekommt: Host und die letzten
+ * Zeichen — genug, um den Kalender wiederzuerkennen, zu wenig, um ihn zu
+ * abonnieren.
+ */
+function urlPreview(url: string): string {
+  const withoutScheme = url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
+  const host = withoutScheme.split('/')[0];
+  const path = withoutScheme.split('?')[0];
+  return `${host}/…/${path.slice(-12)}`;
+}
+
+/**
+ * Kalender anlegen oder ändern. Läuft hier und nicht mehr als SQL-RPC, damit
+ * Adresse und Zugangsdaten verschlüsselt in die Datenbank gehen — im Klartext
+ * sieht sie nur diese Funktion.
+ */
+async function saveCalendar(
+  admin: ReturnType<typeof createClient>,
+  familyId: string,
+  role: string,
+  body: SaveBody,
+): Promise<Response> {
+  if (role !== 'owner') return jsonResponse({ error: 'Nur der Owner darf Kalender verwalten' }, 403);
+
+  const label = (body.label ?? '').trim();
+  if (!label) return jsonResponse({ error: 'Bezeichnung fehlt' }, 400);
+
+  const calendarId = body.calendar_id ?? null;
+  const submittedUrl = (body.url ?? '').trim();
+
+  // Eine leere Adresse beim Bearbeiten heisst „gespeicherte behalten" — die
+  // Oberfläche bekommt sie nie zurück und kann sie darum nicht mitschicken.
+  if (!calendarId && !submittedUrl) return jsonResponse({ error: 'Kalender-Adresse fehlt' }, 400);
+
+  let normalizedUrl: string | null = null;
+  if (submittedUrl) {
+    try {
+      normalizedUrl = normalizeCalendarUrl(submittedUrl);
+    } catch (e) {
+      return jsonResponse({ error: sanitizeError(e) }, 400);
+    }
+  }
+
+  const writesSecret = Boolean(normalizedUrl || body.username || body.password);
+  if (writesSecret && !ENCRYPTION_KEY) {
+    return jsonResponse({
+      error: 'Verschlüsselung ist nicht konfiguriert — CALENDAR_ENCRYPTION_KEY fehlt auf der Edge Function',
+    }, 500);
+  }
+
+  let id = calendarId;
+  const metadata = {
+    label,
+    color: body.color ?? '#8a7d64',
+    enabled: body.enabled ?? true,
+    last_error: null as string | null,
+    ...(normalizedUrl ? { url_preview: urlPreview(normalizedUrl) } : {}),
+  };
+
+  if (id) {
+    const { error } = await admin.from('fp_calendars')
+      .update(metadata).eq('id', id).eq('family_id', familyId);
+    if (error) return jsonResponse({ error: 'Kalender konnte nicht geändert werden' }, 500);
+  } else {
+    const { data, error } = await admin.from('fp_calendars')
+      .insert({ family_id: familyId, kind: 'ics', url_preview: '', ...metadata })
+      .select('id').single();
+    if (error || !data) return jsonResponse({ error: 'Kalender konnte nicht angelegt werden' }, 500);
+    id = data.id as string;
+  }
+
+  if (writesSecret) {
+    const patch: Record<string, string | null> = { calendar_id: id, updated_at: new Date().toISOString() };
+    if (normalizedUrl) patch.url = await encryptSecret(normalizedUrl, ENCRYPTION_KEY!);
+    if (body.username) patch.username = await encryptSecret(body.username, ENCRYPTION_KEY!);
+    if (body.password) patch.password = await encryptSecret(body.password, ENCRYPTION_KEY!);
+
+    const { error } = await admin.from('fp_calendar_secrets')
+      .upsert(patch, { onConflict: 'calendar_id' });
+    if (error) return jsonResponse({ error: 'Zugangsdaten konnten nicht gespeichert werden' }, 500);
+  }
+
+  return jsonResponse({ calendar_id: id });
 }
 
 async function fetchIcs(url: string, username: string | null, password: string | null, etag: string | null) {
@@ -104,7 +206,7 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return jsonResponse({ error: 'Unauthorized' }, 401);
 
-  let body: { family_id?: string; force?: boolean; calendar_id?: string };
+  let body: SyncBody & SaveBody;
   try {
     body = await req.json();
   } catch {
@@ -132,6 +234,10 @@ Deno.serve(async (req) => {
     .eq('user_id', userData.user.id)
     .maybeSingle();
   if (!membership) return jsonResponse({ error: 'Forbidden' }, 403);
+
+  if (body.action === 'save') {
+    return saveCalendar(admin, familyId, membership.role as string, body);
+  }
 
   const { data: family } = await admin
     .from('fp_families')
@@ -182,8 +288,29 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (secretErr || !secret) throw new Error('Keine Kalender-Adresse hinterlegt');
 
-      const url = normalizeCalendarUrl(secret.url);
-      const fetched = await fetchIcs(url, secret.username, secret.password, cache?.etag ?? null);
+      const storedUrl = await decryptSecret(secret.url, ENCRYPTION_KEY);
+      const username = await decryptSecret(secret.username, ENCRYPTION_KEY);
+      const password = await decryptSecret(secret.password, ENCRYPTION_KEY);
+      if (!storedUrl) throw new Error('Keine Kalender-Adresse hinterlegt');
+
+      // Zeilen aus der Zeit vor der Verschlüsselung wandern beim ersten Abruf
+      // nach — ohne Migrationsskript, weil nur diese Funktion den Schlüssel hat.
+      if (ENCRYPTION_KEY) {
+        const stale: Record<string, string> = {};
+        if (!isEncrypted(secret.url)) stale.url = await encryptSecret(storedUrl, ENCRYPTION_KEY);
+        if (username && !isEncrypted(secret.username)) {
+          stale.username = await encryptSecret(username, ENCRYPTION_KEY);
+        }
+        if (password && !isEncrypted(secret.password)) {
+          stale.password = await encryptSecret(password, ENCRYPTION_KEY);
+        }
+        if (Object.keys(stale).length > 0) {
+          await admin.from('fp_calendar_secrets').update(stale).eq('calendar_id', cal.id);
+        }
+      }
+
+      const url = normalizeCalendarUrl(storedUrl);
+      const fetched = await fetchIcs(url, username, password, cache?.etag ?? null);
 
       if (fetched.notModified) {
         await admin.from('fp_calendars')

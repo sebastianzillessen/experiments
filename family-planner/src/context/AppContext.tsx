@@ -585,17 +585,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const upsertCalendar = useCallback(async (input: { id?: string; label: string; url: string; username: string; password: string; color: string; enabled: boolean }) => {
     try {
       const fam = familyRef.current!;
-      const { error } = await supabase.rpc('fp_upsert_calendar', {
-        p_family_id: fam.id,
-        p_label: input.label,
-        p_url: input.url,
-        p_username: input.username || null,
-        p_password: input.password || null,
-        p_color: input.color,
-        p_enabled: input.enabled,
-        p_calendar_id: input.id ?? null,
+      // Adresse und Zugangsdaten gehen an die Edge Function, nicht an Postgres:
+      // nur sie hat den Schlüssel, mit dem sie verschlüsselt abgelegt werden.
+      const { data, error } = await supabase.functions.invoke('family-calendar-sync', {
+        body: {
+          action: 'save',
+          family_id: fam.id,
+          calendar_id: input.id ?? null,
+          label: input.label,
+          url: input.url,
+          username: input.username || null,
+          password: input.password || null,
+          color: input.color,
+          enabled: input.enabled,
+        },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       await reload();
       return true;
     } catch (e) {
