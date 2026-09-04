@@ -59,3 +59,7 @@ jobs:
       - name: Deploy the calendar sync function
         run: supabase functions deploy family-calendar-sync --project-ref "$SUPABASE_PROJECT_ID"
         working-directory: family-planner
+
+      - name: Deploy the menu import function
+        run: supabase functions deploy family-menu-import --project-ref "$SUPABASE_PROJECT_ID"
+        working-directory: family-planner

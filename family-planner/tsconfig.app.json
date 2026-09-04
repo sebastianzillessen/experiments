@@ -19,5 +19,5 @@
     "noUncheckedSideEffectImports": true,
     "types": ["vite/client", "vite-plugin-pwa/client"]
   },
-  "include": ["src", "tests", "supabase/functions/family-calendar-sync/ics.ts", "supabase/functions/family-calendar-sync/crypto.ts", "supabase/functions/family-calendar-sync/url.ts"]
+  "include": ["src", "tests", "supabase/functions/family-calendar-sync/ics.ts", "supabase/functions/family-calendar-sync/crypto.ts", "supabase/functions/family-calendar-sync/url.ts", "supabase/functions/family-menu-import/menu.ts"]
 }

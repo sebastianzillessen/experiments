@@ -1,0 +1,8 @@
+{
+  "//": "Import map for this Edge Function. Deno has no node_modules, so the versions are pinned here rather than written into the imports. menu.ts stays free of these so the vitest suite can check it.",
+  "imports": {
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.123.0",
+    "@anthropic-ai/sdk/helpers/zod": "npm:@anthropic-ai/sdk@0.123.0/helpers/zod",
+    "zod": "npm:zod@4.5.4"
+  }
+}
