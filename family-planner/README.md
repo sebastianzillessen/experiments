@@ -110,6 +110,20 @@ On the iPad itself:
 - On an iPad with Face ID, **Attention Aware Features** keeps the display from
   dimming while somebody is looking at it.
 
+## School lunch menu
+
+The school publishes one PDF per calendar week. Those PDFs are **scans** — one
+embedded JPEG per page, no text layer at all — so there is nothing to parse:
+the page goes to Claude (`claude-opus-5`) and comes back as checked JSON. About
+three to four Rappen per week, so a couple of francs a school year.
+
+`family-menu-import` fetches the week itself where it can (the files are named
+`{week}.{yy}.pdf`) and takes an uploaded PDF where it cannot. It writes
+nothing: a scan can be misread, so the week is shown for confirming first, and
+a dish the model cannot read with confidence is left out rather than guessed
+at. Details and the required `CLAUDE_API_KEY` secret are in
+`supabase/functions/family-menu-import/README.md`.
+
 ## Roles
 
 Deliberately different from Salärli's owner/admin/employee:
@@ -237,8 +251,9 @@ recurrence rules, name matching, date arithmetic, merging both sources into
 the table cells, the calendar URL check including `webcal://` and the SSRF
 guard, the encryption of the credentials with its migration of old plaintext,
 both time formats, reading times **and repetitions** out of a title, expanding
-a series across a change of the clocks, stripping names from the display, and
-the kiosk settings with their two burn-in drifts (184 tests).
+a series across a change of the clocks, stripping names from the display, the
+kiosk settings with their two burn-in drifts, and the menu import's week
+arithmetic and its check on what the model returned (199 tests).
 
 For production `build.sh` in the repo root builds it (`bash build.sh
 family-planner`) and writes `config.js` from `SUPABASE_URL` /
