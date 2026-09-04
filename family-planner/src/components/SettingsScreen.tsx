@@ -4,6 +4,7 @@ import { relativeStamp } from '../lib/dates.ts';
 import { ROLE_LABELS } from '../lib/types.ts';
 import type { Calendar, Person, Role, TimeFormat } from '../lib/types.ts';
 import { Sheet } from './Sheet.tsx';
+import { setKioskEnabled, useKioskSettings } from './KioskMode.tsx';
 
 type Tab = 'people' | 'calendars' | 'access' | 'display';
 
@@ -332,6 +333,34 @@ function DisplaySettings() {
         Die Uhrzeit-Auswahl beim Erfassen ist die des Betriebssystems — welches Format sie zeigt,
         entscheidet dein Gerät (iOS: Einstellungen → Allgemein → Datum &amp; Uhrzeit → 24-Stunden-Zeit).
         Alles, was der Planer selbst schreibt, folgt der Einstellung hier.
+      </p>
+
+      <KioskSetting />
+    </>
+  );
+}
+
+/** Unlike the time format this belongs to the device, not to the family. */
+function KioskSetting() {
+  const kiosk = useKioskSettings();
+  const idleMinutes = Math.round(kiosk.idleMs / 60_000);
+  const refreshMinutes = Math.round(kiosk.refreshMs / 60_000);
+
+  return (
+    <>
+      <h3>Kiosk-Modus</h3>
+      <p className="hint">
+        Nur für dieses Gerät — gedacht für ein iPad, das dauerhaft an der Wand hängt.
+      </p>
+      <label className="choice">
+        <input type="checkbox" checked={kiosk.enabled}
+          onChange={e => setKioskEnabled(e.target.checked)} />
+        <span className="grow">Kiosk-Modus einschalten</span>
+      </label>
+      <p className="hint">
+        Dunkle Darstellung, Bildschirm bleibt wach, nach {idleMinutes} Minuten ohne Berührung wird
+        er schwarz (Antippen holt den Plan zurück), und die Kalender werden alle {refreshMinutes}{' '}
+        Minuten abgerufen. Andere Zeiten über die Adresse: <code>?idle=10&amp;refresh=30</code>.
       </p>
     </>
   );
