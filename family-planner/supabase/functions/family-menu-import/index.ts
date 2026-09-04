@@ -87,10 +87,6 @@ Deno.serve(async (req) => {
   const familyId = body.family_id;
   if (!familyId) return jsonResponse({ error: 'family_id required' }, 400);
 
-  if (!CLAUDE_API_KEY) {
-    return jsonResponse({ error: 'Menü-Import ist nicht konfiguriert — CLAUDE_API_KEY fehlt' }, 500);
-  }
-
   const asUser = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false },
@@ -110,6 +106,12 @@ Deno.serve(async (req) => {
   if (!membership) return jsonResponse({ error: 'Forbidden' }, 403);
   if (membership.role !== 'owner' && membership.role !== 'editor') {
     return jsonResponse({ error: 'Nur Owner und Bearbeiter dürfen den Menüplan holen' }, 403);
+  }
+
+  // Only past the membership check: how this function is configured is nobody
+  // else's business, and the anon key is public.
+  if (!CLAUDE_API_KEY) {
+    return jsonResponse({ error: 'Menü-Import ist nicht konfiguriert — CLAUDE_API_KEY fehlt' }, 500);
   }
 
   const { data: family } = await admin

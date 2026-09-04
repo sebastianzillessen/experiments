@@ -27,7 +27,9 @@ Authorization: Bearer <USER_JWT>
 ```
 
 1. Check the JWT, then the membership. Owner or editor only — a run costs
-   money, so it is for people who may change the plan anyway.
+   money, so it is for people who may change the plan anyway. Whether the
+   function is configured at all is only answered past that check: the anon
+   key is public, and configuration state is nobody else's business.
 2. Without `year`/`week`, take the current week **in the family's time zone**.
    At 01:00 on a Monday a server on UTC would otherwise fetch last week.
 3. Without `pdf_base64`, fetch the week from the school: the files are named
