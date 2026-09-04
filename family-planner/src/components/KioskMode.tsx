@@ -83,6 +83,28 @@ function useWakeLock(enabled: boolean) {
   }, [enabled]);
 }
 
+// iOS paints the status bar of a home screen app from <meta theme-color>, and
+// it does not care what the page below it looks like. Left alone it stays the
+// app's green — a green bar above a dark plan, and above the black curtain a
+// green bar is the only thing lit on the whole screen.
+let originalTheme: string | null = null;
+
+function setThemeColor(color: string | null) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  if (originalTheme === null) originalTheme = meta.getAttribute('content') ?? '';
+  meta.setAttribute('content', color ?? originalTheme);
+}
+
+/**
+ * The plan's own paper colour, read from the stylesheet rather than repeated
+ * here: `body.kiosk` already defines it, and two copies would drift apart.
+ */
+function kioskPaper(): string {
+  const value = getComputedStyle(document.body).getPropertyValue('--paper').trim();
+  return value || '#14161a';
+}
+
 export type Kiosk = {
   enabled: boolean;
   asleep: boolean;
@@ -163,6 +185,13 @@ export function useKiosk(refresh: () => void, rest: () => void): Kiosk {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [settings.enabled, settings.idleMs, settings.refreshMs]);
+
+  // After the class effect above, so --paper is already the kiosk one.
+  useEffect(() => {
+    if (!settings.enabled) return;
+    setThemeColor(asleep ? '#000000' : kioskPaper());
+    return () => setThemeColor(null);
+  }, [settings.enabled, asleep]);
 
   const wake = useCallback(() => {
     lastTouch.current = Date.now();
