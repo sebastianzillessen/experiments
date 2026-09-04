@@ -64,12 +64,13 @@ export type Assignment = {
  * `personIds` is already resolved: empty means the shared "Familie" column.
  */
 export type PlannerEvent = {
-  /** Stable React key, unique across both sources. */
+  /** Stable React key, unique across every source. */
   key: string;
-  source: 'manual' | 'calendar';
+  source: 'manual' | 'calendar' | 'menu';
   /** fp_events.id for manual entries, null for imported ones. */
   id: string | null;
   calendarId: string | null;
+  /** Where an imported entry came from — a calendar, or a menu source. */
   calendarLabel: string | null;
   uid: string | null;
   occurrence: string | null;
@@ -127,3 +128,43 @@ export type OpenInvite = {
 
 /** The shared column: events nobody in particular owns. */
 export const FAMILY_COLUMN = 'family';
+
+/* ----------------------------------------------------------------- menu */
+
+/** One colour for every imported lunch, so a menu chip reads as its own kind. */
+export const MENU_COLOR = '#7a6a9e';
+
+/** Where a school publishes its weekly lunch menu. */
+export type MenuSource = {
+  id: string;
+  label: string;
+  baseUrl: string;
+  /** Tried in order until one is found. See patterns.ts for the placeholders. */
+  pathPatterns: string[];
+  enabled: boolean;
+};
+
+export type MenuDish = {
+  name: string;
+  tags: ('gluten-free' | 'lactose-free' | 'seasonal')[];
+};
+
+/** One imported week, exactly as the importer checked and stored it. */
+export type MenuWeek = {
+  id: string;
+  sourceId: string;
+  year: number;
+  week: number;
+  from: string;
+  to: string;
+  importedAt: string | null;
+  days: { date: string; dishes: MenuDish[] }[];
+};
+
+/** A child who eats at that school, and on which days. */
+export type MenuAssignment = {
+  sourceId: string;
+  personId: string;
+  /** 1 = Monday … 5 = Friday, matching Date#getUTCDay() for those days. */
+  weekdays: number[];
+};

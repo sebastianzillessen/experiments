@@ -8,6 +8,12 @@ import type { EditScope } from '../context/AppContext.tsx';
 import { Sheet } from './Sheet.tsx';
 import { QuickAddSheet } from './QuickAddSheet.tsx';
 
+function sourceLabel(event: PlannerEvent): string {
+  if (event.source === 'manual') return 'Selbst eingetragen';
+  if (event.source === 'menu') return `Menüplan „${event.calendarLabel}“`;
+  return `Kalender „${event.calendarLabel}“`;
+}
+
 /**
  * Detail view of one entry. A manual entry can be edited or deleted; an
  * imported one keeps its calendar as the source of truth, so the only things
@@ -75,7 +81,7 @@ export function EventSheet({ event, onClose }: { event: PlannerEvent; onClose: (
           )}
         </dd>
         <dt>Quelle</dt>
-        <dd>{event.source === 'manual' ? 'Selbst eingetragen' : `Kalender „${event.calendarLabel}“`}</dd>
+        <dd>{sourceLabel(event)}</dd>
         {event.repeat && (<><dt>Serie</dt><dd>{describeRepeat(event.repeat)}</dd></>)}
         {event.notes && (<><dt>Notiz</dt><dd className="pre">{event.notes}</dd></>)}
       </dl>

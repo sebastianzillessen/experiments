@@ -4,20 +4,23 @@
 // JSON. It does not write anything — the caller shows the week for confirming
 // first, because a scan can be misread and a wrong menu is worse than none.
 //
-//   POST { family_id: uuid, year?: number, week?: number, pdf_base64?: string }
-//   → { menu: { year, week, from, to, days: [{ date, dishes: [{ name, tags }] }] },
-//       source: 'school' | 'upload', url_tried?: string }
+//   POST { family_id: uuid, source_id: uuid, year?: number, week?: number,
+//          pdf_base64?: string }
+//   → { menu: { id, year, week, from, to, days: [{ date, dishes: [{ name, tags }] }] },
+//       fetched_from?: string }
 //
-// Without `pdf_base64` the function fetches the week itself: the school names
-// its files `{week}.{yy}.pdf`. With it, whatever was uploaded is read instead,
-// which is the way back in if that naming ever changes.
+// Without `pdf_base64` the function builds the address from the source the
+// family configured — a base folder plus one or more patterns like
+// `{KW}.{JJ}.pdf`. With it, whatever was uploaded is read instead, which is
+// the way back in when a school renames its files.
 //
 // Secrets: SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY come
 // from the runtime; CLAUDE_API_KEY is set with `supabase secrets set`.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
 import { extractMenuWeek } from './extract.ts';
-import { isAllowedMenuUrl, isoWeek, menuPdfCandidates, todayInZone } from './menu.ts';
+import { isoWeek, todayInZone } from './menu.ts';
+import { resolveMenuUrl } from './patterns.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -78,7 +81,10 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return jsonResponse({ error: 'Unauthorized' }, 401);
 
-  let body: { family_id?: string; year?: number; week?: number; pdf_base64?: string };
+  let body: {
+    family_id?: string; source_id?: string;
+    year?: number; week?: number; pdf_base64?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -86,10 +92,7 @@ Deno.serve(async (req) => {
   }
   const familyId = body.family_id;
   if (!familyId) return jsonResponse({ error: 'family_id required' }, 400);
-
-  if (!CLAUDE_API_KEY) {
-    return jsonResponse({ error: 'Menü-Import ist nicht konfiguriert — CLAUDE_API_KEY fehlt' }, 500);
-  }
+  if (!body.source_id) return jsonResponse({ error: 'source_id required' }, 400);
 
   const asUser = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
@@ -112,6 +115,20 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Nur Owner und Bearbeiter dürfen den Menüplan holen' }, 403);
   }
 
+  // Only past the membership check: how this function is configured is nobody
+  // else's business, and the anon key is public.
+  if (!CLAUDE_API_KEY) {
+    return jsonResponse({ error: 'Menü-Import ist nicht konfiguriert — CLAUDE_API_KEY fehlt' }, 500);
+  }
+
+  const { data: source } = await admin
+    .from('fp_menu_sources')
+    .select('id, label, base_url, path_patterns, enabled')
+    .eq('id', body.source_id)
+    .eq('family_id', familyId)
+    .maybeSingle();
+  if (!source) return jsonResponse({ error: 'Diese Menüplan-Quelle gibt es nicht' }, 404);
+
   const { data: family } = await admin
     .from('fp_families').select('timezone').eq('id', familyId).maybeSingle();
   const tz = family?.timezone || 'Europe/Zurich';
@@ -122,8 +139,7 @@ Deno.serve(async (req) => {
   if (week < 1 || week > 53) return jsonResponse({ error: 'Ungültige Kalenderwoche' }, 400);
 
   let pdf: Uint8Array | null = null;
-  let source: 'school' | 'upload' = 'upload';
-  let urlTried: string | undefined;
+  let fetchedFrom: string | null = null;
 
   if (body.pdf_base64) {
     try {
@@ -133,25 +149,47 @@ Deno.serve(async (req) => {
     }
     if (pdf.byteLength > MAX_BYTES) return jsonResponse({ error: 'Die Datei ist zu gross' }, 400);
   } else {
-    source = 'school';
-    for (const candidate of menuPdfCandidates(year, week)) {
-      if (!isAllowedMenuUrl(candidate)) continue;
-      urlTried = candidate;
+    if (!source.enabled) return jsonResponse({ error: 'Diese Quelle ist deaktiviert' }, 400);
+    // Patterns are family-entered text, so resolveMenuUrl decides what may be
+    // fetched — not this loop.
+    for (const pattern of (source.path_patterns as string[]) ?? []) {
+      const candidate = resolveMenuUrl(source.base_url as string, pattern, year, week);
+      if (!candidate) continue;
       pdf = await fetchPdf(candidate);
-      if (pdf) break;
+      if (pdf) { fetchedFrom = candidate; break; }
     }
     if (!pdf) {
       return jsonResponse({
-        error: `Für Woche ${week} liegt auf der Schul-Website kein Menüplan — bitte die PDF hochladen`,
+        error: `Für Woche ${week} wurde unter „${source.label}" nichts gefunden — bitte die PDF hochladen`,
       }, 404);
     }
   }
 
+  let menu;
   try {
-    const menu = await extractMenuWeek(pdf, year, week, CLAUDE_API_KEY);
-    return jsonResponse({ menu, source, url_tried: urlTried });
+    menu = await extractMenuWeek(pdf, year, week, CLAUDE_API_KEY);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Der Menüplan konnte nicht gelesen werden';
     return jsonResponse({ error: message.slice(0, 200) }, 502);
   }
+
+  // Re-importing a week replaces it: a school correcting its own PDF is the
+  // normal reason to run this twice.
+  const { data: stored, error: storeErr } = await admin.from('fp_menu_weeks').upsert({
+    family_id: familyId,
+    source_id: source.id,
+    year: menu.year,
+    week: menu.week,
+    from_date: menu.from,
+    to_date: menu.to,
+    source_url: fetchedFrom,
+    days: menu.days,
+    imported_at: new Date().toISOString(),
+    imported_by: userData.user.id,
+  }, { onConflict: 'source_id,year,week' }).select('id').single();
+  if (storeErr || !stored) {
+    return jsonResponse({ error: 'Der Menüplan konnte nicht gespeichert werden' }, 500);
+  }
+
+  return jsonResponse({ menu: { id: stored.id, ...menu }, fetched_from: fetchedFrom });
 });

@@ -82,35 +82,10 @@ export function todayInZone(timeZone: string, now = Date.now()): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/** Prefilled in the settings, because it is the school this was built for. */
 export const HUTTEN_DOWNLOADS =
   'https://www.stadt-zuerich.ch/content/dam/stzh/schulen/hutten/downloads/';
-
-/**
- * Where a week's PDF is published. The observed names are `35.26.pdf`,
- * `36.26.pdf`, `37.26.pdf` — week and two-digit year. Weeks below ten have not
- * come round yet in that sample, so both spellings are offered and the caller
- * tries them in turn.
- */
-export function menuPdfCandidates(year: number, week: number, base = HUTTEN_DOWNLOADS): string[] {
-  const yy = String(year % 100).padStart(2, '0');
-  const names = week < 10 ? [`${week}.${yy}.pdf`, `0${week}.${yy}.pdf`] : [`${week}.${yy}.pdf`];
-  return names.map(name => base + name);
-}
-
-/**
- * Only the school's own site, and only https. This is not a general URL
- * fetcher: the function holds a service-role key, so anything it can be talked
- * into fetching is a hole.
- */
-export function isAllowedMenuUrl(raw: string, hosts = ['www.stadt-zuerich.ch']): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  return url.protocol === 'https:' && hosts.includes(url.hostname);
-}
+export const HUTTEN_PATTERNS = ['{KW}.{JJ}.pdf', '{KW2}.{JJ}.pdf'];
 
 const TAGS: MenuTag[] = ['gluten-free', 'lactose-free', 'seasonal'];
 

@@ -9,10 +9,12 @@ import type { User } from '@supabase/supabase-js';
 import { supabase, hadAuthErrorInUrl, getPendingInviteToken, clearPendingInviteToken } from '../supabaseClient.ts';
 import { localToIso } from '../lib/dates.ts';
 import { calendarEventsToPlanner } from '../lib/merge.ts';
+import { menuEventsToPlanner } from '../lib/menuPlan.ts';
 import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
-  Assignment, Calendar, CachedEvent, Family, Member, OpenInvite, Person, PlannerEvent, Role, TimeFormat,
+  Assignment, Calendar, CachedEvent, Family, Member, MenuAssignment, MenuSource, MenuWeek,
+  OpenInvite, Person, PlannerEvent, Role, TimeFormat,
 } from '../lib/types.ts';
 
 const NEUTRAL_COLOR = '#6b7280';
@@ -57,6 +59,11 @@ type AppContextValue = {
   manualSeries: ManualSeries[];
   /** Events from the connected calendars, already expanded. */
   calendarEvents: PlannerEvent[];
+  menuSources: MenuSource[];
+  menuWeeks: MenuWeek[];
+  menuAssignments: MenuAssignment[];
+  /** Imported lunches, already narrowed to the children who eat them. */
+  menuEvents: PlannerEvent[];
   members: Member[];
   openInvites: OpenInvite[];
   sync: SyncState;
@@ -78,6 +85,12 @@ type AppContextValue = {
   upsertCalendar: (input: { id?: string; label: string; url: string; username: string; password: string; color: string; enabled: boolean }) => Promise<boolean>;
   deleteCalendar: (id: string) => Promise<boolean>;
   refreshCalendars: (force: boolean) => Promise<void>;
+  upsertMenuSource: (input: { id?: string; label: string; baseUrl: string; pathPatterns: string[]; enabled: boolean }) => Promise<boolean>;
+  deleteMenuSource: (id: string) => Promise<boolean>;
+  setMenuAssignment: (sourceId: string, personId: string, weekdays: number[]) => Promise<boolean>;
+  removeMenuAssignment: (sourceId: string, personId: string) => Promise<boolean>;
+  importMenuWeek: (sourceId: string, year: number, week: number, pdfBase64?: string) => Promise<string | null>;
+  deleteMenuWeek: (id: string) => Promise<boolean>;
   setTimeFormat: (format: TimeFormat) => Promise<boolean>;
   createLinkInvite: (role: Role) => Promise<string | null>;
   updateMemberRole: (userId: string, role: Role) => Promise<boolean>;
@@ -120,6 +133,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [caches, setCaches] = useState<CalendarCacheEntry[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [menuSources, setMenuSources] = useState<MenuSource[]>([]);
+  const [menuWeeks, setMenuWeeks] = useState<MenuWeek[]>([]);
+  const [menuAssignments, setMenuAssignments] = useState<MenuAssignment[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [openInvites, setOpenInvites] = useState<OpenInvite[]>([]);
   const [sync, setSync] = useState<SyncState>({ busy: false, message: null, error: null });
@@ -181,7 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadFamilyData = useCallback(async (fam: Family, currentRole: Role) => {
-    const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes] = await Promise.all([
+    const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes,
+           menuSourceRes, menuWeekRes, menuPeopleRes] = await Promise.all([
       supabase.from('fp_people').select('*').eq('family_id', fam.id).is('archived_at', null).order('sort_order'),
       supabase.from('fp_events')
         .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, '
@@ -191,6 +208,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from('fp_calendars').select('*').eq('family_id', fam.id).order('created_at'),
       supabase.from('fp_calendar_cache').select('calendar_id, events').eq('family_id', fam.id),
       supabase.from('fp_calendar_assignments').select('calendar_id, uid, occurrence, person_ids, hidden').eq('family_id', fam.id),
+      supabase.from('fp_menu_sources').select('*').eq('family_id', fam.id).order('created_at'),
+      supabase.from('fp_menu_weeks')
+        .select('id, source_id, year, week, from_date, to_date, imported_at, days')
+        .eq('family_id', fam.id).order('from_date'),
+      supabase.from('fp_menu_people').select('source_id, person_id, weekdays'),
     ]);
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
@@ -218,6 +240,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       occurrence: row.occurrence === SERIES_WIDE ? null : (row.occurrence as string) ?? null,
       personIds: (row.person_ids as string[]) ?? [],
       hidden: Boolean(row.hidden),
+    })));
+
+    setMenuSources((menuSourceRes.data ?? []).map(row => ({
+      id: row.id as string,
+      label: row.label as string,
+      baseUrl: row.base_url as string,
+      pathPatterns: (row.path_patterns as string[]) ?? [],
+      enabled: Boolean(row.enabled),
+    })));
+    setMenuWeeks((menuWeekRes.data ?? []).map(row => ({
+      id: row.id as string,
+      sourceId: row.source_id as string,
+      year: row.year as number,
+      week: row.week as number,
+      from: row.from_date as string,
+      to: row.to_date as string,
+      importedAt: (row.imported_at as string) ?? null,
+      days: (row.days ?? []) as MenuWeek['days'],
+    })));
+    // fp_menu_people has no family_id of its own; RLS scopes it through the
+    // source, so what comes back is already this family's.
+    setMenuAssignments((menuPeopleRes.data ?? []).map(row => ({
+      sourceId: row.source_id as string,
+      personId: row.person_id as string,
+      weekdays: (row.weekdays as number[]) ?? [],
     })));
 
     if (currentRole === 'owner') {
@@ -316,6 +363,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setPeople([]);
         setManualSeries([]);
+        setMenuSources([]);
+        setMenuWeeks([]);
+        setMenuAssignments([]);
         setCalendars([]);
         setCaches([]);
         setAssignments([]);
@@ -698,6 +748,108 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fail, reload]);
 
+  /* ------------------------------------------------------------------ */
+  /* Menu plans                                                          */
+  /* ------------------------------------------------------------------ */
+
+  const upsertMenuSource = useCallback(async (input: {
+    id?: string; label: string; baseUrl: string; pathPatterns: string[]; enabled: boolean;
+  }) => {
+    try {
+      const fam = familyRef.current!;
+      const row = {
+        family_id: fam.id,
+        label: input.label.trim(),
+        base_url: input.baseUrl.trim(),
+        path_patterns: input.pathPatterns.map(p => p.trim()).filter(Boolean),
+        enabled: input.enabled,
+      };
+      const { error } = input.id
+        ? await supabase.from('fp_menu_sources').update(row).eq('id', input.id)
+        : await supabase.from('fp_menu_sources').insert(row);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Quelle konnte nicht gespeichert werden');
+    }
+  }, [fail, reload]);
+
+  const deleteMenuSource = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase.from('fp_menu_sources').delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Quelle konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
+  const setMenuAssignment = useCallback(async (
+    sourceId: string, personId: string, weekdays: number[]
+  ) => {
+    try {
+      const { error } = await supabase.from('fp_menu_people').upsert({
+        source_id: sourceId, person_id: personId, weekdays,
+      }, { onConflict: 'source_id,person_id' });
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Zuordnung konnte nicht gespeichert werden');
+    }
+  }, [fail, reload]);
+
+  const removeMenuAssignment = useCallback(async (sourceId: string, personId: string) => {
+    try {
+      const { error } = await supabase.from('fp_menu_people')
+        .delete().eq('source_id', sourceId).eq('person_id', personId);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Zuordnung konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
+  /** Resolves to null on success, or the message to show. */
+  const importMenuWeek = useCallback(async (
+    sourceId: string, year: number, week: number, pdfBase64?: string
+  ) => {
+    const fam = familyRef.current;
+    if (!fam) return 'Keine Familie geladen';
+    setSync({ busy: true, message: null, error: null });
+    try {
+      const { data, error } = await supabase.functions.invoke('family-menu-import', {
+        body: { family_id: fam.id, source_id: sourceId, year, week, pdf_base64: pdfBase64 },
+      });
+      // The function answers with a JSON body on failure too, and that message
+      // is the useful one — "Edge Function returned a non-2xx status" is not.
+      const message = (data as { error?: string } | null)?.error;
+      if (message) throw new Error(message);
+      if (error) throw error;
+      await reload();
+      setSync({ busy: false, message: null, error: null });
+      return null;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Der Menüplan konnte nicht geholt werden';
+      setSync({ busy: false, message: null, error: message });
+      return message;
+    }
+  }, [reload]);
+
+  const deleteMenuWeek = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase.from('fp_menu_weeks').delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Woche konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
   // One opportunistic refresh per session once the plan is on screen. The
   // Edge Function is a no-op while every calendar's cache is inside its TTL,
   // so several viewers opening the planner cost one fetch, not one each.
@@ -717,14 +869,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [caches, calendars, people, assignments]
   );
 
+  const menuEvents = useMemo(
+    () => menuEventsToPlanner(menuWeeks, menuSources, menuAssignments),
+    [menuWeeks, menuSources, menuAssignments]
+  );
+
   const value: AppContextValue = {
     screen, user, family, role, canEdit, isOwner, people, calendars,
     manualSeries, calendarEvents,
+    menuSources, menuWeeks, menuAssignments, menuEvents,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
     addPerson, updatePerson, deletePerson, setAssignment,
     upsertCalendar, deleteCalendar, refreshCalendars, setTimeFormat,
+    upsertMenuSource, deleteMenuSource, setMenuAssignment, removeMenuAssignment,
+    importMenuWeek, deleteMenuWeek,
     createLinkInvite, updateMemberRole, removeMember, reload,
   };
 

@@ -5,8 +5,9 @@ import { ROLE_LABELS } from '../lib/types.ts';
 import type { Calendar, Person, Role, TimeFormat } from '../lib/types.ts';
 import { Sheet } from './Sheet.tsx';
 import { setKioskEnabled, useKioskSettings } from './KioskMode.tsx';
+import { MenuSettings } from './MenuSettings.tsx';
 
-type Tab = 'people' | 'calendars' | 'access' | 'display';
+type Tab = 'people' | 'calendars' | 'menu' | 'access' | 'display';
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const { isOwner } = useApp();
@@ -19,6 +20,8 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           onClick={() => setTab('people')}>Personen</button>
         <button role="tab" aria-selected={tab === 'calendars'} className={tab === 'calendars' ? 'active' : ''}
           onClick={() => setTab('calendars')}>Kalender</button>
+        <button role="tab" aria-selected={tab === 'menu'} className={tab === 'menu' ? 'active' : ''}
+          onClick={() => setTab('menu')}>Menüplan</button>
         <button role="tab" aria-selected={tab === 'access'} className={tab === 'access' ? 'active' : ''}
           onClick={() => setTab('access')}>Zugriff</button>
         <button role="tab" aria-selected={tab === 'display'} className={tab === 'display' ? 'active' : ''}
@@ -27,6 +30,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
 
       {tab === 'people' && <PeopleSettings />}
       {tab === 'calendars' && (isOwner ? <CalendarSettings /> : <OwnerOnly what="Kalender" />)}
+      {tab === 'menu' && <MenuSettings />}
       {tab === 'access' && (isOwner ? <AccessSettings /> : <OwnerOnly what="Zugriffsrechte" />)}
       {tab === 'display' && <DisplaySettings />}
     </Sheet>
