@@ -32,7 +32,9 @@ function useIsNarrow(): boolean {
 }
 
 export function Planner() {
-  const { family, role, people, manualSeries, calendarEvents, canEdit, sync, refreshCalendars } = useApp();
+  const {
+    family, role, people, manualSeries, calendarEvents, menuEvents, canEdit, sync, refreshCalendars,
+  } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const weekStart = family?.weekStart ?? 1;
   const timeFormat = family?.timeFormat ?? '24h';
@@ -52,8 +54,9 @@ export function Planner() {
     () => [
       ...expandManualSeries(manualSeries, days[0], days[days.length - 1], tz),
       ...calendarEvents,
+      ...menuEvents,
     ],
-    [manualSeries, calendarEvents, days, tz]
+    [manualSeries, calendarEvents, menuEvents, days, tz]
   );
   const cells = useMemo(() => buildCells(days, people, events, tz), [days, people, events, tz]);
   const today = todayKey(tz);
@@ -184,7 +187,7 @@ function EventChip({ event, tz, timeFormat, onClick }: {
   return (
     <button
       className={`chip ${event.source}`}
-      style={event.source === 'calendar' ? { borderLeftColor: event.color } : undefined}
+      style={event.source !== 'manual' ? { borderLeftColor: event.color } : undefined}
       onClick={onClick}
       title={event.title}
     >

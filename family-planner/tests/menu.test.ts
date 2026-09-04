@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAllowedMenuUrl, isoWeek, menuPdfCandidates, mondayOfIsoWeek, schoolDays, todayInZone,
-  validateMenuWeek,
+  isoWeek, mondayOfIsoWeek, schoolDays, todayInZone, validateMenuWeek,
 } from '../supabase/functions/family-menu-import/menu.ts';
 
 describe('ISO weeks', () => {
@@ -45,35 +44,6 @@ describe('todayInZone', () => {
     expect(todayInZone('Europe/Zurich', late)).toBe('2026-09-07');
     expect(todayInZone('UTC', late)).toBe('2026-09-06');
     expect(isoWeek(todayInZone('Europe/Zurich', late))).toEqual({ year: 2026, week: 37 });
-  });
-});
-
-describe('menuPdfCandidates', () => {
-  it('builds the name the school uses', () => {
-    expect(menuPdfCandidates(2026, 37)).toEqual([
-      'https://www.stadt-zuerich.ch/content/dam/stzh/schulen/hutten/downloads/37.26.pdf',
-    ]);
-  });
-
-  it('offers both spellings for a single-digit week', () => {
-    const urls = menuPdfCandidates(2026, 7);
-    expect(urls).toHaveLength(2);
-    expect(urls[0]).toMatch(/\/7\.26\.pdf$/);
-    expect(urls[1]).toMatch(/\/07\.26\.pdf$/);
-  });
-});
-
-describe('isAllowedMenuUrl', () => {
-  it('takes the school site over https', () => {
-    expect(isAllowedMenuUrl(menuPdfCandidates(2026, 37)[0])).toBe(true);
-  });
-
-  it('refuses anything else', () => {
-    expect(isAllowedMenuUrl('http://www.stadt-zuerich.ch/x.pdf')).toBe(false);
-    expect(isAllowedMenuUrl('https://evil.example.com/x.pdf')).toBe(false);
-    expect(isAllowedMenuUrl('https://www.stadt-zuerich.ch.evil.com/x.pdf')).toBe(false);
-    expect(isAllowedMenuUrl('file:///etc/passwd')).toBe(false);
-    expect(isAllowedMenuUrl('nonsense')).toBe(false);
   });
 });
 

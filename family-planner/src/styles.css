@@ -49,7 +49,7 @@ h3 { font-size: .95rem; margin: 18px 0 6px; }
 input, select, button, textarea { font: inherit; }
 
 input[type="text"], input[type="email"], input[type="password"],
-input[type="date"], input[type="time"], input:not([type]), select {
+input[type="date"], input[type="time"], input:not([type]), select, textarea {
   padding: 10px 12px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
@@ -213,8 +213,10 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   font-size: .84rem; cursor: pointer;
 }
 .chip:hover { background: var(--paper-alt); }
-/* Imported chips override this inline with the calendar's own colour. */
+/* Imported chips override this inline: a calendar's own colour, or the one
+   colour every lunch shares. */
 .chip.manual { border-left-color: var(--accent); }
+.chip.menu .chip-title { font-style: italic; }
 .chip-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
 .chip-repeat { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
@@ -326,6 +328,35 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   padding: 12px 14px; border-radius: var(--radius); box-shadow: var(--shadow);
 }
 .update-prompt button { background: var(--surface); color: var(--ink); border: none; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+
+/* --- menu plans -------------------------------------------------------- */
+
+.menu-source {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 10px 0;
+  background: var(--surface);
+}
+.menu-source h3 { margin: 14px 0 4px; }
+.menu-source .row-line { display: flex; align-items: baseline; gap: 8px; }
+
+/* Mon-Fri as five small toggles: a child's school days are a shape, not a
+   list, and this reads at a glance. */
+.weekday-picker { display: inline-flex; gap: 4px; flex: none; }
+.weekday-picker button {
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 6px;
+  min-width: 34px; padding: 3px 0;
+  font-size: .8rem; cursor: pointer;
+}
+.weekday-picker button.active {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600;
+}
+.weekday-picker button:disabled { opacity: .5; cursor: default; }
 
 /* --- kiosk: the iPad on the wall --------------------------------------- */
 

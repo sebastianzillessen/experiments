@@ -117,11 +117,20 @@ embedded JPEG per page, no text layer at all — so there is nothing to parse:
 the page goes to Claude (`claude-opus-5`) and comes back as checked JSON. About
 three to four Rappen per week, so a couple of francs a school year.
 
-`family-menu-import` fetches the week itself where it can (the files are named
-`{week}.{yy}.pdf`) and takes an uploaded PDF where it cannot. It writes
-nothing: a scan can be misread, so the week is shown for confirming first, and
-a dish the model cannot read with confidence is left out rather than guessed
-at. Details and the required `CLAUDE_API_KEY` secret are in
+Set it up under **Settings → Menüplan**: the folder the school publishes in,
+and one or more file-name patterns filled in per week — `{KW}.{JJ}.pdf` gives
+`37.26.pdf`. Several patterns are tried in turn, which covers a school that
+writes `7.26.pdf` one week and `07.26.pdf` the next. The form shows what each
+pattern resolves to, so nobody has to work that out in their head. A family can
+have more than one source: children at two schools eat two different lunches.
+
+Then tick which children eat there and on which weekdays — a child in school
+Monday to Wednesday is not shown Thursday's lunch. The dishes appear as an
+entry in that child's own column on those days, in their own colour.
+
+A dish the model cannot read with confidence is left out rather than guessed
+at, and what comes back is checked against the week it was asked for before
+anything is stored. Details and the required `CLAUDE_API_KEY` secret are in
 `supabase/functions/family-menu-import/README.md`.
 
 ## Roles
@@ -202,6 +211,8 @@ fp_families ─┬─ fp_memberships (user_id, role)        ← logins
              ├─ fp_calendars ─┬─ fp_calendar_secrets   ← no policy!
              │                └─ fp_calendar_cache     ← fetched events
              ├─ fp_calendar_assignments                ← manual corrections
+             ├─ fp_menu_sources ─┬─ fp_menu_weeks       ← imported lunches
+             │                   └─ fp_menu_people      ← who eats, which days
              └─ fp_invites
 ```
 
@@ -252,8 +263,9 @@ the table cells, the calendar URL check including `webcal://` and the SSRF
 guard, the encryption of the credentials with its migration of old plaintext,
 both time formats, reading times **and repetitions** out of a title, expanding
 a series across a change of the clocks, stripping names from the display, the
-kiosk settings with their two burn-in drifts, and the menu import's week
-arithmetic and its check on what the model returned (199 tests).
+kiosk settings with their two burn-in drifts, the menu import's week
+arithmetic and its check on what the model returned, the file-name patterns
+with their escape attempts, and which child sees which lunch (222 tests).
 
 For production `build.sh` in the repo root builds it (`bash build.sh
 family-planner`) and writes `config.js` from `SUPABASE_URL` /

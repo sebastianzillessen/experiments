@@ -32,15 +32,18 @@ Authorization: Bearer <USER_JWT>
    key is public, and configuration state is nobody else's business.
 2. Without `year`/`week`, take the current week **in the family's time zone**.
    At 01:00 on a Monday a server on UTC would otherwise fetch last week.
-3. Without `pdf_base64`, fetch the week from the school: the files are named
-   `{week}.{yy}.pdf` (`37.26.pdf`). Weeks below ten have not come round in the
-   observed sample, so both `7.26.pdf` and `07.26.pdf` are tried.
-4. Send the PDF to Claude (`claude-opus-5`) with a JSON schema, then check what
-   comes back against the week that was asked for.
+3. Without `pdf_base64`, build the address from the source the family
+   configured in **Settings → Menüplan**: a base folder plus patterns like
+   `{KW}.{JJ}.pdf`, tried in turn. `patterns.ts` decides what may be fetched —
+   only https, nothing inside the local network, and the result must still sit
+   under the base, so a pattern cannot climb out with `../` or be an address of
+   its own.
+4. Send the PDF to Claude (`claude-opus-5`) with a JSON schema, check what
+   comes back against the week that was asked for, and store it in
+   `fp_menu_weeks`. Re-importing a week replaces it — a school correcting its
+   own PDF is the normal reason to run this twice.
 
-`pdf_base64` is the way back in if the school ever renames its files. Fetching
-is limited to `https://www.stadt-zuerich.ch` — this function holds a
-service-role key, so anything it can be talked into fetching would be a hole.
+`pdf_base64` is the way back in if the school ever renames its files.
 
 ## What the model is told, and why
 
