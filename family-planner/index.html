@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2f6f5e">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script>
+// iOS paints the status bar of a home screen app from theme-color, and reads it
+// at launch. On the wall tablet that would be app-green above a dark plan until
+// React mounts, so the kiosk colour is set here from the stored setting.
+// KioskMode.tsx keeps it right from then on; the value matches --paper in
+// body.kiosk (styles.css).
+try {
+  if (JSON.parse(localStorage.getItem('fp.kiosk') || '{}').enabled) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#14161a');
+  }
+} catch (e) { /* blocked storage: the green bar is the smallest of those worries */ }
+</script>
 <meta name="apple-mobile-web-app-title" content="Planer">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon-180x180.png">

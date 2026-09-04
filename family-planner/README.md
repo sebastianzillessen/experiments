@@ -85,6 +85,11 @@ What changes:
   that moves around. A touch anywhere brings the plan back. Before going dark
   the view returns to this week, so whoever walks up finds today rather than
   wherever someone left off paging.
+- **The iPad's status bar follows the plan.** iOS paints it from
+  `theme-color`, which is otherwise the app's green — a green bar above a dark
+  plan, and above the black screen the only thing lit on the whole wall. It
+  turns dark with the theme and black under the curtain, and is already dark at
+  launch so nothing flashes green on the way in.
 - **Today is scrolled into view** whenever it is among the days on screen.
 - **The calendars are pulled every 15 minutes.** Both timers count elapsed
   time, so an iPad that slept through the night does not owe 40 syncs on
