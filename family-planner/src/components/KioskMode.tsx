@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { burnInOffset, curtainClockSpot, readKioskSettings } from '../lib/kiosk.ts';
 import type { KioskSettings } from '../lib/kiosk.ts';
@@ -7,20 +7,46 @@ const STORAGE_KEY = 'fp.kiosk';
 /** One timer drives everything, so the three jobs cannot drift apart. */
 const TICK_MS = 20_000;
 
-function loadSettings(): KioskSettings {
-  let stored: string | null = null;
-  try {
-    stored = window.localStorage.getItem(STORAGE_KEY);
-  } catch {
-    // Private mode or blocked storage: the URL alone decides.
-  }
-  const settings = readKioskSettings(window.location.search, stored);
+// One shared value for the whole app: the switch in the settings and the
+// planner behind it must not hold different opinions. Kept as one object so
+// useSyncExternalStore sees a stable snapshot.
+let cached: KioskSettings | null = null;
+const listeners = new Set<() => void>();
+
+function persist(settings: KioskSettings) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
     // Not being able to remember is survivable; the URL still works.
   }
-  return settings;
+}
+
+function currentSettings(): KioskSettings {
+  if (!cached) {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // Private mode or blocked storage: the URL alone decides.
+    }
+    cached = readKioskSettings(window.location.search, stored);
+    persist(cached);
+  }
+  return cached;
+}
+
+/** Switching it on or off takes effect at once — no reload of the app. */
+export function setKioskEnabled(enabled: boolean) {
+  cached = { ...currentSettings(), enabled };
+  persist(cached);
+  for (const notify of listeners) notify();
+}
+
+export function useKioskSettings(): KioskSettings {
+  return useSyncExternalStore(
+    notify => { listeners.add(notify); return () => { listeners.delete(notify); }; },
+    currentSettings,
+  );
 }
 
 /**
@@ -68,7 +94,7 @@ export type Kiosk = {
  * @param rest     put the view back the way someone walking up should find it
  */
 export function useKiosk(refresh: () => void, rest: () => void): Kiosk {
-  const [settings] = useState(loadSettings);
+  const settings = useKioskSettings();
   const [asleep, setAsleep] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
@@ -143,7 +169,8 @@ export function useKiosk(refresh: () => void, rest: () => void): Kiosk {
     setAsleep(false);
   }, []);
 
-  return { enabled: settings.enabled, asleep, wake };
+  // Turning the mode off while the curtain is up must lift it too.
+  return { enabled: settings.enabled, asleep: settings.enabled && asleep, wake };
 }
 
 /**

@@ -65,10 +65,12 @@ The user interface is German; the code and its comments are English.
 
 ## Kiosk mode on an iPad
 
-Open the app once as `https://planer.zillessen.dev/?kiosk=1` and add *that* to
-the home screen. The setting is per device — only the tablet on the wall wants
-a screensaver — and is remembered from then on, so a relaunch keeps it.
-`?kiosk=0` switches it off again.
+Switch it on under **Settings → Anzeige → Kiosk-Modus**, or open the app as
+`https://planer.zillessen.dev/?kiosk=1` and add *that* to the home screen. The
+setting is per device — only the tablet on the wall wants a screensaver, so it
+is not a family setting like the time format — and is remembered from then on,
+so a relaunch keeps it. `?kiosk=0` switches it off again, as does the same
+switch.
 
 What changes:
 
