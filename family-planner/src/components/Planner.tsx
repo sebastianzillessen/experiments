@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../supabaseClient.ts';
 import { useApp } from '../context/AppContext.tsx';
 import {
@@ -14,6 +14,7 @@ import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { AppVersion } from './AppVersion.tsx';
+import { KioskCurtain, useKiosk } from './KioskMode.tsx';
 
 type View = 'week' | 'month';
 
@@ -57,6 +58,18 @@ export function Planner() {
   const cells = useMemo(() => buildCells(days, people, events, tz), [days, people, events, tz]);
   const today = todayKey(tz);
 
+  const backToToday = useCallback(() => { setView('week'); setAnchor(todayKey(tz)); }, [tz]);
+  const pullCalendars = useCallback(() => { refreshCalendars(false); }, [refreshCalendars]);
+  const kiosk = useKiosk(pullCalendars, backToToday);
+
+  // Bring today into view whenever it is among the days on screen. Paging to
+  // another week or month finds nothing to scroll to and is left alone.
+  const tableRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const row = tableRef.current?.querySelector('.is-today');
+    row?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  }, [days, today, narrow, kiosk.asleep]);
+
   function step(delta: number) {
     setAnchor(prev => (view === 'week' ? addDaysToKey(prev, 7 * delta) : addMonths(startOfMonth(prev), delta)));
   }
@@ -65,7 +78,7 @@ export function Planner() {
   const columns = [...people, { id: FAMILY_COLUMN, name: 'Familie', color: '#8a7d64' }];
 
   return (
-    <div className="planner">
+    <div className="planner" ref={tableRef}>
       <header className="topbar no-print">
         <div className="topbar-left">
           <h1>{family?.name ?? 'Familienplaner'}</h1>
@@ -159,6 +172,7 @@ export function Planner() {
       {quickAdd && <QuickAddSheet prefill={quickAdd} onClose={() => setQuickAdd(null)} />}
       {selected && <EventSheet event={selected} onClose={() => setSelected(null)} />}
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
+      {kiosk.asleep && <KioskCurtain onWake={kiosk.wake} />}
     </div>
   );
 }

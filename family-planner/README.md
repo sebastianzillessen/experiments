@@ -54,12 +54,59 @@ The user interface is German; the code and its comments are English.
   series).
 - **Several viewers.** A family has any number of logins with different
   rights; you invite by link.
+- **Kiosk mode** for a wall-mounted iPad: dark, awake, blanked when nobody is
+  there, refreshed every 15 minutes. See below.
 - **Time format per family.** Settings → Anzeige switches between 24 hours
   (`14:00–15:15`) and AM/PM (`2:00–3:15 PM`). It applies to everything the
   planner writes itself. The time picker for a new entry is a native browser
   control, so the operating system decides what format it shows (on iOS:
   Settings → General → Date & Time → 24-Hour Time). The stored value is the
   same either way.
+
+## Kiosk mode on an iPad
+
+Open the app once as `https://planer.zillessen.dev/?kiosk=1` and add *that* to
+the home screen. The setting is per device — only the tablet on the wall wants
+a screensaver — and is remembered from then on, so a relaunch keeps it.
+`?kiosk=0` switches it off again.
+
+What changes:
+
+- **The screen stays awake** (Screen Wake Lock), so iPadOS does not lock the
+  device and lose the plan.
+- **A dark theme**, because a bright plan standing still for weeks is what
+  burns in. It matters most on the OLED iPad Pro; every other iPad is LCD and
+  only ever shows temporary after-images.
+- **The plan is nudged by up to 3 px** every minute, so no pixel keeps showing
+  the same table rule.
+- **After 5 minutes without a touch the screen goes black**, with a dim clock
+  that moves around. A touch anywhere brings the plan back. Before going dark
+  the view returns to this week, so whoever walks up finds today rather than
+  wherever someone left off paging.
+- **Today is scrolled into view** whenever it is among the days on screen.
+- **The calendars are pulled every 15 minutes.** Both timers count elapsed
+  time, so an iPad that slept through the night does not owe 40 syncs on
+  waking.
+
+Timings can be changed: `?kiosk=1&idle=10&refresh=30` (minutes; idle 1–120,
+refresh 1–240).
+
+Worth knowing before you mount it: **no web app can switch the display off, and
+none can switch it back on** — a native app cannot either, iOS has no interface
+for it. So the black screen is a cover over a lit display, not the iPad's own
+sleep. Presence detection through the camera would not change that, which is
+why there is none.
+
+On the iPad itself:
+
+- **Guided Access** (Settings → Accessibility) locks the device to the app:
+  start it, then triple-click the side button. For a tablet that hangs on the
+  wall for good, **Single App Mode** through Apple Configurator survives a
+  restart as well.
+- Set **Auto-Lock to Never** as a belt-and-braces measure next to the wake
+  lock.
+- On an iPad with Face ID, **Attention Aware Features** keeps the display from
+  dimming while somebody is looking at it.
 
 ## Roles
 
@@ -188,8 +235,8 @@ recurrence rules, name matching, date arithmetic, merging both sources into
 the table cells, the calendar URL check including `webcal://` and the SSRF
 guard, the encryption of the credentials with its migration of old plaintext,
 both time formats, reading times **and repetitions** out of a title, expanding
-a series across a change of the clocks, and stripping names from the display
-(172 tests).
+a series across a change of the clocks, stripping names from the display, and
+the kiosk settings with their two burn-in drifts (184 tests).
 
 For production `build.sh` in the repo root builds it (`bash build.sh
 family-planner`) and writes `config.js` from `SUPABASE_URL` /

@@ -203,7 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       color: c.color,
       enabled: c.enabled,
       urlPreview: c.url_preview ?? '',
-      ttlMinutes: c.ttl_minutes ?? 30,
+      ttlMinutes: c.ttl_minutes ?? 15,
       lastSyncedAt: c.last_synced_at,
       lastError: c.last_error,
     })));

@@ -22,7 +22,7 @@ Authorization: Bearer <USER_JWT>
 2. Check membership. This is explicit, because the service-role client after
    it bypasses RLS. **Every** role may trigger a run, a viewer too: the run
    changes nothing, it only refreshes the cache.
-3. Per calendar: check the TTL (`fp_calendars.ttl_minutes`, 30 by default).
+3. Per calendar: check the TTL (`fp_calendars.ttl_minutes`, 15 by default).
    Fresh and no `force` means nothing to do.
 4. Read the secret, check the URL (https only, no private addresses), fetch it
    (Basic auth optional, `If-None-Match`, 15 s timeout, 5 MB cap).

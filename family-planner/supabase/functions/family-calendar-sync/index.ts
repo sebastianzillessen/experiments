@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
 
     // 3. Still fresh? Then this is a no-op — that is the whole point of caching
     //    a feed several viewers open at once.
-    const ttlMs = (cal.ttl_minutes ?? 30) * 60_000;
+    const ttlMs = (cal.ttl_minutes ?? 15) * 60_000;
     const lastSynced = cal.last_synced_at ? Date.parse(cal.last_synced_at) : 0;
     const fresh = Boolean(cache) && Date.now() - lastSynced < ttlMs;
     if (fresh && !body.force) {
