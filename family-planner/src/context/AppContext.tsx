@@ -865,8 +865,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* ------------------------------------------------------------------ */
 
   const calendarEvents = useMemo(
-    () => calendarEventsToPlanner(caches, calendars, people, assignments),
-    [caches, calendars, people, assignments]
+    () => calendarEventsToPlanner(caches, calendars, people, assignments, family?.timezone),
+    [caches, calendars, people, assignments, family?.timezone]
   );
 
   const menuEvents = useMemo(
