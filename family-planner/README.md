@@ -54,6 +54,13 @@ The user interface is German; the code and its comments are English.
   series).
 - **Several viewers.** A family has any number of logins with different
   rights; you invite by link.
+- **Times written short in the table.** A chip shows `8–13`, not `08:00–13:00`
+  — the leading zero and whole `:00` minutes are dropped, because in a column
+  six people wide those characters decide whether an entry fits on one line.
+  The detail view keeps the full form. An entry that repeats its own time in
+  its text ("GM schaut auf Lars 8:00-13:00") has it removed from the chip, the
+  same way the person's name is: the column answers who, the time answers when,
+  the chip only has to answer what.
 - **Kiosk mode** for a wall-mounted iPad: dark, awake, blanked when nobody is
   there, refreshed every 15 minutes. See below.
 - **Time format per family.** Settings → Anzeige switches between 24 hours
@@ -270,7 +277,8 @@ both time formats, reading times **and repetitions** out of a title, expanding
 a series across a change of the clocks, stripping names from the display, the
 kiosk settings with their two burn-in drifts, the menu import's week
 arithmetic and its check on what the model returned, the file-name patterns
-with their escape attempts, and which child sees which lunch (222 tests).
+with their escape attempts, which child sees which lunch, and the short time
+format down to which repeated times may be dropped (234 tests).
 
 For production `build.sh` in the repo root builds it (`bash build.sh
 family-planner`) and writes `config.js` from `SUPABASE_URL` /
