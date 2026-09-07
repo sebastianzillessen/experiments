@@ -164,3 +164,26 @@ export function parseTitleTime(raw: string): TitleTimes | null {
 
   return null;
 }
+
+/**
+ * Drop a time from a title when the chip already shows it beside the text.
+ *
+ * Calendar entries often repeat their own time — "GM schaut auf Lars
+ * 8:00-13:00" — and in a narrow column that turns one line into three for no
+ * information at all. Only an exact match goes: a *different* time in the
+ * title ("Abgabe bis 16:00" on a 9–17 entry) is something the reader needs.
+ *
+ * Times come in as "HH:MM", the shape timeValue() produces, so this stays free
+ * of time zones.
+ */
+export function stripRedundantTime(
+  title: string, startTime: string | null, endTime: string | null
+): string {
+  if (!title || !startTime) return title;
+  const found = parseTitleTime(title);
+  if (!found || found.startTime !== startTime) return title;
+  // A title naming only a start ("ab 8:00") repeats itself in both fields.
+  const endMatches = found.endTime === found.startTime || found.endTime === endTime;
+  if (!endMatches) return title;
+  return found.title || title;
+}

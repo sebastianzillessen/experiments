@@ -159,3 +159,48 @@ describe('clock format', () => {
     expect(timeValue('2026-09-08T05:05:00.000Z', TZ)).toBe('07:05');
   });
 });
+
+describe('compact clock', () => {
+  const at = (day: string, time: string) => `${day}T${time}:00.000Z`;
+
+  it('drops the leading zero and whole :00 minutes', () => {
+    expect(formatClock(8, 0, '24h', true)).toBe('8');
+    expect(formatClock(8, 15, '24h', true)).toBe('8:15');
+    expect(formatClock(16, 0, '24h', true)).toBe('16');
+    expect(formatClock(0, 0, '24h', true)).toBe('0');
+  });
+
+  it('leaves the full form alone', () => {
+    expect(formatClock(8, 0, '24h')).toBe('08:00');
+    expect(formatClock(8, 15, '24h')).toBe('08:15');
+  });
+
+  it('does the same in AM/PM', () => {
+    expect(formatClock(14, 0, '12h', true)).toBe('2 PM');
+    expect(formatClock(14, 15, '12h', true)).toBe('2:15 PM');
+    expect(formatClock(0, 0, '12h', true)).toBe('12 AM');
+  });
+
+  it('shortens the ranges from the real plan', () => {
+    // The chips that wrapped to two and three lines on the wall iPad.
+    const range = (from: string, to: string) =>
+      timeRangeLabel(at('2026-09-07', from), at('2026-09-07', to), 'UTC', '24h', true);
+    expect(range('20:00', '21:00')).toBe('20–21');
+    expect(range('06:00', '15:00')).toBe('6–15');
+    expect(range('08:15', '16:00')).toBe('8:15–16');
+    expect(range('15:15', '17:00')).toBe('15:15–17');
+    expect(range('16:10', '16:55')).toBe('16:10–16:55');
+  });
+
+  it('still writes a shared AM/PM suffix once', () => {
+    expect(timeRangeLabel(at('2026-09-07', '14:00'), at('2026-09-07', '15:00'), 'UTC', '12h', true))
+      .toBe('2–3 PM');
+    expect(timeRangeLabel(at('2026-09-07', '11:30'), at('2026-09-07', '13:00'), 'UTC', '12h', true))
+      .toBe('11:30 AM–1 PM');
+  });
+
+  it('leaves the detail view untouched by default', () => {
+    expect(timeRangeLabel(at('2026-09-07', '08:00'), at('2026-09-07', '13:00'), 'UTC'))
+      .toBe('08:00–13:00');
+  });
+});

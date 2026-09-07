@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTitleTime } from '../src/lib/parseTitleTime.ts';
+import { parseTitleTime, stripRedundantTime } from '../src/lib/parseTitleTime.ts';
 
 /** Compact assertion: "Zahnarzt 14-15" → "Zahnarzt 14:00–15:00". */
 function read(input: string): string | null {
@@ -150,5 +150,38 @@ describe('parseTitleTime — what it reports', () => {
   it('hands back the text it interpreted', () => {
     expect(parseTitleTime('Zahnarzt 14-15')?.source).toBe('14-15');
     expect(parseTitleTime('ab 15 daheim')?.source).toBe('ab 15');
+  });
+});
+
+describe('stripRedundantTime', () => {
+  it('drops a time the chip already shows', () => {
+    // The worst chip on the wall iPad: six lines in one cell.
+    expect(stripRedundantTime('GM schaut auf Lars 8:00-13:00', '08:00', '13:00'))
+      .toBe('GM schaut auf Lars');
+  });
+
+  it('drops a title that only names the start', () => {
+    expect(stripRedundantTime('ab 15 daheim', '15:00', '18:00')).toBe('daheim');
+  });
+
+  it('keeps a time that is not the entry\'s own', () => {
+    // "Abgabe bis 16:00" on a 9-17 entry is information, not repetition.
+    expect(stripRedundantTime('Abgabe bis 16:00', '09:00', '17:00'))
+      .toBe('Abgabe bis 16:00');
+    expect(stripRedundantTime('Termin 8:00-12:00', '08:00', '13:00'))
+      .toBe('Termin 8:00-12:00');
+  });
+
+  it('leaves a title with no time alone', () => {
+    expect(stripRedundantTime('Kinderarzt', '15:15', '17:00')).toBe('Kinderarzt');
+    expect(stripRedundantTime('Zimmer 12', '15:15', '17:00')).toBe('Zimmer 12');
+  });
+
+  it('never strips a title down to nothing', () => {
+    expect(stripRedundantTime('8:00-13:00', '08:00', '13:00')).toBe('8:00-13:00');
+  });
+
+  it('does nothing for an all-day entry', () => {
+    expect(stripRedundantTime('Ferien 1.10.', null, null)).toBe('Ferien 1.10.');
   });
 });

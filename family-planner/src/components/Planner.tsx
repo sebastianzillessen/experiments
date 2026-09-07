@@ -183,7 +183,8 @@ export function Planner() {
 function EventChip({ event, tz, timeFormat, onClick }: {
   event: PlannerEvent; tz: string; timeFormat: TimeFormat; onClick: () => void;
 }) {
-  const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
+  // Compact: the chip is the tightest place in the app.
+  const time = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat, true);
   return (
     <button
       className={`chip ${event.source}`}

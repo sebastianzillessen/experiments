@@ -3,7 +3,8 @@
 // day × person table.
 
 import { autoAssign, stripPeopleNames } from './assign.ts';
-import { daysBetween } from './dates.ts';
+import { daysBetween, timeValue } from './dates.ts';
+import { stripRedundantTime } from './parseTitleTime.ts';
 import { wallClockIn } from '../../supabase/functions/family-calendar-sync/ics.ts';
 import { FAMILY_COLUMN } from './types.ts';
 import type { Assignment, CachedEvent, Calendar, Person, PlannerEvent } from './types.ts';
@@ -26,7 +27,8 @@ export function calendarEventsToPlanner(
   caches: CalendarCacheEntry[],
   calendars: Calendar[],
   people: Person[],
-  assignments: Assignment[]
+  assignments: Assignment[],
+  tz = 'Europe/Zurich'
 ): PlannerEvent[] {
   const byId = new Map(calendars.map(c => [c.id, c]));
   const overrides = new Map<string, Assignment>();
@@ -57,8 +59,16 @@ export function calendarEventsToPlanner(
         uid: event.uid,
         occurrence: event.occurrence,
         title,
-        // The column says who it is for, so the chip drops the name.
-        displayTitle: stripPeopleNames(title, assigned),
+        // The column says who it is for and the chip already shows the time,
+        // so neither has to be repeated in the text.
+        displayTitle: stripPeopleNames(
+          stripRedundantTime(
+            title,
+            event.startsAt ? timeValue(event.startsAt, tz) : null,
+            event.endsAt ? timeValue(event.endsAt, tz) : null,
+          ),
+          assigned,
+        ),
         notes: event.description || '',
         allDay: event.allDay,
         startDate: event.startDate,
