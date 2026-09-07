@@ -70,6 +70,29 @@ The user interface is German; the code and its comments are English.
   Settings → General → Date & Time → 24-Hour Time). The stored value is the
   same either way.
 
+## Weather
+
+Settings → Anzeige takes a Swiss postal code, and each day in the planner's
+first column then carries the forecast for **08:00 to 18:00** — the hours a
+school day and a working day share. The daily figures MeteoSwiss publishes are
+no use here: their minimum is the one at four in the morning.
+
+A tap flips the whole column between the symbol and the figures
+(`18–31°`, and the millimetres when there are any). Which it shows is
+remembered per device.
+
+The symbol is worked out from the numbers — sunshine minutes and millimetres —
+rather than from the `weatherIcon3h` field. Those numbers are undocumented, and
+the only meaning that can be read out of the published symbol files is "light
+cloud", "dark cloud" and "lightning", which cannot tell rain from snow. Sunshine
+and rainfall are plain measurements, so the rule can be tested.
+
+`family-weather` fetches it: on the server, because MeteoSwiss sends no CORS
+header and a browser cannot ask it at all, and because one fetch an hour then
+serves every screen. It reads the endpoint the MeteoSwiss app uses, which is
+undocumented and may change — so a failed refresh leaves the last forecast on
+screen rather than clearing the column.
+
 ## Kiosk mode on an iPad
 
 Switch it on under **Settings → Anzeige → Kiosk-Modus**, or open the app as
@@ -278,7 +301,8 @@ a series across a change of the clocks, stripping names from the display, the
 kiosk settings with their two burn-in drifts, the menu import's week
 arithmetic and its check on what the model returned, the file-name patterns
 with their escape attempts, which child sees which lunch, and the short time
-format down to which repeated times may be dropped (234 tests).
+format down to which repeated times may be dropped, and the daytime weather
+window against a real MeteoSwiss response (247 tests).
 
 For production `build.sh` in the repo root builds it (`bash build.sh
 family-planner`) and writes `config.js` from `SUPABASE_URL` /

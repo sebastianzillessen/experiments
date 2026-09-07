@@ -182,7 +182,7 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
   border-bottom: 2px solid var(--rule-strong);
 }
 .planner-table .col-day {
-  width: 92px; min-width: 92px;
+  width: 104px; min-width: 104px;
   background: var(--paper-alt);
   font-size: .85rem; font-weight: 600; white-space: nowrap;
   position: sticky; left: 0; z-index: 2;
@@ -329,6 +329,24 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 }
 .update-prompt button { background: var(--surface); color: var(--ink); border: none; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 
+/* --- weather ----------------------------------------------------------- */
+
+/* Sits under the date in the row header. A button because it flips between the
+   symbol and the figures. */
+.weather {
+  display: block;
+  margin-top: 2px;
+  border: none; background: none; padding: 0;
+  color: var(--ink-soft);
+  font: inherit; font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.25;
+}
+.weather-symbol { font-size: 1.35rem; line-height: 1.1; }
+.weather-temp { display: block; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.weather-rain { display: block; font-size: .72rem; }
+
 /* --- menu plans -------------------------------------------------------- */
 
 .menu-source {
@@ -411,5 +429,6 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
   body { background: #fff; }
   .table-wrap { overflow: visible; padding: 0; }
   .planner-table .col-day { position: static; }
+  .weather { color: #000; }
   .chip { border-left-width: 2px; }
 }

@@ -15,6 +15,7 @@ import { EventSheet } from './EventSheet.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { AppVersion } from './AppVersion.tsx';
 import { KioskCurtain, useKiosk } from './KioskMode.tsx';
+import { WeatherCell, useWeatherDetail } from './Weather.tsx';
 
 type View = 'week' | 'month';
 
@@ -33,7 +34,8 @@ function useIsNarrow(): boolean {
 
 export function Planner() {
   const {
-    family, role, people, manualSeries, calendarEvents, menuEvents, canEdit, sync, refreshCalendars,
+    family, role, people, manualSeries, calendarEvents, menuEvents, canEdit, sync,
+    refreshCalendars, weather, refreshWeather,
   } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const weekStart = family?.weekStart ?? 1;
@@ -61,8 +63,14 @@ export function Planner() {
   const cells = useMemo(() => buildCells(days, people, events, tz), [days, people, events, tz]);
   const today = todayKey(tz);
 
+  const [detailedWeather, toggleWeather] = useWeatherDetail();
+  const byDate = useMemo(() => new Map(weather.map(d => [d.date, d])), [weather]);
+
   const backToToday = useCallback(() => { setView('week'); setAnchor(todayKey(tz)); }, [tz]);
-  const pullCalendars = useCallback(() => { refreshCalendars(false); }, [refreshCalendars]);
+  const pullCalendars = useCallback(() => {
+    refreshCalendars(false);
+    refreshWeather(false);
+  }, [refreshCalendars, refreshWeather]);
   const kiosk = useKiosk(pullCalendars, backToToday);
 
   // Bring today into view whenever it is among the days on screen. Paging to
@@ -135,6 +143,8 @@ export function Planner() {
                 ].filter(Boolean).join(' ')}>
                   <th scope="row" className="col-day">
                     {view === 'week' ? dayLabel(day) : dayLabelShort(day)}
+                    <WeatherCell day={byDate.get(day)} detailed={detailedWeather}
+                      onToggle={toggleWeather} />
                   </th>
                   {columns.map(col => (
                     <td key={col.id}>

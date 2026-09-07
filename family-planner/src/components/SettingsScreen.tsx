@@ -339,7 +339,48 @@ function DisplaySettings() {
         Alles, was der Planer selbst schreibt, folgt der Einstellung hier.
       </p>
 
+      <WeatherSetting />
       <KioskSetting />
+    </>
+  );
+}
+
+/** The postal code the forecast is fetched for. Family-wide, so owner only. */
+function WeatherSetting() {
+  const { family, isOwner, setWeatherPlz, refreshWeather } = useApp();
+  const [plz, setPlz] = useState(family?.weatherPlz ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmed = plz.trim();
+  const valid = trimmed === '' || /^[1-9]\d{3}$/.test(trimmed);
+  const changed = trimmed !== (family?.weatherPlz ?? '');
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    const ok = await setWeatherPlz(trimmed || null);
+    if (ok && trimmed) setError(await refreshWeather(true));
+    setBusy(false);
+  }
+
+  return (
+    <>
+      <h3>Wetter</h3>
+      <p className="hint">
+        Die Vorhersage von MeteoSchweiz für die Stunden 8–18 Uhr, pro Tag in der ersten Spalte.
+        Ein Tipp darauf schaltet zwischen Symbol und Zahlen um.
+      </p>
+      <div className="row">
+        <input value={plz} onChange={e => setPlz(e.target.value)} inputMode="numeric"
+          placeholder="PLZ, z. B. 8134" disabled={!isOwner || busy} aria-label="Postleitzahl" />
+        <button className="btn" onClick={save} disabled={!isOwner || busy || !valid || !changed}>
+          Speichern
+        </button>
+      </div>
+      {!valid && <p className="hint danger-text">Eine vierstellige Schweizer PLZ.</p>}
+      {error && <p className="hint danger-text">{error}</p>}
+      {!isOwner && <p className="hint">Ändern kann das nur der Owner der Familie.</p>}
     </>
   );
 }

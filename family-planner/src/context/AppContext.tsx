@@ -14,7 +14,7 @@ import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
   Assignment, Calendar, CachedEvent, Family, Member, MenuAssignment, MenuSource, MenuWeek,
-  OpenInvite, Person, PlannerEvent, Role, TimeFormat,
+  OpenInvite, Person, PlannerEvent, Role, TimeFormat, WeatherDay,
 } from '../lib/types.ts';
 
 const NEUTRAL_COLOR = '#6b7280';
@@ -59,6 +59,8 @@ type AppContextValue = {
   manualSeries: ManualSeries[];
   /** Events from the connected calendars, already expanded. */
   calendarEvents: PlannerEvent[];
+  /** The daytime forecast per day, empty until a postal code is set. */
+  weather: WeatherDay[];
   menuSources: MenuSource[];
   menuWeeks: MenuWeek[];
   menuAssignments: MenuAssignment[];
@@ -85,6 +87,8 @@ type AppContextValue = {
   upsertCalendar: (input: { id?: string; label: string; url: string; username: string; password: string; color: string; enabled: boolean }) => Promise<boolean>;
   deleteCalendar: (id: string) => Promise<boolean>;
   refreshCalendars: (force: boolean) => Promise<void>;
+  setWeatherPlz: (plz: string | null) => Promise<boolean>;
+  refreshWeather: (force: boolean) => Promise<string | null>;
   upsertMenuSource: (input: { id?: string; label: string; baseUrl: string; pathPatterns: string[]; enabled: boolean }) => Promise<boolean>;
   deleteMenuSource: (id: string) => Promise<boolean>;
   setMenuAssignment: (sourceId: string, personId: string, weekdays: number[]) => Promise<boolean>;
@@ -133,6 +137,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [caches, setCaches] = useState<CalendarCacheEntry[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [weather, setWeather] = useState<WeatherDay[]>([]);
   const [menuSources, setMenuSources] = useState<MenuSource[]>([]);
   const [menuWeeks, setMenuWeeks] = useState<MenuWeek[]>([]);
   const [menuAssignments, setMenuAssignments] = useState<MenuAssignment[]>([]);
@@ -198,7 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadFamilyData = useCallback(async (fam: Family, currentRole: Role) => {
     const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes,
-           menuSourceRes, menuWeekRes, menuPeopleRes] = await Promise.all([
+           menuSourceRes, menuWeekRes, menuPeopleRes, weatherRes] = await Promise.all([
       supabase.from('fp_people').select('*').eq('family_id', fam.id).is('archived_at', null).order('sort_order'),
       supabase.from('fp_events')
         .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, '
@@ -213,6 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .select('id, source_id, year, week, from_date, to_date, imported_at, days')
         .eq('family_id', fam.id).order('from_date'),
       supabase.from('fp_menu_people').select('source_id, person_id, weekdays'),
+      supabase.from('fp_weather_cache').select('days, plz').eq('family_id', fam.id).maybeSingle(),
     ]);
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
@@ -241,6 +247,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       personIds: (row.person_ids as string[]) ?? [],
       hidden: Boolean(row.hidden),
     })));
+
+    // A postal code changed since the last fetch makes the cache another
+    // town's weather, so it is not shown until the next refresh replaces it.
+    const cachedWeather = weatherRes.data as { days?: WeatherDay[]; plz?: string } | null;
+    setWeather(cachedWeather && cachedWeather.plz === fam.weatherPlz
+      ? (cachedWeather.days ?? []) : []);
 
     setMenuSources((menuSourceRes.data ?? []).map(row => ({
       id: row.id as string,
@@ -316,7 +328,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const { data: fam } = await supabase
       .from('fp_families')
-      .select('id, name, timezone, week_start, time_format')
+      .select('id, name, timezone, week_start, time_format, weather_plz')
       .eq('id', membership.family_id)
       .maybeSingle();
     if (!fam) {
@@ -330,6 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timezone: fam.timezone || 'Europe/Zurich',
       weekStart: fam.week_start ?? 1,
       timeFormat: fam.time_format === '12h' ? '12h' : '24h',
+      weatherPlz: (fam.weather_plz as string | null) ?? null,
     };
     const nextRole = membership.role as Role;
     familyRef.current = nextFamily;
@@ -363,6 +376,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setPeople([]);
         setManualSeries([]);
+        setWeather([]);
         setMenuSources([]);
         setMenuWeeks([]);
         setMenuAssignments([]);
@@ -748,6 +762,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fail, reload]);
 
+  const setWeatherPlz = useCallback(async (plz: string | null) => {
+    try {
+      const fam = familyRef.current!;
+      const { error } = await supabase.from('fp_families')
+        .update({ weather_plz: plz }).eq('id', fam.id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die PLZ konnte nicht gespeichert werden');
+    }
+  }, [fail, reload]);
+
+  /** Resolves to null on success, or the message to show. */
+  const refreshWeather = useCallback(async (force: boolean) => {
+    const fam = familyRef.current;
+    if (!fam?.weatherPlz) return null;
+    try {
+      const { data, error } = await supabase.functions.invoke('family-weather', {
+        body: { family_id: fam.id, force },
+      });
+      const message = (data as { error?: string } | null)?.error;
+      if (message) throw new Error(message);
+      if (error) throw error;
+      setWeather(((data as { days?: WeatherDay[] })?.days) ?? []);
+      return null;
+    } catch (e) {
+      // A failed refresh leaves the last forecast on screen; stale beats blank.
+      return e instanceof Error ? e.message : 'Das Wetter konnte nicht geholt werden';
+    }
+  }, []);
+
   /* ------------------------------------------------------------------ */
   /* Menu plans                                                          */
   /* ------------------------------------------------------------------ */
@@ -876,13 +922,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     screen, user, family, role, canEdit, isOwner, people, calendars,
-    manualSeries, calendarEvents,
+    manualSeries, calendarEvents, weather,
     menuSources, menuWeeks, menuAssignments, menuEvents,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
     addPerson, updatePerson, deletePerson, setAssignment,
     upsertCalendar, deleteCalendar, refreshCalendars, setTimeFormat,
+    setWeatherPlz, refreshWeather,
     upsertMenuSource, deleteMenuSource, setMenuAssignment, removeMenuAssignment,
     importMenuWeek, deleteMenuWeek,
     createLinkInvite, updateMemberRole, removeMember, reload,
