@@ -119,8 +119,8 @@ Deno.serve(async (req) => {
 
   let days;
   try {
-    const payload = await fetchForecast(query) as { graph?: Parameters<typeof daytimeForecast>[0] };
-    days = daytimeForecast(payload.graph ?? {}, tz);
+    const payload = await fetchForecast(query) as Parameters<typeof daytimeForecast>[0];
+    days = daytimeForecast(payload ?? {}, tz);
     if (days.length === 0) throw new Error('Keine Vorhersage erhalten');
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Das Wetter konnte nicht geholt werden';

@@ -81,7 +81,11 @@ no use here: their minimum is the one at four in the morning.
 
 A tap flips the whole column between the symbol and the figures
 (`18–31°`, and the millimetres when there are any). Which it shows is
-remembered per device.
+remembered per device. On a phone it sits beside the date in each day card,
+where the plan is a list rather than a table.
+
+Settings → Anzeige says when it was last fetched and how many days came back,
+so a failed fetch reads as a failure rather than as an empty column.
 
 The symbol is worked out from the numbers — sunshine minutes and millimetres —
 rather than from the `weatherIcon3h` field. Those numbers are undocumented, and

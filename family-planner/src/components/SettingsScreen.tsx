@@ -347,10 +347,11 @@ function DisplaySettings() {
 
 /** The postal code the forecast is fetched for. Family-wide, so owner only. */
 function WeatherSetting() {
-  const { family, isOwner, setWeatherPlz, refreshWeather } = useApp();
+  const { family, weather, weatherFetchedAt, isOwner, setWeatherPlz, refreshWeather } = useApp();
   const [plz, setPlz] = useState(family?.weatherPlz ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tz = family?.timezone ?? 'Europe/Zurich';
 
   const trimmed = plz.trim();
   const valid = trimmed === '' || /^[1-9]\d{3}$/.test(trimmed);
@@ -361,6 +362,12 @@ function WeatherSetting() {
     setError(null);
     const ok = await setWeatherPlz(trimmed || null);
     if (ok && trimmed) setError(await refreshWeather(true));
+    setBusy(false);
+  }
+
+  async function refreshNow() {
+    setBusy(true);
+    setError(await refreshWeather(true));
     setBusy(false);
   }
 
@@ -377,7 +384,22 @@ function WeatherSetting() {
         <button className="btn" onClick={save} disabled={!isOwner || busy || !valid || !changed}>
           Speichern
         </button>
+        {family?.weatherPlz && !changed && (
+          <button className="btn btn-secondary" onClick={refreshNow} disabled={busy}>
+            Jetzt holen
+          </button>
+        )}
       </div>
+      {/* Whether the fetch ever ran was invisible before, which made a silent
+          failure impossible to tell from an empty column. */}
+      {family?.weatherPlz && (
+        <p className="hint">
+          {weatherFetchedAt
+            ? `Zuletzt geholt: ${relativeStamp(weatherFetchedAt, tz, Date.now(), family?.timeFormat ?? '24h')}`
+            + ` · ${weather.length} Tage`
+            : 'Noch nie geholt.'}
+        </p>
+      )}
       {!valid && <p className="hint danger-text">Eine vierstellige Schweizer PLZ.</p>}
       {error && <p className="hint danger-text">{error}</p>}
       {!isOwner && <p className="hint">Ändern kann das nur der Owner der Familie.</p>}

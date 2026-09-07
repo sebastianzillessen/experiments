@@ -10,6 +10,7 @@ import { expandManualSeries } from '../lib/recurrence.ts';
 import { FAMILY_COLUMN, ROLE_LABELS } from '../lib/types.ts';
 import type { PlannerEvent, TimeFormat } from '../lib/types.ts';
 import type { ClockParts } from '../lib/dates.ts';
+import type { WeatherDay } from '../lib/types.ts';
 import { QuickAddSheet } from './QuickAddSheet.tsx';
 import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
@@ -121,7 +122,9 @@ export function Planner() {
 
       {narrow ? (
         <DayList days={days} today={today} tz={tz} timeFormat={timeFormat} cells={cells} columns={columns}
-          onPick={setSelected} onAdd={(day, personId) => setQuickAdd({ date: day, personId })} canEdit={canEdit} />
+          onPick={setSelected} onAdd={(day, personId) => setQuickAdd({ date: day, personId })} canEdit={canEdit}
+          weatherFor={day => byDate.get(day)}
+          weatherDetailed={detailedWeather} onToggleWeather={toggleWeather} />
       ) : (
         <div className="table-wrap">
           <table className="planner-table">
@@ -230,7 +233,10 @@ function Clock({ parts }: { parts: ClockParts }) {
 type Column = { id: string; name: string; color: string };
 
 /** Phone layout: one card per day, the people inside it. */
-function DayList({ days, today, tz, timeFormat, cells, columns, onPick, onAdd, canEdit }: {
+function DayList({
+  days, today, tz, timeFormat, cells, columns, onPick, onAdd, canEdit,
+  weatherFor, weatherDetailed, onToggleWeather,
+}: {
   days: string[];
   today: string;
   tz: string;
@@ -240,6 +246,9 @@ function DayList({ days, today, tz, timeFormat, cells, columns, onPick, onAdd, c
   onPick: (ev: PlannerEvent) => void;
   onAdd: (day: string, personId: string | null) => void;
   canEdit: boolean;
+  weatherFor: (day: string) => WeatherDay | undefined;
+  weatherDetailed: boolean;
+  onToggleWeather: () => void;
 }) {
   return (
     <div className="day-list">
@@ -249,7 +258,11 @@ function DayList({ days, today, tz, timeFormat, cells, columns, onPick, onAdd, c
         return (
           <section key={day} className={`day-card${day === today ? ' is-today' : ''}${isWeekend(day) ? ' is-weekend' : ''}`}>
             <h2>
-              {dayLabel(day)}
+              <span className="day-card-title">
+                {dayLabel(day)}
+                <WeatherCell day={weatherFor(day)} detailed={weatherDetailed}
+                  onToggle={onToggleWeather} />
+              </span>
               {canEdit && (
                 <button className="linklike" onClick={() => onAdd(day, null)} aria-label={`Eintrag am ${dayLabel(day)}`}>＋</button>
               )}
