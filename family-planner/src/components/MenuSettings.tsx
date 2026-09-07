@@ -10,6 +10,12 @@ import {
 import type { MenuSource } from '../lib/types.ts';
 import { Sheet } from './Sheet.tsx';
 
+/** "7.9." — the rest of the app writes dates this way, not as ISO. */
+function shortDay(key: string): string {
+  const [, m, d] = key.split('-').map(Number);
+  return `${d}.${m}.`;
+}
+
 const WEEKDAYS = [
   { value: 1, label: 'Mo' }, { value: 2, label: 'Di' }, { value: 3, label: 'Mi' },
   { value: 4, label: 'Do' }, { value: 5, label: 'Fr' },
@@ -147,7 +153,8 @@ function MenuSourceCard({ source }: { source: MenuSource }) {
         {weeks.map(week => (
           <li key={week.id}>
             <span className="grow">
-              <strong>KW {week.week}</strong> <span className="muted">{week.from} – {week.to}</span>
+              <strong>KW {week.week}</strong>{' '}
+              <span className="muted">{shortDay(week.from)} – {shortDay(week.to)}</span>
               <span className="hint"> · {week.days.length} Tage gelesen</span>
             </span>
             {canEdit && (

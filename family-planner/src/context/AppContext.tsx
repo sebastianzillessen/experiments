@@ -763,17 +763,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [fail, reload]);
 
   const setWeatherPlz = useCallback(async (plz: string | null) => {
+    const fam = familyRef.current;
+    if (!fam) return false;
     try {
-      const fam = familyRef.current!;
       const { error } = await supabase.from('fp_families')
         .update({ weather_plz: plz }).eq('id', fam.id);
       if (error) throw error;
-      await reload();
+      // Update the family here rather than through reload(): that only reloads
+      // a family's *contents*, never the family row, so the new code would not
+      // reach refreshWeather() and the fetch would quietly do nothing.
+      const next = { ...fam, weatherPlz: plz };
+      familyRef.current = next;
+      setFamily(next);
+      if (!plz) setWeather([]);
       return true;
     } catch (e) {
       return fail(e, 'Die PLZ konnte nicht gespeichert werden');
     }
-  }, [fail, reload]);
+  }, [fail]);
 
   /** Resolves to null on success, or the message to show. */
   const refreshWeather = useCallback(async (force: boolean) => {
@@ -901,12 +908,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // so several viewers opening the planner cost one fetch, not one each.
   const autoSyncedRef = useRef(false);
   useEffect(() => {
-    if (screen !== 'app' || autoSyncedRef.current) return;
-    if (calendars.some(c => c.enabled)) {
-      autoSyncedRef.current = true;
-      refreshCalendars(false);
-    }
-  }, [screen, calendars, refreshCalendars]);
+    if (screen !== 'app' || autoSyncedRef.current || !family) return;
+    // The screen only becomes 'app' once the family's contents are loaded, so
+    // both of these see their real state. The weather is asked for on its own:
+    // a family with no calendar still wants the forecast.
+    autoSyncedRef.current = true;
+    if (calendars.some(c => c.enabled)) refreshCalendars(false);
+    if (family.weatherPlz) refreshWeather(false);
+  }, [screen, family, calendars, refreshCalendars, refreshWeather]);
 
   /* ------------------------------------------------------------------ */
 
