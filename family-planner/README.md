@@ -54,13 +54,15 @@ The user interface is German; the code and its comments are English.
   series).
 - **Several viewers.** A family has any number of logins with different
   rights; you invite by link.
-- **Times written short in the table.** A chip shows `8–13`, not `08:00–13:00`
-  — the leading zero and whole `:00` minutes are dropped, because in a column
-  six people wide those characters decide whether an entry fits on one line.
-  The detail view keeps the full form. An entry that repeats its own time in
-  its text ("GM schaut auf Lars 8:00-13:00") has it removed from the chip, the
-  same way the person's name is: the column answers who, the time answers when,
-  the chip only has to answer what.
+- **Times set the way a timetable sets them.** A chip shows `8¹⁵–16⁰⁰`: the
+  hour on the baseline, the minutes raised and small. That is narrower than
+  `08:15–16:00`, so entries fit on one line in a column six people wide, and
+  every chip keeps the same shape — dropping the `:00` on some and not others
+  made the column ragged. The detail view keeps the written form, and the chip
+  carries it as its label for anyone listening rather than looking. An entry
+  that repeats its own time in its text ("GM schaut auf Lars 8:00-13:00") has
+  it removed, the same way the person's name is: the column answers who, the
+  time answers when, the chip only has to answer what.
 - **Kiosk mode** for a wall-mounted iPad: dark, awake, blanked when nobody is
   there, refreshed every 15 minutes. See below.
 - **Time format per family.** Settings → Anzeige switches between 24 hours
