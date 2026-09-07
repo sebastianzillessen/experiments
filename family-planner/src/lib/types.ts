@@ -109,6 +109,8 @@ export type Family = {
   timezone: string;
   weekStart: number;
   timeFormat: TimeFormat;
+  /** Swiss postal code the weather is fetched for, or null when unset. */
+  weatherPlz: string | null;
 };
 
 export type Member = {
@@ -167,4 +169,14 @@ export type MenuAssignment = {
   personId: string;
   /** 1 = Monday … 5 = Friday, matching Date#getUTCDay() for those days. */
   weekdays: number[];
+};
+
+/** One day of the daytime forecast, as the Edge Function worked it out. */
+export type WeatherDay = {
+  date: string;
+  tempMin: number;
+  tempMax: number;
+  precipitation: number;
+  sunshine: number;
+  hours: number;
 };

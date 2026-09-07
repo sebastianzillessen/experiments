@@ -182,7 +182,7 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
   border-bottom: 2px solid var(--rule-strong);
 }
 .planner-table .col-day {
-  width: 92px; min-width: 92px;
+  width: 104px; min-width: 104px;
   background: var(--paper-alt);
   font-size: .85rem; font-weight: 600; white-space: nowrap;
   position: sticky; left: 0; z-index: 2;
@@ -218,6 +218,16 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .chip.manual { border-left-color: var(--accent); }
 .chip.menu .chip-title { font-style: italic; }
 .chip-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
+/* Minutes raised, as a timetable sets them: the hour stays on the baseline in
+   every chip, so a column reads straight down. Explicit rather than left to
+   the browser's <sup> default, which varies. */
+.chip-time sup {
+  font-size: .68em;
+  vertical-align: .38em;
+  line-height: 0;
+  margin-left: .5px;
+  letter-spacing: .02em;
+}
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
 .chip-repeat { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
 
@@ -329,6 +339,24 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 }
 .update-prompt button { background: var(--surface); color: var(--ink); border: none; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 
+/* --- weather ----------------------------------------------------------- */
+
+/* Sits under the date in the row header. A button because it flips between the
+   symbol and the figures. */
+.weather {
+  display: block;
+  margin-top: 2px;
+  border: none; background: none; padding: 0;
+  color: var(--ink-soft);
+  font: inherit; font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.25;
+}
+.weather-symbol { font-size: 1.35rem; line-height: 1.1; }
+.weather-temp { display: block; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.weather-rain { display: block; font-size: .72rem; }
+
 /* --- menu plans -------------------------------------------------------- */
 
 .menu-source {
@@ -411,5 +439,6 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
   body { background: #fff; }
   .table-wrap { overflow: visible; padding: 0; }
   .planner-table .col-day { position: static; }
+  .weather { color: #000; }
   .chip { border-left-width: 2px; }
 }

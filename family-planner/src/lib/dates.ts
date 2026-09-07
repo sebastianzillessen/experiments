@@ -116,24 +116,54 @@ export function timeLabel(iso: string, tz: string, format: TimeFormat = '24h'): 
   return formatClock(w.hh, w.mm, format);
 }
 
-/**
- * `compact` drops what a reader supplies anyway: the leading zero, and the
- * minutes when they are :00. "08:00–13:00" becomes "8–13". In a planner column
- * six people wide those four characters are the difference between a chip on
- * one line and a chip on three.
- */
-export function formatClock(
-  hh: number, mm: number, format: TimeFormat, compact = false
-): string {
+export function formatClock(hh: number, mm: number, format: TimeFormat): string {
   const minutes = String(mm).padStart(2, '0');
   if (format === '12h') {
-    const hour = hh % 12 || 12;
-    const suffix = hh < 12 ? 'AM' : 'PM';
-    if (compact && mm === 0) return `${hour} ${suffix}`;
-    return `${hour}:${minutes} ${suffix}`;
+    return `${hh % 12 || 12}:${minutes} ${hh < 12 ? 'AM' : 'PM'}`;
   }
-  if (compact) return mm === 0 ? String(hh) : `${hh}:${minutes}`;
   return `${String(hh).padStart(2, '0')}:${minutes}`;
+}
+
+/**
+ * A clock split into its pieces, so a chip can set the minutes as a
+ * superscript: 16⁰⁰, the way a timetable does it.
+ *
+ * The point is not width but rhythm. Dropping the ":00" made every second chip
+ * a different shape; raising the minutes keeps the hour on the baseline in
+ * every entry, so the column reads straight down whether or not there are
+ * minutes to show.
+ */
+export type ClockParts = { hour: string; minute: string; suffix: string | null };
+
+export function clockParts(hh: number, mm: number, format: TimeFormat): ClockParts {
+  const minute = String(mm).padStart(2, '0');
+  if (format === '12h') {
+    return { hour: String(hh % 12 || 12), minute, suffix: hh < 12 ? 'AM' : 'PM' };
+  }
+  // No leading zero: the raised minutes already carry the structure.
+  return { hour: String(hh), minute, suffix: null };
+}
+
+/**
+ * Both ends of a range, in pieces. A shared AM/PM is written once, on the end,
+ * exactly as timeRangeLabel does it.
+ */
+export function timeRangeParts(
+  startsAt: string | null, endsAt: string | null, tz: string, format: TimeFormat = '24h'
+): { start: ClockParts; end: ClockParts | null } | null {
+  if (!startsAt) return null;
+  const at = (iso: string) => {
+    const w = wallClockIn(Date.parse(iso), tz);
+    return clockParts(w.hh, w.mm, format);
+  };
+  const start = at(startsAt);
+  if (!endsAt || endsAt === startsAt) return { start, end: null };
+
+  const end = at(endsAt);
+  if (start.suffix && start.suffix === end.suffix) {
+    return { start: { ...start, suffix: null }, end };
+  }
+  return { start, end };
 }
 
 /**
@@ -141,17 +171,12 @@ export function formatClock(
  * shared suffix is written once: "2:00–3:15 PM", but "11:30 AM–1:00 PM".
  */
 export function timeRangeLabel(
-  startsAt: string | null, endsAt: string | null, tz: string, format: TimeFormat = '24h',
-  compact = false
+  startsAt: string | null, endsAt: string | null, tz: string, format: TimeFormat = '24h'
 ): string {
   if (!startsAt) return '';
-  const clock = (iso: string) => {
-    const w = wallClockIn(Date.parse(iso), tz);
-    return formatClock(w.hh, w.mm, format, compact);
-  };
-  const start = clock(startsAt);
+  const start = timeLabel(startsAt, tz, format);
   if (!endsAt || endsAt === startsAt) return start;
-  const end = clock(endsAt);
+  const end = timeLabel(endsAt, tz, format);
   if (format === '12h') {
     const suffix = start.slice(-2);
     if (suffix === end.slice(-2)) return `${start.slice(0, -3)}–${end}`;
