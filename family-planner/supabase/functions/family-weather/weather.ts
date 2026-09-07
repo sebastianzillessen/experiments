@@ -36,14 +36,41 @@ export type WeatherDay = {
  */
 export type WeatherSymbol = 'sunny' | 'partly' | 'cloudy' | 'showers' | 'rain' | 'snow';
 
-/** The shape this reads out of `plzDetail`. Everything is optional on purpose. */
+/**
+ * The shape this reads out of `plzDetail`. Everything is optional on purpose.
+ *
+ * Two traps in here, both found by checking our numbers against what the
+ * MeteoSwiss app shows for the same postal code:
+ *
+ * `temperatureMin1h` / `temperatureMax1h` are NOT the coldest and warmest
+ * point within the hour — they are an uncertainty band, like the wind's q10
+ * and q90. In the first hour of a run all three series are equal to the
+ * decimal, and the band only widens with lead time. The forecast itself is
+ * `temperatureMean1h`, and its daily extremes reproduce the figures MeteoSwiss
+ * publishes for the day. Reading the band gave us 32° where the app said 31°.
+ *
+ * And `precipitation1h` does not start at `start`. The first ~23 hours come as
+ * `precipitation10m` instead, and the hourly series picks up at
+ * `startLowResolution`. Aligning it to `start` moved a whole day's rain onto
+ * the day before.
+ */
 export type WeatherGraph = {
   start?: number;
-  temperatureMin1h?: number[];
-  temperatureMax1h?: number[];
-  precipitation1h?: number[];
+  /** The forecast itself. Use this, not the min/max band beside it. */
+  temperatureMean1h?: number[];
   /** Minutes of sun per hour, 0 to 60. */
   sunshine1h?: number[];
+};
+
+/** One entry of the daily forecast the app itself shows. */
+export type ForecastDay = {
+  dayDate?: string;
+  precipitation?: number;
+};
+
+export type WeatherPayload = {
+  graph?: WeatherGraph;
+  forecast?: ForecastDay[];
 };
 
 /** 4 digits, as Swiss postal codes are. */
@@ -83,33 +110,40 @@ function wallClock(ms: number, timeZone: string): Clock {
  * hour of its window is covered; `hours` says how much stands behind it.
  */
 export function daytimeForecast(
-  graph: WeatherGraph, timeZone: string, fromHour = 8, toHour = 18
+  payload: WeatherPayload, timeZone: string, fromHour = 8, toHour = 18
 ): WeatherDay[] {
+  const graph = payload.graph ?? {};
   const start = graph.start;
-  const mins = graph.temperatureMin1h ?? [];
-  const maxes = graph.temperatureMax1h ?? [];
-  const rain = graph.precipitation1h ?? [];
+  const temps = graph.temperatureMean1h ?? [];
   const sun = graph.sunshine1h ?? [];
-  if (typeof start !== 'number' || mins.length === 0) return [];
+  if (typeof start !== 'number' || temps.length === 0) return [];
 
-  const byDay = new Map<string,
-    { min: number; max: number; rain: number; sun: number; hours: number }>();
+  // Rain comes from the daily forecast, not from the hourly series: summing
+  // the hours gives numbers that do not reconcile with the figure MeteoSwiss
+  // publishes for the same day — for one Wednesday, 3.2mm against their 8.8,
+  // below even their own stated lower bound. Until that is explained, the
+  // number on screen is the one their app shows. It covers the whole day
+  // rather than the window, which for "does it rain on Wednesday" is the more
+  // useful reading anyway.
+  const rainByDay = new Map<string, number>();
+  for (const day of payload.forecast ?? []) {
+    if (typeof day.dayDate === 'string' && typeof day.precipitation === 'number') {
+      rainByDay.set(day.dayDate, day.precipitation);
+    }
+  }
 
-  for (let i = 0; i < mins.length; i++) {
-    const low = mins[i];
-    const high = maxes[i] ?? low;
-    if (typeof low !== 'number' || !Number.isFinite(low)) continue;
+  const byDay = new Map<string, { min: number; max: number; sun: number; hours: number }>();
+
+  for (let i = 0; i < temps.length; i++) {
+    const temp = temps[i];
+    if (typeof temp !== 'number' || !Number.isFinite(temp)) continue;
 
     const { date, hour } = wallClock(start + i * HOUR_MS, timeZone);
     if (hour < fromHour || hour >= toHour) continue;
 
-    const day = byDay.get(date)
-      ?? { min: Infinity, max: -Infinity, rain: 0, sun: 0, hours: 0 };
-    day.min = Math.min(day.min, low);
-    day.max = Math.max(day.max, typeof high === 'number' && Number.isFinite(high) ? high : low);
-    // The rain series is shorter than the temperature one at the far end.
-    const fall = rain[i];
-    if (typeof fall === 'number' && Number.isFinite(fall)) day.rain += fall;
+    const day = byDay.get(date) ?? { min: Infinity, max: -Infinity, sun: 0, hours: 0 };
+    day.min = Math.min(day.min, temp);
+    day.max = Math.max(day.max, temp);
     const minutes = sun[i];
     if (typeof minutes === 'number' && Number.isFinite(minutes)) day.sun += minutes;
     day.hours += 1;
@@ -124,7 +158,7 @@ export function daytimeForecast(
       tempMin: Math.round(day.min),
       tempMax: Math.round(day.max),
       // One decimal, and never "-0".
-      precipitation: Math.round(day.rain * 10) / 10 || 0,
+      precipitation: Math.round((rainByDay.get(date) ?? 0) * 10) / 10 || 0,
       sunshine: Math.round((day.sun / (day.hours * 60)) * 100) / 100,
       hours: day.hours,
     }));
@@ -139,9 +173,9 @@ export function daytimeForecast(
  */
 export function weatherSymbol(day: Pick<WeatherDay,
   'tempMax' | 'precipitation' | 'sunshine'>): WeatherSymbol {
-  // Under a fifth of a millimetre over ten hours is not weather anyone plans
-  // around; MeteoSwiss reports those as a trace.
-  if (day.precipitation >= 0.2) {
+  // A millimetre over a whole day is the line MeteoSwiss itself draws: below
+  // it their app writes "<1 mm", which is not weather anyone dresses for.
+  if (day.precipitation >= 1) {
     if (day.tempMax <= 2) return 'snow';
     return day.sunshine >= 0.3 ? 'showers' : 'rain';
   }

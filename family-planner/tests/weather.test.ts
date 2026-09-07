@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   daytimeForecast, isValidPlz, plzQuery, weatherSymbol,
 } from '../supabase/functions/family-weather/weather.ts';
-import type { WeatherGraph } from '../supabase/functions/family-weather/weather.ts';
+import type { WeatherPayload } from '../supabase/functions/family-weather/weather.ts';
 import real from './fixtures-weather.json' with { type: 'json' };
 
-/** A graph starting at midnight UTC, one value per hour. */
-function graph(hours: Omit<WeatherGraph, 'start'> = {}): WeatherGraph {
-  return { start: Date.parse('2026-09-07T00:00:00Z'), ...hours };
+/** A payload whose hourly series starts at midnight UTC. */
+function payload(over: Partial<WeatherPayload['graph']> = {}, forecast: WeatherPayload['forecast'] = []): WeatherPayload {
+  return { graph: { start: Date.parse('2026-09-07T00:00:00Z'), ...over }, forecast };
 }
 
-/** `value` for every hour of two days. */
+/** `value` for every hour. */
 function flat(value: number, n = 48): number[] {
   return Array.from({ length: n }, () => value);
 }
@@ -34,75 +34,79 @@ describe('daytimeForecast', () => {
     // 0 degrees all night, 20 during the day: taking the whole day would
     // report a minimum of 0, which is the very thing this avoids.
     const temps = Array.from({ length: 48 }, (_, i) => (i % 24 >= 8 && i % 24 < 18 ? 20 : 0));
-    const days = daytimeForecast(
-      graph({ temperatureMin1h: temps, temperatureMax1h: temps }), 'UTC');
+    const days = daytimeForecast(payload({ temperatureMean1h: temps }), 'UTC');
     expect(days).toHaveLength(2);
     expect(days[0]).toMatchObject({ date: '2026-09-07', tempMin: 20, tempMax: 20, hours: 10 });
-  });
-
-  it('adds the rain up over the window and leaves the night out', () => {
-    const rain = Array.from({ length: 24 }, (_, i) => (i >= 8 && i < 18 ? 0.5 : 9));
-    const days = daytimeForecast(
-      graph({ temperatureMin1h: flat(10, 24), temperatureMax1h: flat(12, 24), precipitation1h: rain }),
-      'UTC');
-    expect(days[0].precipitation).toBe(5);
   });
 
   it('reads the window in the family zone, not in UTC', () => {
     // 06:00 UTC is 08:00 in Zurich in September, so Zurich sees one more early
     // hour of this day than UTC does.
     const temps = Array.from({ length: 48 }, (_, i) => i);
-    const utc = daytimeForecast(graph({ temperatureMin1h: temps, temperatureMax1h: temps }), 'UTC');
-    const zrh = daytimeForecast(
-      graph({ temperatureMin1h: temps, temperatureMax1h: temps }), 'Europe/Zurich');
-    expect(utc[0].tempMin).toBe(8);
-    expect(zrh[0].tempMin).toBe(6);
+    expect(daytimeForecast(payload({ temperatureMean1h: temps }), 'UTC')[0].tempMin).toBe(8);
+    expect(daytimeForecast(payload({ temperatureMean1h: temps }), 'Europe/Zurich')[0].tempMin)
+      .toBe(6);
   });
 
   it('honours a different window', () => {
     const temps = Array.from({ length: 24 }, (_, i) => i);
-    const days = daytimeForecast(
-      graph({ temperatureMin1h: temps, temperatureMax1h: temps }), 'UTC', 12, 14);
+    const days = daytimeForecast(payload({ temperatureMean1h: temps }), 'UTC', 12, 14);
     expect(days[0]).toMatchObject({ tempMin: 12, tempMax: 13, hours: 2 });
+  });
+
+  it('takes the rain from the daily forecast, not the hourly series', () => {
+    // The hourly series does not reconcile with the figure MeteoSwiss
+    // publishes for the same day, so the published one is what is shown.
+    const days = daytimeForecast(
+      payload({ temperatureMean1h: flat(12, 24) }, [{ dayDate: '2026-09-07', precipitation: 8.8 }]),
+      'UTC');
+    expect(days[0].precipitation).toBe(8.8);
+  });
+
+  it('reports no rain for a day the forecast does not mention', () => {
+    const days = daytimeForecast(payload({ temperatureMean1h: flat(12, 24) }), 'UTC');
+    expect(days[0].precipitation).toBe(0);
   });
 
   it('keeps a day the forecast only half covers', () => {
     // Today is usually part gone when this runs.
-    const late = { ...graph(), start: Date.parse('2026-09-07T15:00:00Z') };
-    const days = daytimeForecast(
-      { ...late, temperatureMin1h: flat(14, 6), temperatureMax1h: flat(16, 6) }, 'UTC');
+    const late = { start: Date.parse('2026-09-07T15:00:00Z'), temperatureMean1h: flat(14, 6) };
+    const days = daytimeForecast({ graph: late }, 'UTC');
     expect(days[0]).toMatchObject({ date: '2026-09-07', hours: 3 });
   });
 
-  it('survives the short and missing arrays the endpoint sends', () => {
-    // precipitation1h is genuinely shorter than the temperature series.
-    const days = daytimeForecast(
-      graph({ temperatureMin1h: flat(10, 24), temperatureMax1h: flat(12, 24), precipitation1h: [0.4] }),
-      'UTC');
-    expect(days[0].precipitation).toBe(0);
-    expect(days[0].sunshine).toBe(0);
-    expect(daytimeForecast(graph(), 'UTC')).toEqual([]);
+  it('survives the missing pieces the endpoint may send', () => {
+    expect(daytimeForecast(payload(), 'UTC')).toEqual([]);
+    expect(daytimeForecast({ graph: {} }, 'UTC')).toEqual([]);
     expect(daytimeForecast({}, 'UTC')).toEqual([]);
+    const days = daytimeForecast(payload({ temperatureMean1h: flat(10, 24) }), 'UTC');
+    expect(days[0].sunshine).toBe(0);
   });
 
-  it('reads a real MeteoSwiss response', () => {
-    // Captured from plzDetail for 8001 — the shape this has to survive.
-    const days = daytimeForecast(real as WeatherGraph, 'Europe/Zurich');
-    expect(days.length).toBeGreaterThanOrEqual(2);
+  it('matches what the MeteoSwiss app itself shows', () => {
+    // Captured from plzDetail for 8044, the day the numbers were compared
+    // against the app on a phone. Its weekly list read:
+    //   Mon 07 Sep  16° | 28°   <1 mm
+    //   Tue 08 Sep  18° | 31°   <1 mm
+    // Our maxima are the app's exactly; our minima sit higher because they
+    // cover 08:00–18:00 only, which is the whole point of this window.
+    const days = daytimeForecast(real as WeatherPayload, 'Europe/Zurich');
+
     const monday = days.find(d => d.date === '2026-09-07')!;
     expect(monday.hours).toBe(10);
-    expect(monday).toMatchObject({ tempMin: 18, tempMax: 31, precipitation: 0 });
-    // Hazy that Monday, clear the day after — and the symbol follows.
-    expect(monday.sunshine).toBeCloseTo(0.44, 2);
-    expect(weatherSymbol(monday)).toBe('partly');
+    expect(monday.tempMax).toBe(28);
+    expect(monday.tempMin).toBeGreaterThan(16);
+    expect(monday.precipitation).toBe(0.2);
 
     const tuesday = days.find(d => d.date === '2026-09-08')!;
-    expect(tuesday).toMatchObject({ tempMin: 18, tempMax: 33 });
-    expect(weatherSymbol(tuesday)).toBe('sunny');
+    expect(tuesday.tempMax).toBe(31);
+    expect(tuesday.tempMin).toBeGreaterThan(18);
+    expect(tuesday.precipitation).toBe(0.7);
 
-    // MeteoSwiss's own daily figures for that Monday are 18/30 — ours read the
-    // daytime hours only, so they sit close but not equal.
-    expect(monday.tempMax).toBeGreaterThanOrEqual(30);
+    // The wet day the app marks with 9 mm.
+    const wednesday = days.find(d => d.date === '2026-09-09')!;
+    expect(wednesday.precipitation).toBe(8.8);
+    expect(weatherSymbol(wednesday)).toBe('rain');
   });
 });
 
@@ -128,9 +132,9 @@ describe('weatherSymbol', () => {
     expect(weatherSymbol(day({ precipitation: 3, tempMax: 5 }))).toBe('rain');
   });
 
-  it('ignores a trace of rain', () => {
-    // A tenth of a millimetre over ten hours is not something to dress for.
-    expect(weatherSymbol(day({ precipitation: 0.1, sunshine: 0.9 }))).toBe('sunny');
-    expect(weatherSymbol(day({ precipitation: 0.2, sunshine: 0.9 }))).toBe('showers');
+  it('treats under a millimetre a day as dry', () => {
+    // The line MeteoSwiss draws itself: below it their app writes "<1 mm".
+    expect(weatherSymbol(day({ precipitation: 0.7, sunshine: 0.9 }))).toBe('sunny');
+    expect(weatherSymbol(day({ precipitation: 1, sunshine: 0.9 }))).toBe('showers');
   });
 });
