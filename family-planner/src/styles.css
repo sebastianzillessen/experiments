@@ -103,6 +103,11 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 .notice.danger { background: #f8e6e2; border: 1px solid #e0b2a8; color: #6d2418; }
 
 .segmented { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+/* The settings have five tabs, which is more than a phone is wide. They wrap
+   rather than being clipped: a tab you cannot reach is a setting you cannot
+   change, and Anzeige holds the weather and the kiosk switch. */
+.settings-tabs { display: flex; flex-wrap: wrap; overflow: visible; width: 100%; }
+.settings-tabs button { flex: 1 0 auto; }
 .segmented button { border: none; background: none; padding: 9px 14px; cursor: pointer; color: var(--ink-soft); }
 .segmented button.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
@@ -239,8 +244,16 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .day-card.is-weekend { background: var(--paper-alt); }
 .day-card h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px; font-size: .95rem; }
 .day-card .empty { margin: 0; font-size: .85rem; }
-.day-person { display: flex; gap: 8px; padding: 4px 0; border-top: 1px solid var(--rule); }
-.person-tag { font-size: .8rem; color: var(--ink-soft); width: 84px; flex: none; display: flex; align-items: center; }
+.day-person { display: flex; gap: 6px; padding: 4px 0; border-top: 1px solid var(--rule); }
+/* Fixed width so the chips line up down the card, but only as wide as the
+   longest name needs — every pixel here is one the entries do not get, and on
+   a phone they are the ones that run out of room. */
+.person-tag {
+  font-size: .8rem; color: var(--ink-soft);
+  width: 62px; flex: none;
+  display: flex; align-items: center; gap: 4px;
+}
+.person-tag .dot { margin-right: 0; }
 
 /* --- floating add ------------------------------------------------------ */
 
@@ -275,6 +288,8 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .sheet {
   background: var(--paper); width: min(520px, 100%);
   max-height: 92dvh; overflow-y: auto;
+  /* Scrolling to the end of a sheet must not carry on into the plan behind. */
+  overscroll-behavior: contain;
   border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
 }
 .sheet.wide { width: min(720px, 100%); }
@@ -325,7 +340,10 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 
 .settings-tabs { margin-bottom: 14px; }
 .settings-list { list-style: none; padding: 0; margin: 8px 0; }
-.settings-list li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.settings-list li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+/* A long address is the one thing here that cannot be shortened, so it breaks
+   rather than running out of the card. */
+.settings-list .hint, .menu-source .hint { overflow-wrap: anywhere; }
 .settings-list li.stacked { display: block; }
 .settings-list .row-line { display: flex; align-items: center; gap: 8px; }
 
@@ -367,7 +385,8 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   background: var(--surface);
 }
 .menu-source h3 { margin: 14px 0 4px; }
-.menu-source .row-line { display: flex; align-items: baseline; gap: 8px; }
+.menu-source .row-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.menu-source .row-line .hint { display: block; width: 100%; }
 
 /* Mon-Fri as five small toggles: a child's school days are a shape, not a
    list, and this reads at a glance. */
@@ -385,6 +404,14 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   color: var(--accent-ink); font-weight: 600;
 }
 .weekday-picker button:disabled { opacity: .5; cursor: default; }
+
+@media (max-width: 420px) {
+  /* Five day toggles and a name do not share a line on a small phone; the
+     toggles take their own instead of pushing the name out of its box. */
+  .settings-list li > .choice { flex: 1 1 100%; }
+  .weekday-picker { width: 100%; justify-content: space-between; }
+  .weekday-picker button { flex: 1; }
+}
 
 /* --- kiosk: the iPad on the wall --------------------------------------- */
 
