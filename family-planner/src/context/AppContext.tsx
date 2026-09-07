@@ -61,6 +61,8 @@ type AppContextValue = {
   calendarEvents: PlannerEvent[];
   /** The daytime forecast per day, empty until a postal code is set. */
   weather: WeatherDay[];
+  /** When it was last fetched, so the settings can say whether it ever was. */
+  weatherFetchedAt: string | null;
   menuSources: MenuSource[];
   menuWeeks: MenuWeek[];
   menuAssignments: MenuAssignment[];
@@ -138,6 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [caches, setCaches] = useState<CalendarCacheEntry[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [weather, setWeather] = useState<WeatherDay[]>([]);
+  const [weatherFetchedAt, setWeatherFetchedAt] = useState<string | null>(null);
   const [menuSources, setMenuSources] = useState<MenuSource[]>([]);
   const [menuWeeks, setMenuWeeks] = useState<MenuWeek[]>([]);
   const [menuAssignments, setMenuAssignments] = useState<MenuAssignment[]>([]);
@@ -218,7 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .select('id, source_id, year, week, from_date, to_date, imported_at, days')
         .eq('family_id', fam.id).order('from_date'),
       supabase.from('fp_menu_people').select('source_id, person_id, weekdays'),
-      supabase.from('fp_weather_cache').select('days, plz').eq('family_id', fam.id).maybeSingle(),
+      supabase.from('fp_weather_cache').select('days, plz, fetched_at').eq('family_id', fam.id).maybeSingle(),
     ]);
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
@@ -250,9 +253,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // A postal code changed since the last fetch makes the cache another
     // town's weather, so it is not shown until the next refresh replaces it.
-    const cachedWeather = weatherRes.data as { days?: WeatherDay[]; plz?: string } | null;
-    setWeather(cachedWeather && cachedWeather.plz === fam.weatherPlz
-      ? (cachedWeather.days ?? []) : []);
+    const cachedWeather = weatherRes.data as
+      { days?: WeatherDay[]; plz?: string; fetched_at?: string } | null;
+    const weatherMatches = Boolean(cachedWeather && cachedWeather.plz === fam.weatherPlz);
+    setWeather(weatherMatches ? (cachedWeather!.days ?? []) : []);
+    setWeatherFetchedAt(weatherMatches ? (cachedWeather!.fetched_at ?? null) : null);
 
     setMenuSources((menuSourceRes.data ?? []).map(row => ({
       id: row.id as string,
@@ -377,6 +382,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPeople([]);
         setManualSeries([]);
         setWeather([]);
+        setWeatherFetchedAt(null);
         setMenuSources([]);
         setMenuWeeks([]);
         setMenuAssignments([]);
@@ -775,7 +781,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const next = { ...fam, weatherPlz: plz };
       familyRef.current = next;
       setFamily(next);
-      if (!plz) setWeather([]);
+      if (!plz) { setWeather([]); setWeatherFetchedAt(null); }
       return true;
     } catch (e) {
       return fail(e, 'Die PLZ konnte nicht gespeichert werden');
@@ -793,7 +799,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const message = (data as { error?: string } | null)?.error;
       if (message) throw new Error(message);
       if (error) throw error;
-      setWeather(((data as { days?: WeatherDay[] })?.days) ?? []);
+      const payload = data as { days?: WeatherDay[]; fetched_at?: string } | null;
+      setWeather(payload?.days ?? []);
+      setWeatherFetchedAt(payload?.fetched_at ?? new Date().toISOString());
       return null;
     } catch (e) {
       // A failed refresh leaves the last forecast on screen; stale beats blank.
@@ -931,7 +939,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     screen, user, family, role, canEdit, isOwner, people, calendars,
-    manualSeries, calendarEvents, weather,
+    manualSeries, calendarEvents, weather, weatherFetchedAt,
     menuSources, menuWeeks, menuAssignments, menuEvents,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,

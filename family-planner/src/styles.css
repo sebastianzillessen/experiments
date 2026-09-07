@@ -248,6 +248,11 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .day-card.is-today { background: var(--today); }
 .day-card.is-weekend { background: var(--paper-alt); }
 .day-card h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px; font-size: .95rem; }
+/* Beside the date, not under it: a day card is wide and short, unlike the
+   table's narrow day column where the forecast stacks. */
+.day-card-title { display: flex; align-items: baseline; gap: 10px; }
+.day-card-title .weather { margin-top: 0; display: flex; align-items: baseline; gap: 8px; }
+.day-card-title .weather-temp, .day-card-title .weather-rain { display: inline; }
 .day-card .empty { margin: 0; font-size: .85rem; }
 .day-person { display: flex; gap: 6px; padding: 4px 0; border-top: 1px solid var(--rule); }
 /* Fixed width so the chips line up down the card, but only as wide as the
