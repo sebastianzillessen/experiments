@@ -213,7 +213,6 @@ export function Planner() {
       )}
 
       <footer className="userbar no-print">
-        <span>{family?.name}</span>
         <AppVersion />
         <button className="linklike" onClick={() => supabase.auth.signOut()}>Abmelden</button>
       </footer>

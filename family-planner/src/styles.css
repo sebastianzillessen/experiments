@@ -333,7 +333,7 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   box-shadow: var(--shadow); z-index: 6;
 }
 
-/* Family name left, build in the middle, sign-out right. */
+/* Build left, sign-out right. The family's name is in the header already. */
 .userbar {
   margin-top: auto;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
