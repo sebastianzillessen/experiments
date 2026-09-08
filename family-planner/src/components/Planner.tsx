@@ -67,6 +67,15 @@ export function Planner() {
   const spans = useMemo(() => buildSpanLanes(days, people, events), [days, people, events]);
   const today = todayKey(tz);
 
+  // The run under the pointer, by entry key. A band is one entry drawn in
+  // several pieces, so hovering any piece has to light all of them and the
+  // chip that names it. Read off the DOM rather than tracked per segment:
+  // mouseover bubbles once on the way in, so moving along a band never
+  // flickers through an unlit frame.
+  const [lit, setLit] = useState<string | null>(null);
+  const litFrom = (e: { target: EventTarget | null }) =>
+    setLit((e.target as HTMLElement | null)?.closest<HTMLElement>('[data-span]')?.dataset.span ?? null);
+
   const [detailedWeather, toggleWeather] = useWeatherDetail();
   const byDate = useMemo(() => new Map(weather.map(d => [d.date, d])), [weather]);
 
@@ -141,7 +150,8 @@ export function Planner() {
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody onMouseOver={litFrom} onMouseLeave={() => setLit(null)}
+              onFocus={litFrom} onBlur={() => setLit(null)}>
               {days.map(day => (
                 <tr key={day} className={[
                   day === today ? 'is-today' : '',
@@ -156,8 +166,19 @@ export function Planner() {
                     const bands = spans.at.get(col.id)?.get(day) ?? [];
                     // An entry drawn as a band gets its chip on the first day
                     // on screen only; the band carries the rest of the run.
+                    // The chip that names a run goes to the top of the cell,
+                    // where its band begins — a run that carries a time would
+                    // otherwise sort below the all-day entries and hang off
+                    // the middle of its own band.
                     const list = (cells.get(day)?.get(col.id) ?? [])
-                      .filter(ev => (spans.spannedFrom.get(ev.key) ?? day) === day);
+                      .filter(ev => (spans.spannedFrom.get(ev.key) ?? day) === day)
+                      .sort((a, b) =>
+                        Number(spans.spannedFrom.has(b.key)) - Number(spans.spannedFrom.has(a.key)));
+                    // The chip sits against its band, so that the two read as
+                    // one entry. Only the outermost band can have it: an inner
+                    // one would have to reach across the bands beside it.
+                    const outer = bands.length - 1;
+                    const glued = bands[outer]?.first ? bands[outer]!.event.key : null;
                     return (
                       <td key={col.id}>
                         <div className="cell-row">
@@ -165,6 +186,7 @@ export function Planner() {
                             <div className="cell-bands">
                               {bands.map((lane, i) => (lane
                                 ? <SpanBand key={lane.event.key} lane={lane}
+                                    glued={lane.event.key === glued} lit={lit === lane.event.key}
                                     onClick={() => setSelected(lane.event)} />
                                 : <span key={`gap${i}`} className="band-gap" />))}
                             </div>
@@ -172,8 +194,8 @@ export function Planner() {
                           <div className="cell">
                             {list.map(ev => (
                               <EventChip key={ev.key + day} event={ev} tz={tz} timeFormat={timeFormat}
-                                span={spanMarker(spans.at.get(col.id)?.get(day), ev)}
-                                onClick={() => setSelected(ev)} />
+                                span={spanMarker(bands, ev)} glued={ev.key === glued}
+                                lit={lit === ev.key} onClick={() => setSelected(ev)} />
                             ))}
                             {canEdit && (
                               <button className="cell-add" aria-label={`Eintrag am ${dayLabel(day)} für ${col.name}`}
@@ -229,22 +251,28 @@ function spanMarker(lanes: (SpanLane | null)[] | undefined, event: PlannerEvent)
   return lane.openStart ? '↕' : '↓';
 }
 
-function SpanBand({ lane, onClick }: { lane: SpanLane; onClick: () => void }) {
+function SpanBand({ lane, glued, lit, onClick }: {
+  lane: SpanLane; glued: boolean; lit: boolean; onClick: () => void;
+}) {
   const { event, first, last, openStart, openEnd } = lane;
   const classes = [
     'band',
     first && !openStart ? 'band-start' : '',
     last && !openEnd ? 'band-end' : '',
+    // Square where the chip is about to be set against it.
+    glued && first ? 'band-glued' : '',
+    lit ? 'is-lit' : '',
   ].filter(Boolean).join(' ');
   return (
-    <button className={classes} onClick={onClick}
+    <button className={classes} onClick={onClick} data-span={event.key}
       style={{ background: event.source === 'manual' ? 'var(--accent)' : event.color }}
       title={event.title} aria-label={event.title} />
   );
 }
 
-function EventChip({ event, tz, timeFormat, span, onClick }: {
-  event: PlannerEvent; tz: string; timeFormat: TimeFormat; span?: string; onClick: () => void;
+function EventChip({ event, tz, timeFormat, span, glued, lit, onClick }: {
+  event: PlannerEvent; tz: string; timeFormat: TimeFormat;
+  span?: string; glued?: boolean; lit?: boolean; onClick: () => void;
 }) {
   const parts = event.allDay ? null : timeRangeParts(event.startsAt, event.endsAt, tz, timeFormat);
   // The plain form is what a screen reader should hear, and what the tooltip
@@ -252,9 +280,11 @@ function EventChip({ event, tz, timeFormat, span, onClick }: {
   const spoken = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
   return (
     <button
-      className={`chip ${event.source}`}
+      className={['chip', event.source, glued ? 'chip-glued' : '', lit ? 'is-lit' : '']
+        .filter(Boolean).join(' ')}
       style={event.source !== 'manual' ? { borderLeftColor: event.color } : undefined}
       onClick={onClick}
+      data-span={span ? event.key : undefined}
       title={spoken ? `${spoken} ${event.title}` : event.title}
       aria-label={spoken ? `${spoken} ${event.title}` : event.title}
     >

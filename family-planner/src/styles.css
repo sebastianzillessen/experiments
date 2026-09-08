@@ -232,7 +232,24 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 .band-start { margin-top: 0; border-radius: 4px 4px 0 0; }
 .band-end { margin-bottom: 0; border-radius: 0 0 4px 4px; }
 .band-start.band-end { border-radius: 4px; }
-.band:hover { filter: brightness(1.15); }
+/* The chip that names the run is set against the band, so the two read as one
+   entry rather than as a label near a stripe. Square on the side they meet. */
+.band-glued { border-top-right-radius: 0; }
+.chip-glued {
+  margin-left: -5px;
+  border-left-width: 0;
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+}
+/* One entry drawn in several pieces answers as one: hovering any day of a run
+   lights every day of it and the chip that names it.
+
+   A 7px ribbon cannot say much with colour alone — brightness on its own was
+   barely visible against either paper — so it grows as well. A transform
+   rather than a width, so the cells beside it do not move. */
+.band { transition: transform .1s; }
+.band.is-lit { transform: scaleX(1.5); filter: brightness(1.2); }
+.chip:hover, .chip.is-lit { background: var(--paper-alt); }
+.chip.is-lit { border-color: var(--rule-strong); }
 /* Which way the run leaves the chip. */
 .chip-span { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
 .cell-add {
@@ -252,7 +269,6 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   background: var(--surface); color: var(--ink);
   font-size: .84rem; cursor: pointer;
 }
-.chip:hover { background: var(--paper-alt); }
 /* Imported chips override this inline: a calendar's own colour, or the one
    colour every lunch shares. */
 .chip.manual { border-left-color: var(--accent); }
