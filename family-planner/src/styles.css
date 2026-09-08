@@ -165,17 +165,23 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 
 /* --- the table --------------------------------------------------------- */
 
-.table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 10px 24px; }
+/* No padding on the left: the sticky day column parks at the content edge, so
+   a padding strip beside it is a gap the scrolled columns show through —
+   measured 10px of another person's chips sliding past it. The gutter moves
+   to the table's own margin, which scrolls with it. */
+.table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 0 24px; }
 
 /* No `overflow: hidden` here, however tidy it made the rounded corners: it
    makes the table a scroll container of its own, and a sticky header inside
    one that never scrolls simply never moves. */
+/* No border of its own. With border-collapse the table paints the outer edge,
+   so a left border stays put while the sticky day column slides over it — a
+   1px line the other columns show through. The cells draw the grid, and the
+   first column's own border travels with it. */
 .planner-table {
   width: 100%;
   border-collapse: collapse;
   background: var(--surface);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
 }
 .planner-table th, .planner-table td {
   border: 1px solid var(--rule);
