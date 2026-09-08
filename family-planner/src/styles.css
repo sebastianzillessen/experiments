@@ -235,11 +235,6 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 /* The chip that names the run is set against the band, so the two read as one
    entry rather than as a label near a stripe. Square on the side they meet. */
 .band-glued { border-top-right-radius: 0; }
-.chip-glued {
-  margin-left: -5px;
-  border-left-width: 0;
-  border-top-left-radius: 0; border-bottom-left-radius: 0;
-}
 /* One entry drawn in several pieces answers as one: hovering any day of a run
    lights every day of it and the chip that names it.
 
@@ -248,10 +243,7 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
    rather than a width, so the cells beside it do not move. */
 .band { transition: transform .1s; }
 .band.is-lit { transform: scaleX(1.5); filter: brightness(1.2); }
-.chip:hover, .chip.is-lit { background: var(--paper-alt); }
-.chip.is-lit { border-color: var(--rule-strong); }
 /* Which way the run leaves the chip. */
-.chip-span { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
 .cell-add {
   align-self: flex-start;
   border: 1px dashed var(--rule-strong); background: none; color: var(--ink-soft);
@@ -286,6 +278,23 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 }
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
 .chip-repeat { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
+/* Which way a run leaves the chip that names it. */
+.chip-span { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
+/* The band IS this chip's left edge: no accent stripe of its own beside it,
+   square where they meet, pulled over the gap so the two touch. The text keeps
+   the inset every other chip has — 5px of gap, the 4px border it gave up and
+   its own 7px — so a column still reads straight down.
+
+   These rules have to sit after .chip: its `border-left` shorthand carries the
+   same specificity, so above it they simply lost. */
+.chip-glued {
+  margin-left: -5px;
+  padding-left: 16px;
+  border-left-width: 0;
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+}
+.chip:hover, .chip.is-lit { background: var(--paper-alt); }
+.chip.is-lit { border-color: var(--rule-strong); }
 
 /* --- phone list layout ------------------------------------------------- */
 
