@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCells, calendarEventsToPlanner } from '../src/lib/merge.ts';
+import { buildCells, buildSpanLanes, calendarEventsToPlanner } from '../src/lib/merge.ts';
 import { FAMILY_COLUMN } from '../src/lib/types.ts';
 import type { Assignment, CachedEvent, Calendar, Person, PlannerEvent } from '../src/lib/types.ts';
 
@@ -250,5 +250,126 @@ describe('stripping the person out of an imported title', () => {
     };
     // Moved to Lars, so "Caro" is no longer a name in that column and stays.
     expect(displayed('Caro LQ', [CARO, LARS], [override])).toBe('Caro LQ');
+  });
+});
+
+describe('buildSpanLanes', () => {
+  const WEEK = ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11',
+    '2026-09-12', '2026-09-13'];
+
+  /** The lane an entry occupies, per day, as "day: lane" for readability. */
+  function laneOf(table: ReturnType<typeof buildSpanLanes>, column: string, key: string) {
+    const out: Record<string, number> = {};
+    for (const [day, slots] of table.at.get(column) ?? []) {
+      const lane = slots.findIndex(s => s?.event.key === key);
+      if (lane >= 0) out[day] = lane;
+    }
+    return out;
+  }
+
+  it('draws a run as one band and puts the chip on its first day', () => {
+    const holiday = manual('ferien', {
+      title: 'Lena Ferien', startDate: '2026-09-07', endDate: '2026-09-13',
+    });
+    const spans = buildSpanLanes(WEEK, PEOPLE, [holiday]);
+
+    expect(spans.spannedFrom.get('man:ferien')).toBe('2026-09-07');
+    expect(spans.lanes.get(FAMILY_COLUMN)).toBe(1);
+    const days = spans.at.get(FAMILY_COLUMN)!;
+    expect(days.get('2026-09-07')![0]).toMatchObject({ first: true, last: false });
+    expect(days.get('2026-09-10')![0]).toMatchObject({ first: false, last: false });
+    expect(days.get('2026-09-13')![0]).toMatchObject({ first: false, last: true });
+  });
+
+  it('leaves a single-day entry alone', () => {
+    const spans = buildSpanLanes(WEEK, PEOPLE, [manual('kita')]);
+    expect(spans.spannedFrom.size).toBe(0);
+    expect(spans.at.size).toBe(0);
+  });
+
+  it('treats a run that only reaches one day on screen as an ordinary entry', () => {
+    // Ends on the Monday: a band of one cell says nothing a chip does not.
+    const spans = buildSpanLanes(WEEK, PEOPLE,
+      [manual('rest', { startDate: '2026-09-01', endDate: '2026-09-07' })]);
+    expect(spans.spannedFrom.size).toBe(0);
+  });
+
+  it('marks the ends the run leaves open', () => {
+    const spans = buildSpanLanes(WEEK, PEOPLE,
+      [manual('lang', { startDate: '2026-09-01', endDate: '2026-09-20' })]);
+    const days = spans.at.get(FAMILY_COLUMN)!;
+    // Still labelled on the Monday, but drawn as already running.
+    expect(spans.spannedFrom.get('man:lang')).toBe('2026-09-07');
+    expect(days.get('2026-09-07')![0]).toMatchObject({ first: true, openStart: true });
+    expect(days.get('2026-09-13')![0]).toMatchObject({ last: true, openEnd: true });
+  });
+
+  it('keeps an entry in one lane the whole way down', () => {
+    // The short run must not push the long one sideways halfway through,
+    // which is exactly what sorting by start date would do.
+    const long = manual('ferien', { startDate: '2026-09-07', endDate: '2026-09-13' });
+    const short = manual('hike', { startDate: '2026-09-12', endDate: '2026-09-13' });
+    const spans = buildSpanLanes(WEEK, PEOPLE, [short, long]);
+
+    expect(spans.lanes.get(FAMILY_COLUMN)).toBe(2);
+    expect(Object.values(laneOf(spans, FAMILY_COLUMN, 'man:ferien'))).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(Object.values(laneOf(spans, FAMILY_COLUMN, 'man:hike'))).toEqual([1, 1]);
+  });
+
+  it('reuses a lane once the run in it has ended', () => {
+    const first = manual('a', { startDate: '2026-09-07', endDate: '2026-09-08' });
+    const second = manual('b', { startDate: '2026-09-10', endDate: '2026-09-11' });
+    const spans = buildSpanLanes(WEEK, PEOPLE, [first, second]);
+    expect(spans.lanes.get(FAMILY_COLUMN)).toBe(1);
+  });
+
+  it('holds a lane open under a band that is still running outside it', () => {
+    // The long run starts a day later, so on the Monday lane 0 is empty while
+    // lane 1 is not. Dropping the empty slot would step the short band inwards
+    // for that one day.
+    const long = manual('lang', { startDate: '2026-09-08', endDate: '2026-09-13' });
+    const short = manual('kurz', { startDate: '2026-09-07', endDate: '2026-09-09' });
+    const spans = buildSpanLanes(WEEK, PEOPLE, [long, short]);
+    const monday = spans.at.get(FAMILY_COLUMN)!.get('2026-09-07')!;
+    expect(monday).toHaveLength(2);
+    expect(monday[0]).toBeNull();
+    expect(monday[1]?.event.key).toBe('man:kurz');
+  });
+
+  it('gives the width back on days where nothing runs beyond a lane', () => {
+    // Two bands overlap midweek, but Monday has neither, and a cell that
+    // reserves room for bands it does not show is room the entries lose.
+    const a = manual('a', { startDate: '2026-09-09', endDate: '2026-09-11' });
+    const b = manual('b', { startDate: '2026-09-10', endDate: '2026-09-12' });
+    const spans = buildSpanLanes(WEEK, PEOPLE, [a, b]);
+    const days = spans.at.get(FAMILY_COLUMN)!;
+    expect(days.get('2026-09-07')).toEqual([]);
+    expect(days.get('2026-09-09')).toHaveLength(1);
+    expect(days.get('2026-09-10')).toHaveLength(2);
+    expect(days.get('2026-09-12')).toHaveLength(2);
+  });
+
+  it('lays each column out on its own', () => {
+    const hers = manual('lilly', {
+      personIds: ['p-lilly'], startDate: '2026-09-07', endDate: '2026-09-09',
+    });
+    const both = manual('beide', {
+      personIds: ['p-lilly', 'p-miri'], startDate: '2026-09-07', endDate: '2026-09-13',
+    });
+    const spans = buildSpanLanes(WEEK, PEOPLE, [hers, both]);
+    expect(spans.lanes.get('p-lilly')).toBe(2);
+    expect(spans.lanes.get('p-miri')).toBe(1);
+    expect(spans.lanes.has(FAMILY_COLUMN)).toBe(false);
+  });
+
+  it('files a run for a person who is gone under the family column', () => {
+    const spans = buildSpanLanes(WEEK, PEOPLE, [manual('weg', {
+      personIds: ['p-geloescht'], startDate: '2026-09-07', endDate: '2026-09-09',
+    })]);
+    expect(spans.lanes.get(FAMILY_COLUMN)).toBe(1);
+  });
+
+  it('survives an empty week', () => {
+    expect(buildSpanLanes([], PEOPLE, [manual('x')]).lanes.size).toBe(0);
   });
 });

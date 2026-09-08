@@ -167,3 +167,108 @@ export function compareEvents(
 export function isMultiDay(event: PlannerEvent): boolean {
   return event.endDate > event.startDate;
 }
+
+/**
+ * One day of a multi-day entry, drawn as a band beside the cells.
+ *
+ * The table puts days in rows and people in columns, so an entry that runs
+ * over several days is one tall object in a column — a week of holidays is a
+ * single thing, not seven identical chips. `first` and `last` are about the
+ * days on screen, not the entry: a holiday that started last week is still
+ * labelled on Monday, with `openStart` saying the band was already running.
+ */
+export type SpanLane = {
+  event: PlannerEvent;
+  first: boolean;
+  last: boolean;
+  openStart: boolean;
+  openEnd: boolean;
+};
+
+export type SpanTable = {
+  /** Bands a column needs, so every cell in it keeps the same room free. */
+  lanes: Map<string, number>;
+  /** column → day → one slot per lane, null where that lane runs nothing. */
+  at: Map<string, Map<string, (SpanLane | null)[]>>;
+  /** Entry key → the day its chip belongs on, for entries drawn as a band. */
+  spannedFrom: Map<string, string>;
+};
+
+const EMPTY_SPANS: SpanTable = { lanes: new Map(), at: new Map(), spannedFrom: new Map() };
+
+/**
+ * Lay the multi-day entries out in lanes, per column.
+ *
+ * An entry keeps one lane for its whole run, so a band never steps sideways
+ * halfway down. Longest first, so the week-long band sits innermost and the
+ * short ones stack outside it rather than pushing it about.
+ */
+export function buildSpanLanes(
+  days: string[],
+  people: Person[],
+  events: PlannerEvent[]
+): SpanTable {
+  const from = days[0];
+  const to = days[days.length - 1];
+  if (!from || !to) return EMPTY_SPANS;
+
+  const known = new Set(people.map(p => p.id));
+  const runs = new Map<string, { event: PlannerEvent; run: string[] }[]>();
+  const spannedFrom = new Map<string, string>();
+
+  for (const event of events) {
+    if (!isMultiDay(event)) continue;
+    const run = daysBetween(event.startDate, event.endDate, from, to);
+    // One day on screen is an ordinary entry, whatever it does off screen.
+    if (run.length < 2) continue;
+    spannedFrom.set(event.key, run[0]);
+    const targets = event.personIds.filter(id => known.has(id));
+    for (const column of targets.length ? targets : [FAMILY_COLUMN]) {
+      const list = runs.get(column) ?? [];
+      list.push({ event, run });
+      runs.set(column, list);
+    }
+  }
+
+  const lanes = new Map<string, number>();
+  const at = new Map<string, Map<string, (SpanLane | null)[]>>();
+
+  for (const [column, list] of runs) {
+    list.sort((a, b) => b.run.length - a.run.length
+      || a.run[0].localeCompare(b.run[0])
+      || a.event.title.localeCompare(b.event.title, 'de'));
+
+    const perDay = new Map<string, (SpanLane | null)[]>();
+    for (const day of days) perDay.set(day, []);
+
+    let count = 0;
+    for (const { event, run } of list) {
+      let lane = 0;
+      while (run.some(day => perDay.get(day)![lane])) lane++;
+      count = Math.max(count, lane + 1);
+      run.forEach((day, i) => {
+        const slots = perDay.get(day)!;
+        while (slots.length <= lane) slots.push(null);
+        slots[lane] = {
+          event,
+          first: i === 0,
+          last: i === run.length - 1,
+          openStart: i === 0 && event.startDate < from,
+          openEnd: i === run.length - 1 && event.endDate > to,
+        };
+      });
+    }
+
+    // A lane is held open only while a band still runs outside it: lane 1
+    // occupied means lane 0 must keep its place even when empty, but a day
+    // with nothing after lane 0 gives the width back to the entries.
+    for (const [day, slots] of perDay) {
+      while (slots.length && !slots[slots.length - 1]) slots.pop();
+      perDay.set(day, slots);
+    }
+    lanes.set(column, count);
+    at.set(column, perDay);
+  }
+
+  return { lanes, at, spannedFrom };
+}
