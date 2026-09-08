@@ -2,7 +2,7 @@ import { AppProvider, useApp } from './context/AppContext.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
 import { CreateFamilyScreen } from './components/CreateFamilyScreen.tsx';
 import { Planner } from './components/Planner.tsx';
-import { UpdatePrompt } from './components/UpdatePrompt.tsx';
+import { Toasts } from './components/Toasts.tsx';
 
 function Screens() {
   const { screen } = useApp();
@@ -18,7 +18,7 @@ export default function App() {
   return (
     <AppProvider>
       <Screens />
-      <UpdatePrompt />
+      <Toasts />
     </AppProvider>
   );
 }
