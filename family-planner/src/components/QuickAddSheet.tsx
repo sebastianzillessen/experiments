@@ -40,6 +40,8 @@ export function QuickAddSheet({ prefill, existing, scope = 'series', onClose }: 
 
   const [title, setTitle] = useState(existing?.title ?? '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  // Most entries carry no note, so the field is offered rather than shown.
+  const [notesOpen, setNotesOpen] = useState(false);
   const [startDate, setStartDate] = useState(existing?.startDate ?? prefill?.date ?? '');
   const [endDate, setEndDate] = useState(existing?.endDate ?? prefill?.date ?? '');
   const [allDay, setAllDay] = useState(existing ? existing.allDay : true);
@@ -208,9 +210,17 @@ export function QuickAddSheet({ prefill, existing, scope = 'series', onClose }: 
           ))}
           {people.length === 0 && <span className="hint">Noch keine Personen angelegt.</span>}
         </div>
-        <p className="hint">Niemand ausgewählt → Spalte „Familie“.</p>
+        {selected.length === 0 && (
+          <p className="hint">Niemand ausgewählt → Spalte „Familie“.</p>
+        )}
 
-        <label htmlFor="qa-start">Wann?</label>
+        <div className="field-head">
+          <label htmlFor="qa-start">Wann?</label>
+          <div className="radios">
+            <label><input type="radio" name="qa-mode" checked={allDay} onChange={() => { setTouched(true); setAllDay(true); }} /> ganztägig</label>
+            <label><input type="radio" name="qa-mode" checked={!allDay} onChange={() => { setTouched(true); setAllDay(false); }} /> von–bis</label>
+          </div>
+        </div>
         <div className="row">
           <input id="qa-start" type="date" value={startDate}
             onChange={e => { setStartDate(e.target.value); if (!endDate || endDate < e.target.value) setEndDate(e.target.value); }} />
@@ -219,10 +229,6 @@ export function QuickAddSheet({ prefill, existing, scope = 'series', onClose }: 
             onChange={e => setEndDate(e.target.value)} />
         </div>
 
-        <div className="row radios">
-          <label><input type="radio" name="qa-mode" checked={allDay} onChange={() => { setTouched(true); setAllDay(true); }} /> ganztägig</label>
-          <label><input type="radio" name="qa-mode" checked={!allDay} onChange={() => { setTouched(true); setAllDay(false); }} /> von–bis</label>
-        </div>
         {!allDay && (
           // lang nudges Chrome towards the family's clock format; Safari and
           // Firefox follow the operating system and ignore it. The value is
@@ -242,10 +248,12 @@ export function QuickAddSheet({ prefill, existing, scope = 'series', onClose }: 
           </p>
         ) : (
           <>
-            <label>Wiederholen?</label>
-            <div className="row radios">
-              <label><input type="radio" name="qa-repeat" checked={!repeats} onChange={() => enableRepeat(false)} /> einmalig</label>
-              <label><input type="radio" name="qa-repeat" checked={repeats} onChange={() => enableRepeat(true)} /> wöchentlich</label>
+            <div className="field-head">
+              <label>Wiederholen?</label>
+              <div className="radios">
+                <label><input type="radio" name="qa-repeat" checked={!repeats} onChange={() => enableRepeat(false)} /> einmalig</label>
+                <label><input type="radio" name="qa-repeat" checked={repeats} onChange={() => enableRepeat(true)} /> wöchentlich</label>
+              </div>
             </div>
             {repeats && (
               <>
@@ -278,8 +286,17 @@ export function QuickAddSheet({ prefill, existing, scope = 'series', onClose }: 
           </>
         )}
 
-        <label htmlFor="qa-notes">Notiz (optional)</label>
-        <input id="qa-notes" value={notes} onChange={e => setNotes(e.target.value)} />
+        {notesOpen || notes ? (
+          <>
+            <label htmlFor="qa-notes">Notiz</label>
+            <input id="qa-notes" value={notes} autoFocus={notesOpen}
+              onChange={e => setNotes(e.target.value)} />
+          </>
+        ) : (
+          <button type="button" className="linklike add-note" onClick={() => setNotesOpen(true)}>
+            + Notiz
+          </button>
+        )}
 
         {error && <div className="notice danger">{error}</div>}
 

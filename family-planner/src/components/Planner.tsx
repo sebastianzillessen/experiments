@@ -128,9 +128,6 @@ export function Planner() {
         <button className="icon-btn" aria-label="Weiter" onClick={() => step(1)}>›</button>
       </nav>
 
-      {sync.error && <div className="notice danger no-print">{sync.error}</div>}
-      {sync.busy && <div className="notice info no-print">Kalender werden abgerufen …</div>}
-
       {narrow ? (
         <DayList days={days} today={today} tz={tz} timeFormat={timeFormat} cells={cells} columns={columns}
           onPick={setSelected} onAdd={(day, personId) => setQuickAdd({ date: day, personId })} canEdit={canEdit}
@@ -216,7 +213,6 @@ export function Planner() {
       )}
 
       <footer className="userbar no-print">
-        <span>{family?.name}</span>
         <AppVersion />
         <button className="linklike" onClick={() => supabase.auth.signOut()}>Abmelden</button>
       </footer>

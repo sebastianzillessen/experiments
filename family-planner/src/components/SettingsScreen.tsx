@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
+import { supabase } from '../supabaseClient.ts';
 import { relativeStamp } from '../lib/dates.ts';
 import { ROLE_LABELS } from '../lib/types.ts';
 import type { Calendar, Person, Role, TimeFormat } from '../lib/types.ts';
+import { AppVersion } from './AppVersion.tsx';
 import { Sheet } from './Sheet.tsx';
 import { setKioskEnabled, useKioskSettings } from './KioskMode.tsx';
 import { MenuSettings } from './MenuSettings.tsx';
@@ -33,6 +35,12 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
       {tab === 'menu' && <MenuSettings />}
       {tab === 'access' && (isOwner ? <AccessSettings /> : <OwnerOnly what="Zugriffsrechte" />)}
       {tab === 'display' && <DisplaySettings />}
+
+      {/* The phone has no footer strip to carry these, so they live here. */}
+      <div className="settings-foot">
+        <AppVersion />
+        <button className="linklike" onClick={() => supabase.auth.signOut()}>Abmelden</button>
+      </div>
     </Sheet>
   );
 }

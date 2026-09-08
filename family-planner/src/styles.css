@@ -94,7 +94,13 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .row > input { flex: 1; }
 .row-sep { color: var(--ink-soft); }
-.radios label { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; }
+.radios { display: flex; gap: 14px; flex-wrap: wrap; }
+.radios label { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; margin-top: 0; }
+/* A label and the short choice that belongs to it, on one line. The sheet is
+   taller than a phone otherwise, and a heading over two radio buttons spends a
+   line saying what the buttons already say. */
+.field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.add-note { align-self: flex-start; margin-top: 6px; }
 
 .notice { padding: 10px 12px; border-radius: var(--radius); margin: 10px 0; font-size: .9rem; }
 .notice.success { background: #e7f1e9; border: 1px solid #b9d5be; }
@@ -113,7 +119,9 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; flex: none; }
 
-.role-badge { font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-strong); color: var(--ink-soft); background: var(--surface); }
+/* Hidden on a phone: your own role is the one thing you already know, and the
+   badge takes the width the family's name needs beside four controls. */
+.role-badge { display: none; font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-strong); color: var(--ink-soft); background: var(--surface); }
 .role-badge.owner { border-color: var(--accent); color: var(--accent); }
 .role-badge.editor { border-color: #3b5f9e; color: #3b5f9e; }
 
@@ -333,14 +341,23 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   box-shadow: var(--shadow); z-index: 6;
 }
 
-/* Family name left, build in the middle, sign-out right. */
+/* Build left, sign-out right; the family's name is in the header already.
+   Hidden on a phone, where it cost a full row of a short screen to carry a
+   build hash and a sign-out link. Both are in the settings sheet; the strip
+   comes back on a screen that can spare the room. */
 .userbar {
+  display: none;
   margin-top: auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 16px; border-top: 1px solid var(--rule);
   color: var(--ink-soft); font-size: .82rem;
 }
 
+.settings-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--rule);
+  color: var(--ink-soft); font-size: .82rem;
+}
 .app-version { color: var(--ink-soft); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .app-version a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .app-version a:hover { color: var(--accent); }
@@ -353,24 +370,52 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   position: fixed; inset: 0; background: rgba(35, 32, 27, .45);
   display: flex; align-items: flex-end; justify-content: center; z-index: 20;
 }
+/* Three rows: a title that stays, a form that scrolls, buttons that stay.
+   The sheet itself no longer scrolls — on a phone the form is taller than the
+   screen, and with the whole sheet scrolling the buttons sat below the fold
+   with nothing to say so. */
 .sheet {
   background: var(--paper); width: min(520px, 100%);
-  max-height: 92dvh; overflow-y: auto;
-  /* Scrolling to the end of a sheet must not carry on into the plan behind. */
-  overscroll-behavior: contain;
+  max-height: 92dvh;
+  display: flex; flex-direction: column;
   border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
 }
 .sheet.wide { width: min(720px, 100%); }
 .sheet-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 14px 16px; border-bottom: 1px solid var(--rule);
-  position: sticky; top: 0; background: var(--paper);
+  flex: none; background: var(--paper);
 }
 .sheet-head h2 { margin: 0; }
-.sheet-body { padding: 16px; }
-.sheet-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+.sheet-body {
+  flex: 1; min-height: 0;
+  /* No bottom padding: the button row below supplies it, and without a sticky
+     footer the last field would sit on the edge — hence the :last-child rule. */
+  padding: 16px 16px 0;
+  overflow-y: auto;
+  /* Scrolling to the end of a sheet must not carry on into the plan behind. */
+  overscroll-behavior: contain;
+}
+.sheet-body > :last-child { margin-bottom: 16px; }
+/* Every sheet has one of these and it always comes last, so it can hold the
+   floor of the scroll area: Speichern is on screen from the start, whatever
+   the form does above it. env() keeps it clear of the iPhone's home bar. */
+.sheet-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  position: sticky; bottom: 0; z-index: 1;
+  margin: 14px -16px 0; padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--paper); border-top: 1px solid var(--rule);
+}
 
 @media (min-width: 761px) {
+  /* No ＋ button in the way of a centred box here. */
+  .toasts { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .role-badge { display: inline-block; }
+  .userbar { display: flex; }
+  /* Clear of the footer, which only exists at this width — the button was
+     sitting on top of Abmelden. */
+  .fab { bottom: 66px; }
   .sheet-backdrop { align-items: center; }
   .sheet { border-radius: 16px; }
 }
@@ -417,12 +462,37 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 
 /* --- update prompt ----------------------------------------------------- */
 
-.update-prompt {
-  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 30;
-  display: flex; align-items: center; gap: 10px;
-  background: var(--ink); color: #fff;
-  padding: 12px 14px; border-radius: var(--radius); box-shadow: var(--shadow);
+/* --- toasts ------------------------------------------------------------ */
+
+/* Anything that speaks up while the plan stays put. In the flow, a sync
+   starting pushed the whole week down and finishing pushed it back.
+
+   The stack itself takes no clicks — it spans the width even when empty — so
+   only the boxes in it do. It sits above the phone's ＋ button, which is in
+   the same corner, and under the kiosk curtain (z-index 60): a screen that
+   has gone black for the night should stay black. */
+.toasts {
+  position: fixed; left: 12px; right: 12px; z-index: 30;
+  /* Above the ＋ button; on a wide screen a centred box never reaches it. */
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
 }
+.toasts > * { pointer-events: auto; width: min(520px, 100%); }
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: var(--radius);
+  box-shadow: var(--shadow); font-size: .9rem;
+}
+.toast.info { background: #e8eef5; border: 1px solid #bccde0; }
+.toast.danger { background: #f8e6e2; border: 1px solid #e0b2a8; color: #6d2418; }
+body.kiosk .toast.info { background: #1b2530; border-color: #2f4257; color: var(--ink); }
+body.kiosk .toast.danger { background: #2e1c18; border-color: #593029; color: #eab5a9; }
+.toast-close {
+  border: none; background: none; color: inherit; cursor: pointer;
+  font-size: 1.1rem; line-height: 1; padding: 0 2px;
+}
+.update-prompt { background: var(--ink); color: #fff; padding: 12px 14px; }
 .update-prompt button { background: var(--surface); color: var(--ink); border: none; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 
 /* --- weather ----------------------------------------------------------- */
