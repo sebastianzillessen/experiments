@@ -341,14 +341,23 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   box-shadow: var(--shadow); z-index: 6;
 }
 
-/* Build left, sign-out right. The family's name is in the header already. */
+/* Build left, sign-out right; the family's name is in the header already.
+   Hidden on a phone, where it cost a full row of a short screen to carry a
+   build hash and a sign-out link. Both are in the settings sheet; the strip
+   comes back on a screen that can spare the room. */
 .userbar {
+  display: none;
   margin-top: auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 16px; border-top: 1px solid var(--rule);
   color: var(--ink-soft); font-size: .82rem;
 }
 
+.settings-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--rule);
+  color: var(--ink-soft); font-size: .82rem;
+}
 .app-version { color: var(--ink-soft); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .app-version a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .app-version a:hover { color: var(--accent); }
@@ -403,6 +412,10 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   /* No ＋ button in the way of a centred box here. */
   .toasts { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   .role-badge { display: inline-block; }
+  .userbar { display: flex; }
+  /* Clear of the footer, which only exists at this width — the button was
+     sitting on top of Abmelden. */
+  .fab { bottom: 66px; }
   .sheet-backdrop { align-items: center; }
   .sheet { border-radius: 16px; }
 }
