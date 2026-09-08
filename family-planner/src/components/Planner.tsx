@@ -5,9 +5,10 @@ import {
   addDaysToKey, addMonths, dayLabel, dayLabelShort, isWeekend, monthDays, monthLabel,
   startOfMonth, startOfWeek, timeRangeLabel, timeRangeParts, todayKey, weekDays, weekLabel,
 } from '../lib/dates.ts';
-import { buildCells } from '../lib/merge.ts';
+import { buildCells, buildSpanLanes } from '../lib/merge.ts';
 import { expandManualSeries } from '../lib/recurrence.ts';
 import { FAMILY_COLUMN, ROLE_LABELS } from '../lib/types.ts';
+import type { SpanLane } from '../lib/merge.ts';
 import type { PlannerEvent, TimeFormat } from '../lib/types.ts';
 import type { ClockParts } from '../lib/dates.ts';
 import type { WeatherDay } from '../lib/types.ts';
@@ -63,7 +64,17 @@ export function Planner() {
     [manualSeries, calendarEvents, menuEvents, days, tz]
   );
   const cells = useMemo(() => buildCells(days, people, events, tz), [days, people, events, tz]);
+  const spans = useMemo(() => buildSpanLanes(days, people, events), [days, people, events]);
   const today = todayKey(tz);
+
+  // The run under the pointer, by entry key. A band is one entry drawn in
+  // several pieces, so hovering any piece has to light all of them and the
+  // chip that names it. Read off the DOM rather than tracked per segment:
+  // mouseover bubbles once on the way in, so moving along a band never
+  // flickers through an unlit frame.
+  const [lit, setLit] = useState<string | null>(null);
+  const litFrom = (e: { target: EventTarget | null }) =>
+    setLit((e.target as HTMLElement | null)?.closest<HTMLElement>('[data-span]')?.dataset.span ?? null);
 
   const [detailedWeather, toggleWeather] = useWeatherDetail();
   const byDate = useMemo(() => new Map(weather.map(d => [d.date, d])), [weather]);
@@ -139,7 +150,8 @@ export function Planner() {
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody onMouseOver={litFrom} onMouseLeave={() => setLit(null)}
+              onFocus={litFrom} onBlur={() => setLit(null)}>
               {days.map(day => (
                 <tr key={day} className={[
                   day === today ? 'is-today' : '',
@@ -150,22 +162,52 @@ export function Planner() {
                     <WeatherCell day={byDate.get(day)} detailed={detailedWeather}
                       onToggle={toggleWeather} />
                   </th>
-                  {columns.map(col => (
-                    <td key={col.id}>
-                      <div className="cell">
-                        {(cells.get(day)?.get(col.id) ?? []).map(ev => (
-                          <EventChip key={ev.key + day} event={ev} tz={tz} timeFormat={timeFormat}
-                            onClick={() => setSelected(ev)} />
-                        ))}
-                        {canEdit && (
-                          <button className="cell-add" aria-label={`Eintrag am ${dayLabel(day)} für ${col.name}`}
-                            onClick={() => setQuickAdd({ date: day, personId: col.id === FAMILY_COLUMN ? null : col.id })}>
-                            ＋
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  ))}
+                  {columns.map(col => {
+                    const bands = spans.at.get(col.id)?.get(day) ?? [];
+                    // An entry drawn as a band gets its chip on the first day
+                    // on screen only; the band carries the rest of the run.
+                    // The chip that names a run goes to the top of the cell,
+                    // where its band begins — a run that carries a time would
+                    // otherwise sort below the all-day entries and hang off
+                    // the middle of its own band.
+                    const list = (cells.get(day)?.get(col.id) ?? [])
+                      .filter(ev => (spans.spannedFrom.get(ev.key) ?? day) === day)
+                      .sort((a, b) =>
+                        Number(spans.spannedFrom.has(b.key)) - Number(spans.spannedFrom.has(a.key)));
+                    // The chip sits against its band, so that the two read as
+                    // one entry. Only the outermost band can have it: an inner
+                    // one would have to reach across the bands beside it.
+                    const outer = bands.length - 1;
+                    const glued = bands[outer]?.first ? bands[outer]!.event.key : null;
+                    return (
+                      <td key={col.id}>
+                        <div className="cell-row">
+                          {bands.length > 0 && (
+                            <div className="cell-bands">
+                              {bands.map((lane, i) => (lane
+                                ? <SpanBand key={lane.event.key} lane={lane}
+                                    glued={lane.event.key === glued} lit={lit === lane.event.key}
+                                    onClick={() => setSelected(lane.event)} />
+                                : <span key={`gap${i}`} className="band-gap" />))}
+                            </div>
+                          )}
+                          <div className="cell">
+                            {list.map(ev => (
+                              <EventChip key={ev.key + day} event={ev} tz={tz} timeFormat={timeFormat}
+                                span={spanMarker(bands, ev)} glued={ev.key === glued}
+                                lit={lit === ev.key} onClick={() => setSelected(ev)} />
+                            ))}
+                            {canEdit && (
+                              <button className="cell-add" aria-label={`Eintrag am ${dayLabel(day)} für ${col.name}`}
+                                onClick={() => setQuickAdd({ date: day, personId: col.id === FAMILY_COLUMN ? null : col.id })}>
+                                ＋
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -194,8 +236,43 @@ export function Planner() {
   );
 }
 
-function EventChip({ event, tz, timeFormat, onClick }: {
-  event: PlannerEvent; tz: string; timeFormat: TimeFormat; onClick: () => void;
+/**
+ * The band that carries a multi-day entry down its column.
+ *
+ * It bleeds over the cell padding and the rule between the rows, so the
+ * segments of consecutive days meet and read as one object rather than as the
+ * same chip printed again and again. Square where the run leaves the days on
+ * screen, rounded where it really begins and ends.
+ */
+/** Which way the run leaves the chip: down, or in from before and on. */
+function spanMarker(lanes: (SpanLane | null)[] | undefined, event: PlannerEvent): string | undefined {
+  const lane = lanes?.find(l => l?.event.key === event.key);
+  if (!lane) return undefined;
+  return lane.openStart ? '↕' : '↓';
+}
+
+function SpanBand({ lane, glued, lit, onClick }: {
+  lane: SpanLane; glued: boolean; lit: boolean; onClick: () => void;
+}) {
+  const { event, first, last, openStart, openEnd } = lane;
+  const classes = [
+    'band',
+    first && !openStart ? 'band-start' : '',
+    last && !openEnd ? 'band-end' : '',
+    // Square where the chip is about to be set against it.
+    glued && first ? 'band-glued' : '',
+    lit ? 'is-lit' : '',
+  ].filter(Boolean).join(' ');
+  return (
+    <button className={classes} onClick={onClick} data-span={event.key}
+      style={{ background: event.source === 'manual' ? 'var(--accent)' : event.color }}
+      title={event.title} aria-label={event.title} />
+  );
+}
+
+function EventChip({ event, tz, timeFormat, span, glued, lit, onClick }: {
+  event: PlannerEvent; tz: string; timeFormat: TimeFormat;
+  span?: string; glued?: boolean; lit?: boolean; onClick: () => void;
 }) {
   const parts = event.allDay ? null : timeRangeParts(event.startsAt, event.endsAt, tz, timeFormat);
   // The plain form is what a screen reader should hear, and what the tooltip
@@ -203,9 +280,11 @@ function EventChip({ event, tz, timeFormat, onClick }: {
   const spoken = event.allDay ? '' : timeRangeLabel(event.startsAt, event.endsAt, tz, timeFormat);
   return (
     <button
-      className={`chip ${event.source}`}
+      className={['chip', event.source, glued ? 'chip-glued' : '', lit ? 'is-lit' : '']
+        .filter(Boolean).join(' ')}
       style={event.source !== 'manual' ? { borderLeftColor: event.color } : undefined}
       onClick={onClick}
+      data-span={span ? event.key : undefined}
       title={spoken ? `${spoken} ${event.title}` : event.title}
       aria-label={spoken ? `${spoken} ${event.title}` : event.title}
     >
@@ -217,6 +296,7 @@ function EventChip({ event, tz, timeFormat, onClick }: {
       )}
       <span className="chip-title">{event.displayTitle || event.title}</span>
       {event.repeat && <span className="chip-repeat" aria-label="wiederholt sich">↻</span>}
+      {span && <span className="chip-span" aria-hidden="true">{span}</span>}
     </button>
   );
 }

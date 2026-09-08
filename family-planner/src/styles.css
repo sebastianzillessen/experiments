@@ -202,6 +202,48 @@ input[type="color"] { padding: 0; width: 44px; height: 38px; border: 1px solid v
 .planner-table tbody td { min-width: 130px; }
 
 .cell { display: flex; flex-direction: column; gap: 3px; min-height: 34px; }
+
+/* --- multi-day entries ------------------------------------------------- */
+
+/* Days are rows and people are columns, so an entry over several days is one
+   tall object in a column. It used to be the same chip printed in every cell
+   it touched, which read as several entries. Now the chip is written once and
+   a band traces the rest of the run down the column.
+
+   The band has to be as tall as the cell, whatever else is in it, or it would
+   break wherever a day has more entries than its neighbours. A div inside a
+   table cell does not inherit the cell's height by itself; declaring a token
+   height on the cell gives the percentage something to resolve against, and
+   the cell still grows to its content as table cells do. */
+.planner-table tbody td { height: 1px; }
+.cell-row { display: flex; align-items: stretch; gap: 5px; height: 100%; }
+.cell-row > .cell { flex: 1; min-width: 0; }
+.cell-bands { display: flex; gap: 3px; }
+/* Empty lane: an entry keeps its lane for the whole run, so a day where the
+   inner band has ended still has to hold the place open. */
+.band, .band-gap { width: 7px; flex: none; }
+.band {
+  /* -4px reaches the cell's own edge, -5px carries 1px over the rule between
+     the rows so this day's band and the next one meet. */
+  margin: -4px 0 -5px;
+  border: none; padding: 0; cursor: pointer;
+  background: var(--imported);
+}
+.band-start { margin-top: 0; border-radius: 4px 4px 0 0; }
+.band-end { margin-bottom: 0; border-radius: 0 0 4px 4px; }
+.band-start.band-end { border-radius: 4px; }
+/* The chip that names the run is set against the band, so the two read as one
+   entry rather than as a label near a stripe. Square on the side they meet. */
+.band-glued { border-top-right-radius: 0; }
+/* One entry drawn in several pieces answers as one: hovering any day of a run
+   lights every day of it and the chip that names it.
+
+   A 7px ribbon cannot say much with colour alone — brightness on its own was
+   barely visible against either paper — so it grows as well. A transform
+   rather than a width, so the cells beside it do not move. */
+.band { transition: transform .1s; }
+.band.is-lit { transform: scaleX(1.5); filter: brightness(1.2); }
+/* Which way the run leaves the chip. */
 .cell-add {
   align-self: flex-start;
   border: 1px dashed var(--rule-strong); background: none; color: var(--ink-soft);
@@ -219,7 +261,6 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   background: var(--surface); color: var(--ink);
   font-size: .84rem; cursor: pointer;
 }
-.chip:hover { background: var(--paper-alt); }
 /* Imported chips override this inline: a calendar's own colour, or the one
    colour every lunch shares. */
 .chip.manual { border-left-color: var(--accent); }
@@ -237,6 +278,23 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 }
 .chip-title { overflow: hidden; text-overflow: ellipsis; }
 .chip-repeat { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
+/* Which way a run leaves the chip that names it. */
+.chip-span { color: var(--ink-soft); font-size: .78rem; margin-left: auto; padding-left: 4px; }
+/* The band IS this chip's left edge: no accent stripe of its own beside it,
+   square where they meet, pulled over the gap so the two touch. The text keeps
+   the inset every other chip has — 5px of gap, the 4px border it gave up and
+   its own 7px — so a column still reads straight down.
+
+   These rules have to sit after .chip: its `border-left` shorthand carries the
+   same specificity, so above it they simply lost. */
+.chip-glued {
+  margin-left: -5px;
+  padding-left: 16px;
+  border-left-width: 0;
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+}
+.chip:hover, .chip.is-lit { background: var(--paper-alt); }
+.chip.is-lit { border-color: var(--rule-strong); }
 
 /* --- phone list layout ------------------------------------------------- */
 
