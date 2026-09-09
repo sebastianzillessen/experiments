@@ -402,7 +402,12 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   /* Scrolling to the end of a sheet must not carry on into the plan behind. */
   overscroll-behavior: contain;
 }
+/* Breathing room under the last field — but not under the button row, which
+   is already the floor: that margin fell below the sticky bar and read as
+   dead space, 16px of it. */
 .sheet-body > :last-child { margin-bottom: 16px; }
+.sheet-body > .sheet-actions:last-child,
+.sheet-body > :last-child:has(> .sheet-actions:last-child) { margin-bottom: 0; }
 /* Every sheet has one of these and it always comes last, so it can hold the
    floor of the scroll area: Speichern is on screen from the start, whatever
    the form does above it. env() keeps it clear of the iPhone's home bar. */
@@ -410,13 +415,13 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   display: flex; gap: 8px; justify-content: flex-end;
   position: sticky; bottom: 0; z-index: 1;
   margin: 14px -16px 0; padding: 12px 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   background: var(--paper); border-top: 1px solid var(--rule);
 }
 
 @media (min-width: 761px) {
   /* No ＋ button in the way of a centred box here. */
-  .toasts { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .toasts { bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
   .role-badge { display: inline-block; }
   .userbar { display: flex; }
   /* Clear of the footer, which only exists at this width — the button was
@@ -480,7 +485,7 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .toasts {
   position: fixed; left: 12px; right: 12px; z-index: 30;
   /* Above the ＋ button; on a wide screen a centred box never reaches it. */
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(66px + max(18px, env(safe-area-inset-bottom, 0px)));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   pointer-events: none;
 }
