@@ -10,6 +10,7 @@ function person(name: string, extra: Partial<Person> = {}): Person {
     color: '#000',
     sortOrder: 0,
     aliases: [],
+    doesTasks: false,
     userId: null,
     archivedAt: null,
     ...extra,

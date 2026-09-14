@@ -143,8 +143,8 @@ describe('expandSeries — times', () => {
 
 describe('expandManualSeries + buildCells', () => {
   const people: Person[] = [
-    { id: 'p-lars', name: 'Lars', shortName: null, color: '#1', sortOrder: 0, aliases: [], userId: null, archivedAt: null },
-    { id: 'p-miri', name: 'Miri', shortName: null, color: '#2', sortOrder: 1, aliases: [], userId: null, archivedAt: null },
+    { id: 'p-lars', name: 'Lars', shortName: null, color: '#1', sortOrder: 0, aliases: [], userId: null, archivedAt: null, doesTasks: false },
+    { id: 'p-miri', name: 'Miri', shortName: null, color: '#2', sortOrder: 1, aliases: [], userId: null, archivedAt: null, doesTasks: false },
   ];
 
   it('puts every Friday in both people\'s columns', () => {

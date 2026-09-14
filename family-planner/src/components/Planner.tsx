@@ -16,6 +16,7 @@ import { QuickAddSheet } from './QuickAddSheet.tsx';
 import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
+import { Household } from './Household.tsx';
 import { AppVersion } from './AppVersion.tsx';
 import { KioskCurtain, useKiosk } from './KioskMode.tsx';
 import { WeatherCell, useWeatherDetail } from './Weather.tsx';
@@ -47,6 +48,7 @@ export function Planner() {
   const [view, setView] = useState<View>('week');
   const [anchor, setAnchor] = useState(() => todayKey(tz));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [householdOpen, setHouseholdOpen] = useState(false);
   const [quickAdd, setQuickAdd] = useState<QuickAddPrefill | null>(null);
   const [selected, setSelected] = useState<PlannerEvent | null>(null);
   const narrow = useIsNarrow();
@@ -115,6 +117,8 @@ export function Planner() {
             <button role="tab" aria-selected={view === 'month'} className={view === 'month' ? 'active' : ''}
               onClick={() => setView('month')}>Monat</button>
           </div>
+          <button className="icon-btn" title="Haushalt" aria-label="Haushalt"
+            onClick={() => setHouseholdOpen(true)}>🧺</button>
           <button className="icon-btn" title="Kalender aktualisieren" aria-label="Kalender aktualisieren"
             onClick={() => refreshCalendars(true)} disabled={sync.busy}>⟳</button>
           <button className="icon-btn" title="Einstellungen" aria-label="Einstellungen"
@@ -227,6 +231,7 @@ export function Planner() {
       {quickAdd && <QuickAddSheet prefill={quickAdd} onClose={() => setQuickAdd(null)} />}
       {selected && <EventSheet event={selected} onClose={() => setSelected(null)} />}
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
+      {householdOpen && <Household onClose={() => setHouseholdOpen(false)} />}
       {kiosk.asleep && <KioskCurtain onWake={kiosk.wake} />}
     </div>
   );

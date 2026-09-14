@@ -4,7 +4,7 @@ import { FAMILY_COLUMN } from '../src/lib/types.ts';
 import type { Assignment, CachedEvent, Calendar, Person, PlannerEvent } from '../src/lib/types.ts';
 
 function person(id: string, name: string): Person {
-  return { id, name, shortName: null, color: '#111', sortOrder: 0, aliases: [], userId: null, archivedAt: null };
+  return { id, name, shortName: null, color: '#111', sortOrder: 0, aliases: [], userId: null, archivedAt: null, doesTasks: false };
 }
 
 const LILLY = person('p-lilly', 'Lilly');

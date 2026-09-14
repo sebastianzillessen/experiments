@@ -610,7 +610,176 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
 
 /* --- print: the week goes on the fridge -------------------------------- */
 
+/* --- household: what keeps the house running ---------------------------
+   Its own screen over the plan, a ruled list rather than cards: the rows are
+   read down the page and tapped, and a card each would make twenty jobs look
+   like twenty decisions. Person colours come from fp_people, so a household
+   button and a planner column are recognisably the same person. */
+.hh-screen .topbar { flex-wrap: wrap; }
+@media (max-width: 700px) {
+  /* Three tabs and a title do not fit a phone side by side, and the title is
+     what gets clipped — so the tabs take a row of their own. */
+  .hh-screen .topbar-right { flex: 1 1 100%; }
+  .hh-screen .topbar-right .segmented { display: flex; width: 100%; }
+  .hh-screen .topbar-right .segmented button { flex: 1; }
+}
+.hh-screen {
+  position: fixed; inset: 0; z-index: 15; overflow: auto;
+  background: var(--paper); color: var(--ink);
+  display: flex; flex-direction: column;
+}
+.hh-body { width: 100%; max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 4px 90px; }
+.hh-num { font-variant-numeric: tabular-nums; }
+
+.hh-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin: 22px 0 2px; flex-wrap: wrap;
+}
+.hh-head h2 { margin: 0; font-size: 1.05rem; }
+.hh-eyebrow {
+  font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 600;
+}
+.hh-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .88rem; margin-top: 6px; }
+
+.hh-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.hh-row {
+  display: flex; align-items: center; gap: 10px; position: relative;
+  padding: 10px 0 10px 12px; border-bottom: 1px solid var(--rule);
+}
+/* The severity stripe: an overdue job has to be findable while scrolling. */
+.hh-row::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 2px; background: transparent;
+}
+.hh-row.is-over::before { background: var(--danger); }
+.hh-row.is-due::before { background: #9a7020; }
+.hh-main {
+  flex: 1 1 auto; min-width: 0; display: block; text-align: left;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
+}
+.hh-name { display: block; font-weight: 600; }
+.hh-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 7px;
+  font-size: .83rem; color: var(--ink-soft); margin-top: 1px;
+}
+.hh-sep { opacity: .45; }
+.hh-state { font-size: .83rem; font-weight: 600; flex: none; }
+.hh-state.is-over { color: var(--danger); }
+.hh-state.is-due { color: #9a7020; }
+
+.hh-tag { font-size: .76rem; padding: 1px 8px; border-radius: 999px; background: var(--paper-alt); white-space: nowrap; }
+.hh-tag-coord { background: #e4efea; color: var(--accent); font-weight: 600; }
+.hh-tag-drift { background: #f7eed6; color: #8a6418; font-weight: 600; }
+
+.hh-pips { display: flex; gap: 4px; flex: none; }
+.hh-pip {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1px dashed var(--rule-strong); background: none;
+}
+.hh-pip.is-done { border: 1px solid var(--p, var(--accent)); background: var(--p, var(--accent)); }
+
+.hh-who { display: flex; gap: 6px; flex: none; }
+.hh-person {
+  width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+  font: inherit; font-weight: 700; font-size: .95rem;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-soft);
+}
+.hh-person:hover:not(:disabled), .hh-person:focus-visible {
+  border-color: var(--p); color: var(--p); background: color-mix(in srgb, var(--p) 12%, var(--surface));
+}
+.hh-person:disabled { opacity: .5; cursor: default; }
+.hh-load-cell { flex: none; text-align: right; font-size: .78rem; color: var(--ink-soft); }
+.hh-load-cell b { display: block; font-size: .95rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.hh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+.hh-chip {
+  font: inherit; font-size: .85rem; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+}
+.hh-chip[aria-pressed="true"] { background: #e4efea; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.hh-empty { max-width: 46ch; margin: 40px auto; text-align: center; }
+.hh-empty .row { justify-content: center; margin: 16px 0 8px; }
+
+/* --- the split --------------------------------------------------------- */
+.hh-total { margin: 6px 0 0; }
+.hh-total b { display: block; font-size: 1.9rem; letter-spacing: -.02em; line-height: 1.2; }
+.hh-split {
+  display: flex; height: 32px; margin-top: 10px; overflow: hidden;
+  border: 1px solid var(--rule-strong); border-radius: 8px;
+}
+.hh-split span {
+  display: grid; place-items: center; min-width: 0; overflow: hidden;
+  font-size: .85rem; font-weight: 700; color: #fff;
+}
+.hh-bar-row {
+  display: grid; grid-template-columns: minmax(80px, 1fr) 2fr auto;
+  gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule);
+}
+.hh-minibar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--paper-alt); }
+.hh-minibar i { display: block; }
+
+/* --- booking ----------------------------------------------------------- */
+.hh-booked {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 25;
+  display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px);
+  padding: 8px 12px; font-size: .9rem;
+  background: var(--surface); border: 1px solid var(--rule-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.hh-adjust { display: flex; align-items: center; gap: 6px; flex: none; }
+.hh-adjust .icon-btn { width: 30px; height: 30px; }
+.hh-runbar {
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px auto 0; width: 100%; max-width: 760px;
+  padding: 8px 12px; border: 1px solid var(--accent); background: #e4efea; border-radius: var(--radius);
+}
+.hh-runbar b { display: block; }
+.hh-runbar .hint { display: block; }
+
+/* --- entering a duration ----------------------------------------------- */
+.hh-dur-note { text-align: center; margin: 10px 0 0; color: var(--ink-soft); font-size: .88rem; }
+.hh-dur-total {
+  text-align: center; margin: 14px 0 2px; font-size: 2.4rem; font-weight: 700; letter-spacing: -.02em;
+}
+.hh-dur-total.is-empty { color: var(--ink-soft); }
+.hh-add-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.hh-add {
+  padding: 20px 6px; font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--rule-strong); border-radius: 14px; background: var(--surface); color: var(--ink);
+}
+.hh-add:hover, .hh-add:focus-visible { border-color: var(--accent); color: var(--accent); background: #e4efea; }
+
+/* --- the task form ----------------------------------------------------- */
+.hh-seg { display: flex; width: 100%; }
+.hh-seg button { flex: 1; }
+.hh-inline-num { width: 4.5rem; }
+.hh-measured {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 6px; padding: 10px 12px; font-size: .87rem;
+  background: var(--paper-alt); border: 1px solid var(--rule); border-radius: var(--radius);
+}
+.hh-switch { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--rule); cursor: pointer; margin-top: 0; }
+.hh-switch input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.hh-switch-title { display: block; font-weight: 600; font-size: .92rem; }
+.hh-switch-note { display: block; font-size: .83rem; color: var(--ink-soft); font-weight: 400; }
+.hh-actions { align-items: center; flex-wrap: wrap; }
+.hh-load { flex: 1 1 100%; font-size: .88rem; color: var(--ink-soft); }
+.hh-doer { display: flex; align-items: center; gap: 8px; width: 100%; font-weight: 400; margin: 0; cursor: pointer; }
+.hh-doer input { width: 18px; height: 18px; accent-color: var(--accent); }
+.hh-parsed li { align-items: flex-start; }
+.hh-parsed .hh-tag { margin-left: 6px; }
+/* The line the date came out of, so a wrong reading is visible as wrong. */
+.hh-parsed-line { display: block; font-weight: 400; overflow-wrap: anywhere; }
+
+/* The iPad on the wall shows the week, not the chores. */
+body.kiosk .hh-screen { display: none; }
+body.kiosk .hh-tag-coord, body.kiosk .hh-chip[aria-pressed="true"] { background: #1b2a25; }
+body.kiosk .hh-runbar { background: #1b2a25; }
+
 @media print {
+  .hh-screen { display: none; }
   .no-print { display: none !important; }
   body { background: #fff; }
   .table-wrap { overflow: visible; padding: 0; }

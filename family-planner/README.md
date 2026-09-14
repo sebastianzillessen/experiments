@@ -174,6 +174,96 @@ at, and what comes back is checked against the week it was asked for before
 anything is stored. Details and the required `CLAUDE_API_KEY` secret are in
 `supabase/functions/family-menu-import/README.md`.
 
+## Household work
+
+Who actually keeps the house running, how often each job comes round, and how
+long it takes. Opened with the **🧺** button in the top bar; it takes over the
+whole screen, so it could move to its own address later without being pulled
+apart first.
+
+Three views:
+
+- **Heute** — what is waiting. One tap on a person's initial books the job with
+  the time, the person and the duration; the confirmation that follows carries
+  **− 12 min +** and *Rückgängig*, so a correction costs one more tap. A job
+  with a daily rhythm shows one circle per expected run, filled in the colour
+  of whoever did it: whether the dog has already been out is then a glance, not
+  a conversation.
+- **Aufgaben** — the catalog by area, with the planned load per area and per
+  job, and the form behind every row.
+- **Verteilung** — minutes per week per person over the last four weeks,
+  overall, per area, and the biggest single items. This is the point of the
+  feature: an impression that one person does most of it becomes a number
+  either way.
+
+A job carries a rhythm of one of four kinds, because a household has four:
+a **fixed cadence** (2–3× pro Tag, 1–2× pro Woche, optionally pinned to
+weekdays — Kita on Fridays), an **interval** (alle 6 Wochen), an **event**
+(*nach jedem Gast*), or a **list of dates**. An event-driven job is never due
+and never overdue; it carries an estimate per week so it still counts toward
+the load. A job with fixed days is late only once one of its days has gone by —
+Friday's run is not overdue on Tuesday.
+
+### A list of dates, pasted
+
+Some work arrives as an appointment list rather than a rhythm: the cleaner
+sends the days for the next two months, and calling that "roughly every eleven
+days" throws away the only thing that matters. Such a job is set to **Feste
+Termine** and the message is pasted in as it came:
+
+```
+- Mon, Sept 7
+- ⁠Sat, Sept 12
+- _still my special request for Sun, Sept 27, maybe something changed 😉_
+- *⁠Thur, Oct 15*
+```
+
+Bullets, `*bold*`, `_italic_` and the invisible characters a copy carries stay
+in; German and English month names, `15.10.`, `15. Oktober`, `Oct 15th` and
+`2026-10-15` are all read. A year is only assumed when the list gives none —
+the months ahead, with the last few weeks still in reach, since a list usually
+starts a little in the past.
+
+The parser proposes and the person confirms. Every line it found a date in is
+listed with the line it came from, so a wrong reading is visible as wrong, and
+two kinds are left unticked rather than decided for the reader: an *italic*
+line, which is how people mark what is not settled (in the message above, the
+day the cleaner had already turned down), and a line whose **weekday does not
+match its date** — usually a typo in the message, and worth a look before
+somebody drives over. `*Bold*` is marked *neu*, because that is what it means
+in these lists. A day that does not exist is dropped; a day written twice is
+listed once.
+
+From there the days are ordinary planned dates: the row reads *nächster Sa, 3.
+Okt.*, the job is due on its day and overdue once that day has gone by with
+nothing logged since — done a day late still counts, because the day was moved,
+not missed. Its weekly load comes from the days it actually asks for in the
+eight weeks around today, so a list of dates lands in the distribution like
+everything else. Single days are added or removed one at a time; past ones stay
+as history.
+
+**How long it took** has three ways in, by how much the job varies. Normally
+the usual value is booked straight away. Jobs marked *Dauer jedes Mal erfassen*
+open a sheet that starts at zero with **+5 min**, **+15 min** and **+1 h**
+blocks that add up, plus a reset — hanging up bedding is five minutes, hanging
+up a load of children's clothes is twenty. The same sheet offers a
+**stopwatch**, whose bar stays in sight on every view; it lives in
+`localStorage`, since a running stopwatch belongs to the phone it was started
+on rather than to the family.
+
+The rhythm on the job is what the family *means* to do, the logs are what
+happened, and the app shows both rather than quietly reconciling them: once
+four entries exist a row reads `Ø 12 min (5–20)` instead of a single guess, a
+rate that has drifted more than 30 % from the plan gets a `gemessen 1,5×/Wo`
+chip, and the form offers the measured figures with one button to adopt them.
+
+Under **Settings → Haushalt** the family says who takes on household work —
+everyone has a column in the week, not everyone empties the dishwasher, and a
+row of buttons is only usable while they are few. While nobody is picked,
+everyone is offered. The same tab fills an empty catalog with a starter list of
+ordinary jobs, which is faster than typing fourteen rows before seeing
+anything.
+
 ## Roles
 
 Deliberately different from Salärli's owner/admin/employee:
@@ -254,8 +344,23 @@ fp_families ─┬─ fp_memberships (user_id, role)        ← logins
              ├─ fp_calendar_assignments                ← manual corrections
              ├─ fp_menu_sources ─┬─ fp_menu_weeks       ← imported lunches
              │                   └─ fp_menu_people      ← who eats, which days
+             ├─ fp_tasks ─┬─ fp_task_logs                ← household work
+             │             └─ fp_task_dates               ← when it has dates
              └─ fp_invites
 ```
+
+`fp_tasks` is the catalog — one row per job. The rhythm sits in real columns
+(`rhythm_kind` plus the columns of that kind) rather than a JSON blob, and
+`fp_tasks_rhythm_chk` keeps exactly the columns of the chosen kind filled, so a
+daily job cannot carry a half-written interval. `fp_tasks.area` is free text:
+the list of areas grows in the database with the household instead of needing a
+migration for a flat that has an Airbnb in it. `fp_task_logs` is append-only in
+practice — one row per run, with the person it counts for, which is not always
+whoever tapped the button. It carries `family_id` of its own so four weeks of
+distribution is one indexed read. `fp_task_dates` holds one row per planned day
+for a job whose rhythm is a list — a list that arrives by message is edited by
+adding and removing single days, never by rewriting a rule.
+`fp_people.does_tasks` says who is offered as a button.
 
 All-day entries use `start_date`/`end_date` (end **inclusive**, the way a
 person reads a planner); entries with a time add `starts_at`/`ends_at`. A

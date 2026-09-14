@@ -8,8 +8,9 @@ import { AppVersion } from './AppVersion.tsx';
 import { Sheet } from './Sheet.tsx';
 import { setKioskEnabled, useKioskSettings } from './KioskMode.tsx';
 import { MenuSettings } from './MenuSettings.tsx';
+import { HouseholdSettings } from './HouseholdSettings.tsx';
 
-type Tab = 'people' | 'calendars' | 'menu' | 'access' | 'display';
+type Tab = 'people' | 'calendars' | 'menu' | 'household' | 'access' | 'display';
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const { isOwner } = useApp();
@@ -24,6 +25,8 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           onClick={() => setTab('calendars')}>Kalender</button>
         <button role="tab" aria-selected={tab === 'menu'} className={tab === 'menu' ? 'active' : ''}
           onClick={() => setTab('menu')}>Menüplan</button>
+        <button role="tab" aria-selected={tab === 'household'} className={tab === 'household' ? 'active' : ''}
+          onClick={() => setTab('household')}>Haushalt</button>
         <button role="tab" aria-selected={tab === 'access'} className={tab === 'access' ? 'active' : ''}
           onClick={() => setTab('access')}>Zugriff</button>
         <button role="tab" aria-selected={tab === 'display'} className={tab === 'display' ? 'active' : ''}
@@ -33,6 +36,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
       {tab === 'people' && <PeopleSettings />}
       {tab === 'calendars' && (isOwner ? <CalendarSettings /> : <OwnerOnly what="Kalender" />)}
       {tab === 'menu' && <MenuSettings />}
+      {tab === 'household' && <HouseholdSettings />}
       {tab === 'access' && (isOwner ? <AccessSettings /> : <OwnerOnly what="Zugriffsrechte" />)}
       {tab === 'display' && <DisplaySettings />}
 
