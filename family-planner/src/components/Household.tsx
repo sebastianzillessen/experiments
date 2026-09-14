@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
-import { dayLabel, todayKey } from '../lib/dates.ts';
+import { addDaysToKey, dayLabel, timeLabel, todayKey } from '../lib/dates.ts';
 import {
   dailyTarget, defaultMinutes, driftsFromPlan, durationStats, fmtElapsed, fmtMinutes, fmtRate,
   dateLabel, lastLog, logsOnDay, measuredPerWeek, minutesByPerson, nextDate, rhythmLabel,
   taskStatus, weeklyMinutes,
 } from '../lib/tasks.ts';
 import { areaLabel } from '../lib/types.ts';
-import type { HouseholdTask, Person, TaskLog } from '../lib/types.ts';
+import type { HouseholdTask, Person, TaskLog, TimeFormat } from '../lib/types.ts';
 import { TaskSheet } from './TaskSheet.tsx';
 import { Sheet } from './Sheet.tsx';
 
@@ -257,9 +257,13 @@ function relative(iso: string, tz: string): string {
 
 function Today(props: RowProps) {
   const { tasks, taskLogs, tz } = props;
-  const { people } = useApp();
+  const { people, family } = useApp();
   const today = todayKey(tz);
   const active = tasks.filter(t => t.active);
+  // The day's entries are folded away: the list you came to tap has to stay
+  // at the top. The summary that was already there opens them.
+  const [logOpen, setLogOpen] = useState(false);
+  const [logDay, setLogDay] = useState(today);
 
   const doneToday = taskLogs.filter(l => todayKey(tz, Date.parse(l.doneAt)) === today);
   const perPerson = minutesByPerson(doneToday, 0);
@@ -275,9 +279,13 @@ function Today(props: RowProps) {
     <>
       <div className="hh-head">
         <h2>{dayLabel(today)}</h2>
-        <span className="hh-num muted">
-          {doneToday.length} erfasst · {fmtMinutes([...perPerson.values()].reduce((a, b) => a + b, 0))}
-        </span>
+        <button className="hh-log-toggle" aria-expanded={logOpen} aria-controls="hh-daylog"
+          onClick={() => { setLogDay(today); setLogOpen(o => !o); }}>
+          <span className="hh-num">
+            {doneToday.length} erfasst · {fmtMinutes([...perPerson.values()].reduce((a, b) => a + b, 0))}
+          </span>
+          <span aria-hidden="true">{logOpen ? '▴' : '▾'}</span>
+        </button>
       </div>
       <div className="hh-legend">
         {people.filter(p => perPerson.get(p.id)).map(p => (
@@ -288,6 +296,11 @@ function Today(props: RowProps) {
         ))}
         {!perPerson.size && <span className="muted">Heute noch nichts erfasst.</span>}
       </div>
+
+      {logOpen && (
+        <DayLog tasks={tasks} taskLogs={taskLogs} people={people} tz={tz}
+          timeFormat={family?.timeFormat ?? '24h'} day={logDay} today={today} onDay={setLogDay} />
+      )}
 
       <Section title="Jetzt dran" note="Tippen = erledigt">
         {waiting.length
@@ -317,6 +330,93 @@ function Section({ title, note, children }: { title: string; note: string; child
       </div>
       <ul className="hh-list">{children}</ul>
     </>
+  );
+}
+
+/**
+ * What was actually booked on a day, newest first.
+ *
+ * Until this existed the only handle on an entry was the confirmation right
+ * after tapping, which is gone in seconds — so a walk booked on the wrong
+ * person at breakfast stayed wrong. The minutes are corrected in place and an
+ * entry can be dropped; the days page back, because the correction usually
+ * occurs to someone the evening after.
+ */
+function DayLog({ tasks, taskLogs, people, tz, timeFormat, day, today, onDay }: {
+  tasks: HouseholdTask[];
+  taskLogs: TaskLog[];
+  people: Person[];
+  tz: string;
+  timeFormat: TimeFormat;
+  day: string;
+  today: string;
+  onDay: (day: string) => void;
+}) {
+  const { setLogMinutes, deleteTaskLog, canEdit } = useApp();
+  const entries = taskLogs
+    .filter(l => todayKey(tz, Date.parse(l.doneAt)) === day)
+    .sort((a, b) => b.doneAt.localeCompare(a.doneAt));
+  const sum = entries.reduce((s, l) => s + l.minutes, 0);
+
+  const label = day === today ? 'Heute'
+    : day === addDaysToKey(today, -1) ? 'Gestern'
+    : dayLabel(day);
+
+  return (
+    <section className="hh-daylog" id="hh-daylog" aria-label="Erfasste Einträge">
+      <div className="hh-daylog-head">
+        <button className="icon-btn" aria-label="Tag zurück"
+          onClick={() => onDay(addDaysToKey(day, -1))}>‹</button>
+        <span className="grow"><b>{label}</b>
+          <span className="hint hh-num">
+            {' '}{entries.length} {entries.length === 1 ? 'Eintrag' : 'Einträge'} · {fmtMinutes(sum)}
+          </span>
+        </span>
+        <button className="icon-btn" aria-label="Tag vor" disabled={day >= today}
+          onClick={() => onDay(addDaysToKey(day, 1))}>›</button>
+      </div>
+
+      {entries.length ? (
+        <ul className="hh-list">
+          {entries.map(entry => {
+            const task = tasks.find(t => t.id === entry.taskId);
+            const person = people.find(p => p.id === entry.personId);
+            return (
+              <li key={entry.id} className="hh-row hh-log-row">
+                <span className="hh-log-time hh-num">{timeLabel(entry.doneAt, tz, timeFormat)}</span>
+                <span className="hh-main">
+                  <span className="hh-name">{task?.name ?? 'Gelöschte Aufgabe'}</span>
+                  <span className="hh-meta">
+                    {person && (
+                      <span className="hh-pip is-done" aria-hidden="true"
+                        style={{ '--p': person.color } as React.CSSProperties} />
+                    )}
+                    {person?.name ?? 'Niemand'}
+                    <span className="hh-sep">·</span>
+                    <span className="hh-num">{fmtMinutes(entry.minutes)}</span>
+                  </span>
+                </span>
+                {canEdit && (
+                  <span className="hh-adjust">
+                    <button className="icon-btn" aria-label={`Fünf Minuten weniger bei ${task?.name ?? ''}`}
+                      disabled={entry.minutes <= 1}
+                      onClick={() => setLogMinutes(entry.id, Math.max(1, entry.minutes - 5))}>−</button>
+                    <button className="icon-btn" aria-label={`Fünf Minuten mehr bei ${task?.name ?? ''}`}
+                      onClick={() => setLogMinutes(entry.id, entry.minutes + 5)}>+</button>
+                    <button className="icon-btn hh-log-del" aria-label={`Eintrag löschen: ${task?.name ?? ''}`}
+                      onClick={() => deleteTaskLog(entry.id)}>×</button>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="hint">
+          {day === today ? 'Heute noch nichts erfasst.' : 'An diesem Tag wurde nichts erfasst.'}
+        </p>
+      )}
+    </section>
   );
 }
 
