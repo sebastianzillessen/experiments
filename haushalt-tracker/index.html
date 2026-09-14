@@ -1,0 +1,791 @@
+<title>Wer macht was</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same warm paper as the Familienplaner this should eventually live in
+   (--paper/--ink/--accent are its tokens); dark mode borrows its kiosk look. */
+:root {
+  --paper: #faf7f0;
+  --paper-alt: #f2ede1;
+  --surface: #ffffff;
+  --ink: #23201b;
+  --ink-soft: #6f675a;
+  --rule: #ddd5c4;
+  --rule-strong: #c4b9a2;
+  --accent: #2f6f5e;
+  --accent-ink: #ffffff;
+  --accent-wash: #e4efea;
+  --caro: #b0543a;
+  --caro-wash: #f6e6e0;
+  --basti: #33627f;
+  --basti-wash: #e2ebf1;
+  --over: #a33a2a;
+  --due: #9a7020;
+  --due-wash: #f7eed6;
+  --radius: 10px;
+  --shadow: 0 2px 8px rgba(35, 32, 27, .12);
+  --sheet-shadow: 0 -6px 30px rgba(35, 32, 27, .22);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15140f;
+    --paper-alt: #1d1b15;
+    --surface: #232019;
+    --ink: #f1ece0;
+    --ink-soft: #a89e8b;
+    --rule: #332f26;
+    --rule-strong: #4b453a;
+    --accent: #6fb8a1;
+    --accent-ink: #14201c;
+    --accent-wash: #1f2f2a;
+    --caro: #e59573;
+    --caro-wash: #33241d;
+    --basti: #8ab9d8;
+    --basti-wash: #1c2830;
+    --over: #e58775;
+    --due: #d8ac59;
+    --due-wash: #2e2718;
+    --shadow: 0 2px 10px rgba(0, 0, 0, .5);
+    --sheet-shadow: 0 -6px 30px rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15140f;
+  --paper-alt: #1d1b15;
+  --surface: #232019;
+  --ink: #f1ece0;
+  --ink-soft: #a89e8b;
+  --rule: #332f26;
+  --rule-strong: #4b453a;
+  --accent: #6fb8a1;
+  --accent-ink: #14201c;
+  --accent-wash: #1f2f2a;
+  --caro: #e59573;
+  --caro-wash: #33241d;
+  --basti: #8ab9d8;
+  --basti-wash: #1c2830;
+  --over: #e58775;
+  --due: #d8ac59;
+  --due-wash: #2e2718;
+  --shadow: 0 2px 10px rgba(0, 0, 0, .5);
+  --sheet-shadow: 0 -6px 30px rgba(0, 0, 0, .6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+.num { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 0 120px; }
+
+/* --- header ------------------------------------------------------------ */
+.top { padding-block: 20px 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.top h1 { font-size: 1.5rem; letter-spacing: -.015em; margin: 0; text-wrap: balance; }
+.top .sub { color: var(--ink-soft); font-size: .9rem; margin: 0; flex: 1 1 220px; }
+.demo-badge {
+  font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600;
+  color: var(--due); background: var(--due-wash); border: 1px solid var(--rule-strong);
+  border-radius: 999px; padding: 3px 9px;
+}
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); position: sticky; top: 0; background: var(--paper); z-index: 5; padding-top: 2px; }
+.tabs button {
+  font: inherit; font-weight: 600; color: var(--ink-soft); background: none; border: 0;
+  border-bottom: 2px solid transparent; padding: 10px 12px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs button:focus-visible, .chip:focus-visible, .btn:focus-visible, .who:focus-visible,
+.row:focus-visible, .icon-btn:focus-visible, .linkish:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* --- generic bits ------------------------------------------------------ */
+h2 { font-size: 1.02rem; margin: 26px 0 2px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 26px 0 2px; }
+.section-head h2 { margin: 0; }
+.eyebrow { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+.muted { color: var(--ink-soft); }
+.hint { color: var(--ink-soft); font-size: .84rem; }
+
+.btn {
+  font: inherit; font-weight: 600; padding: 11px 16px; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-ink);
+}
+.btn-secondary { background: var(--surface); color: var(--accent); }
+.btn-quiet { background: none; border-color: var(--rule-strong); color: var(--ink); }
+.btn-danger { background: none; border-color: var(--over); color: var(--over); }
+.btn-wide { width: 100%; }
+.linkish { font: inherit; background: none; border: 0; color: var(--accent); font-weight: 600; cursor: pointer; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
+.icon-btn { width: 38px; height: 38px; border-radius: var(--radius); border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+
+.chiprow { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit; font-size: .86rem; padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+}
+.chip[aria-pressed="true"] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.tag { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--paper-alt); color: var(--ink-soft); white-space: nowrap; }
+.tag-measured { background: var(--due-wash); color: var(--due); font-weight: 600; }
+.tag-coord { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
+
+input[type="text"], input[type="number"], select, textarea {
+  font: inherit; padding: 10px 12px; border: 1px solid var(--rule-strong);
+  border-radius: var(--radius); background: var(--surface); color: var(--ink); min-width: 0; width: 100%;
+}
+input[type="number"] { width: 5.5rem; }
+label { display: block; }
+.field { margin-top: 18px; }
+.field > .lab { font-weight: 600; font-size: .92rem; margin-bottom: 6px; display: block; }
+.field > .hint { margin: 4px 0 8px; }
+
+/* --- task rows (the ruled sheet) --------------------------------------- */
+.list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.list li { border-bottom: 1px solid var(--rule); }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 0 12px 12px; position: relative; width: 100%; text-align: left; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.row::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: transparent; }
+.row.is-over::before { background: var(--over); }
+.row.is-due::before { background: var(--due); }
+.row .main { flex: 1 1 auto; min-width: 0; }
+.row .name { font-weight: 600; }
+.row .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: .84rem; color: var(--ink-soft); margin-top: 2px; }
+.row .meta .sep { opacity: .45; }
+.state { font-size: .84rem; font-weight: 600; }
+.state.is-over { color: var(--over); }
+.state.is-due { color: var(--due); }
+
+.who-group { display: flex; gap: 6px; flex: 0 0 auto; }
+.who {
+  width: 42px; height: 42px; border-radius: 50%; cursor: pointer; font: inherit; font-weight: 700; font-size: .95rem;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-soft);
+}
+.who[data-person="caro"]:hover, .who[data-person="caro"]:focus-visible { background: var(--caro-wash); border-color: var(--caro); color: var(--caro); }
+.who[data-person="basti"]:hover, .who[data-person="basti"]:focus-visible { background: var(--basti-wash); border-color: var(--basti); color: var(--basti); }
+
+.done-chips { display: flex; gap: 4px; align-items: center; }
+.pip { width: 22px; height: 22px; border-radius: 50%; font-size: .7rem; font-weight: 700; display: grid; place-items: center; }
+.pip-caro { background: var(--caro-wash); color: var(--caro); border: 1px solid var(--caro); }
+.pip-basti { background: var(--basti-wash); color: var(--basti); border: 1px solid var(--basti); }
+.pip-open { border: 1px dashed var(--rule-strong); color: var(--ink-soft); }
+
+.catalog-group { margin-top: 22px; }
+.right-num { flex: 0 0 auto; text-align: right; font-size: .84rem; color: var(--ink-soft); }
+.right-num strong { display: block; color: var(--ink); font-size: .95rem; }
+
+/* --- balance ----------------------------------------------------------- */
+.total { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.total .big { font-size: 2.1rem; font-weight: 700; letter-spacing: -.02em; }
+.split { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--rule-strong); margin-top: 10px; }
+.split span { display: grid; place-items: center; font-size: .85rem; font-weight: 700; color: var(--surface); min-width: 0; overflow: hidden; }
+.split .s-caro { background: var(--caro); }
+.split .s-basti { background: var(--basti); }
+.legend { display: flex; gap: 16px; margin-top: 8px; font-size: .86rem; flex-wrap: wrap; }
+.legend b { font-weight: 700; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 1fr) 2fr auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.minibar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--paper-alt); }
+.minibar i { display: block; }
+
+/* --- sheet ------------------------------------------------------------- */
+.scrim { position: fixed; inset: 0; background: rgba(35, 32, 27, .4); z-index: 20; }
+.sheet {
+  position: fixed; z-index: 21; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow: auto;
+  background: var(--paper); border-top: 1px solid var(--rule-strong);
+  border-radius: 16px 16px 0 0; box-shadow: var(--sheet-shadow);
+}
+@media (min-width: 640px) {
+  .sheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%); width: 560px; border-radius: 14px; border: 1px solid var(--rule-strong); }
+}
+.sheet-in { padding: 4px 16px 16px; }
+.sheet-head { position: sticky; top: 0; background: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0 8px; border-bottom: 1px solid var(--rule); }
+.sheet-head h2 { margin: 0; font-size: 1.15rem; }
+.sheet-foot { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--rule); padding: 12px 0 4px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.sheet-foot .load { flex: 1 1 100%; font-size: .88rem; color: var(--ink-soft); }
+.sheet-foot .load strong { color: var(--ink); font-size: 1.05rem; }
+
+.seg { display: flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.seg button { flex: 1; font: inherit; font-size: .9rem; padding: 9px 6px; background: none; border: 0; border-right: 1px solid var(--rule); color: var(--ink-soft); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--accent); font-weight: 700; }
+
+.inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.measured {
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--paper-alt); border: 1px solid var(--rule); font-size: .87rem;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.measured .grow { flex: 1 1 180px; }
+.switch { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-top: 1px solid var(--rule); cursor: pointer; }
+.switch input { margin: 3px 0 0; width: 18px; height: 18px; accent-color: var(--accent); flex: 0 0 auto; }
+.switch .sw-t { display: block; font-weight: 600; font-size: .93rem; }
+.switch .sw-d { display: block; font-size: .84rem; color: var(--ink-soft); }
+
+/* --- toast ------------------------------------------------------------- */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 30;
+  background: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+  max-width: calc(100vw - 32px); font-size: .9rem;
+}
+.fab { position: fixed; right: 16px; bottom: 18px; z-index: 10; box-shadow: var(--shadow); }
+@media (min-width: 800px) { .fab { right: calc(50% - 380px + 16px); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: rise .18s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Wer macht was</h1>
+    <span class="demo-badge">Beispieldaten</span>
+    <p class="sub">Haushalt im Blick: erfassen, wer was wie oft macht — und wie viel Zeit das kostet.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Ansicht">
+    <button role="tab" id="tab-heute" data-tab="heute" aria-selected="true">Heute</button>
+    <button role="tab" id="tab-katalog" data-tab="katalog" aria-selected="false">Aufgaben</button>
+    <button role="tab" id="tab-verteilung" data-tab="verteilung" aria-selected="false">Verteilung</button>
+  </nav>
+
+  <main id="view"></main>
+</div>
+
+<div id="overlay"></div>
+<div id="toast"></div>
+
+<script>
+const AREAS = [
+  { id: "haushalt", label: "Haushalt" },
+  { id: "tiere", label: "Tiere" },
+  { id: "entsorgung", label: "Entsorgung" },
+  { id: "kinder", label: "Kinder" },
+  { id: "garten", label: "Garten" },
+  { id: "airbnb", label: "Airbnb" },
+];
+const PEOPLE = [
+  { id: "caro", label: "Caro", initial: "C" },
+  { id: "basti", label: "Basti", initial: "B" },
+];
+const PER = { tag: "Tag", woche: "Woche", monat: "Monat" };
+const UNIT = { tage: "Tage", wochen: "Wochen", monate: "Monate" };
+const UNIT_DAYS = { tage: 1, wochen: 7, monate: 30.4 };
+const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const STORE = "wer-macht-was-v1";
+
+/* --- the tasks Caro and Basti actually named, as example data ----------- */
+const SEED = [
+  ["Hund spazieren", "tiere", { kind: "takt", min: 2, max: 3, per: "tag" }, 25, "wechselnd", { single: true }],
+  ["Hundefutter auffüllen", "tiere", { kind: "takt", min: 1, max: 1, per: "woche" }, 5, "basti"],
+  ["Java Futter bestellen", "tiere", { kind: "intervall", every: 6, unit: "wochen" }, 10, "basti", { coord: true }],
+  ["Spülmaschine ausräumen", "haushalt", { kind: "takt", min: 1, max: 1, per: "tag" }, 6, "basti"],
+  ["Wäsche waschen & aufhängen", "haushalt", { kind: "takt", min: 3, max: 4, per: "woche" }, 20, "basti"],
+  ["Wäsche abhängen", "haushalt", { kind: "takt", min: 3, max: 4, per: "woche" }, 10, "wechselnd"],
+  ["Wäsche verräumen", "haushalt", { kind: "takt", min: 2, max: 2, per: "woche" }, 15, "caro"],
+  ["Online-Wocheneinkauf", "haushalt", { kind: "takt", min: 1, max: 1, per: "woche" }, 35, "basti", { coord: true }],
+  ["Blumen giessen", "haushalt", { kind: "takt", min: 2, max: 2, per: "woche" }, 10, "caro"],
+  ["Müll rausbringen", "entsorgung", { kind: "takt", min: 2, max: 2, per: "woche" }, 5, "basti", { days: ["Di", "Fr"] }],
+  ["Altglas entsorgen", "entsorgung", { kind: "takt", min: 1, max: 2, per: "woche" }, 15, "basti"],
+  ["Dosen entsorgen", "entsorgung", { kind: "takt", min: 1, max: 1, per: "woche" }, 10, "basti"],
+  ["Karton rausstellen", "entsorgung", { kind: "intervall", every: 2, unit: "wochen" }, 10, "basti"],
+  ["Kinder in die Kita bringen", "kinder", { kind: "takt", min: 1, max: 1, per: "woche" }, 20, "caro", { days: ["Fr"] }],
+  ["Kinder aus der Kita holen", "kinder", { kind: "takt", min: 1, max: 1, per: "woche" }, 20, "caro", { days: ["Fr"] }],
+  ["Rasenmähen", "garten", { kind: "intervall", every: 2, unit: "wochen" }, 45, "basti"],
+  ["Airbnb Wäsche verräumen", "airbnb", { kind: "takt", min: 1, max: 1, per: "woche" }, 20, "caro"],
+  ["Airbnb Supplies kontrollieren", "airbnb", { kind: "takt", min: 1, max: 1, per: "woche" }, 15, "caro", { coord: true }],
+  ["Airbnb Reinigung organisieren", "airbnb", { kind: "ereignis", trigger: "nach jeder Buchung", estPerWeek: 1.5 }, 10, "caro", { coord: true }],
+  ["Airbnb Kontrolle nach Gast", "airbnb", { kind: "ereignis", trigger: "nach jedem Gast", estPerWeek: 1.5 }, 25, "basti"],
+];
+
+/* --- state ------------------------------------------------------------- */
+let state = { tasks: [], logs: [], view: "heute", area: "alle", draft: null, seq: 1 };
+let toastTimer = null;
+
+function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+function buildSeed() {
+  const rnd = mulberry(20260914);
+  const tasks = SEED.map((s, i) => {
+    const x = s[5] || {};
+    return {
+      id: "t" + (i + 1), name: s[0], area: s[1], rhythm: s[2], minutes: s[3], owner: s[4],
+      single: !!x.single, coord: !!x.coord, days: x.days || [], askDuration: !!x.ask, active: true,
+    };
+  });
+  const logs = [];
+  let n = 1;
+  const now = new Date();
+  tasks.forEach((t) => {
+    const iv = 7 / plannedPerWeek(t);
+    for (let ago = rnd() * iv * 0.9; ago <= 28; ago += iv * (0.85 + rnd() * 0.35)) {
+      {
+        const at = new Date(now);
+        at.setDate(at.getDate() - Math.floor(ago));
+        at.setHours(7 + Math.floor(rnd() * 13), Math.floor(rnd() * 60), 0, 0);
+        if (at > now) continue;
+        const bias = t.owner === "caro" ? 0.85 : t.owner === "basti" ? 0.15 : t.owner === "wechselnd" ? 0.4 : 0.5;
+        logs.push({
+          id: "l" + n++, taskId: t.id, person: rnd() < bias ? "caro" : "basti",
+          at: at.toISOString(), minutes: Math.max(2, Math.round(t.minutes * (0.75 + rnd() * 0.6))),
+        });
+      }
+    }
+  });
+  return { tasks, logs, seq: n };
+}
+
+function save() {
+  try { localStorage.setItem(STORE, JSON.stringify({ tasks: state.tasks, logs: state.logs, seq: state.seq })); } catch (e) { /* private window: stays in memory */ }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE);
+    if (raw) { const d = JSON.parse(raw); if (d && d.tasks && d.tasks.length) return d; }
+  } catch (e) { /* ignore */ }
+  return buildSeed();
+}
+
+/* --- maths ------------------------------------------------------------- */
+function plannedPerWeek(t) {
+  const r = t.rhythm;
+  if (r.kind === "takt") {
+    const avg = (r.min + (r.max || r.min)) / 2;
+    return r.per === "tag" ? avg * 7 : r.per === "monat" ? avg / 4.345 : avg;
+  }
+  if (r.kind === "intervall") return 7 / (r.every * UNIT_DAYS[r.unit]);
+  return r.estPerWeek || 1;
+}
+function weeklyMinutes(t) { return plannedPerWeek(t) * t.minutes; }
+function logsOf(t, days) {
+  const from = Date.now() - days * 864e5;
+  return state.logs.filter((l) => l.taskId === t.id && new Date(l.at).getTime() >= from);
+}
+function measuredPerWeek(t) { return logsOf(t, 28).length / 4; }
+function medianMinutes(t) {
+  const v = state.logs.filter((l) => l.taskId === t.id).map((l) => l.minutes).sort((a, b) => a - b);
+  if (!v.length) return null;
+  return Math.round(v[Math.floor(v.length / 2)]);
+}
+function lastLog(t) {
+  let best = null;
+  state.logs.forEach((l) => { if (l.taskId === t.id && (!best || l.at > best.at)) best = l; });
+  return best;
+}
+function sameDay(iso, d) { const a = new Date(iso); return a.toDateString() === d.toDateString(); }
+function logsToday(t) { const d = new Date(); return state.logs.filter((l) => l.taskId === t.id && sameDay(l.at, d)); }
+
+function statusOf(t) {
+  const r = t.rhythm;
+  if (r.kind === "ereignis") return { kind: "event" };
+  if (r.kind === "takt" && r.per === "tag") {
+    const done = logsToday(t).length;
+    return { kind: done >= r.min ? "ok" : "due", done: done, target: r.max || r.min };
+  }
+  const last = lastLog(t);
+  const iv = 7 / plannedPerWeek(t);
+  if (!last) return { kind: "over", days: null };
+  const days = (Date.now() - new Date(last.at).getTime()) / 864e5;
+  const ratio = days / iv;
+  return { kind: ratio >= 1.25 ? "over" : ratio >= 0.85 ? "due" : "ok", days: Math.floor(days) };
+}
+
+/* --- formatting -------------------------------------------------------- */
+function fmtMin(m) {
+  m = Math.round(m);
+  if (m < 60) return m + " min";
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? h + " h " + String(r).padStart(2, "0") : h + " h";
+}
+function fmtNum(n) { return n.toFixed(1).replace(".", ",").replace(",0", ""); }
+function rhythmLabel(t) {
+  const r = t.rhythm;
+  if (r.kind === "takt") {
+    const c = r.max && r.max !== r.min ? r.min + "–" + r.max : String(r.min);
+    return c + "× pro " + PER[r.per] + (t.days.length ? " (" + t.days.join(", ") + ")" : "");
+  }
+  if (r.kind === "intervall") return "alle " + r.every + " " + UNIT[r.unit];
+  return r.trigger || "bei Bedarf";
+}
+function personLabel(id) { const p = PEOPLE.find((x) => x.id === id); return p ? p.label : id === "beide" ? "Beide" : "Wechselnd"; }
+function relDay(iso) {
+  const d = new Date(iso), today = new Date();
+  const diff = Math.round((today.setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 864e5);
+  if (diff === 0) return "heute";
+  if (diff === 1) return "gestern";
+  if (diff < 7) return "vor " + diff + " Tagen";
+  return d.toLocaleDateString("de-CH", { day: "numeric", month: "short" });
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+/* --- views ------------------------------------------------------------- */
+const view = document.getElementById("view");
+
+function render() {
+  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.view)));
+  if (state.view === "heute") renderHeute();
+  else if (state.view === "katalog") renderKatalog();
+  else renderVerteilung();
+}
+
+function taskRow(t, opts) {
+  const st = statusOf(t);
+  const cls = st.kind === "over" ? "is-over" : st.kind === "due" ? "is-due" : "";
+  const last = lastLog(t);
+  const meta = [];
+  meta.push('<span class="num">' + esc(rhythmLabel(t)) + "</span>");
+  meta.push('<span class="sep">·</span><span class="num">' + fmtMin(t.minutes) + "</span>");
+  if (t.coord) meta.push('<span class="tag tag-coord">Koordination</span>');
+  const m = measuredPerWeek(t), p = plannedPerWeek(t);
+  if (t.rhythm.kind !== "ereignis" && logsOf(t, 28).length >= 4 && Math.abs(m - p) / p > 0.3) {
+    meta.push('<span class="tag tag-measured num">gemessen ' + fmtNum(m) + "×/Wo</span>");
+  }
+  const hist = last ? "zuletzt " + relDay(last.at) + ", " + personLabel(last.person) : "noch nie erfasst";
+  let head = "";
+  if (st.kind !== "event" && t.rhythm.per === "tag" && t.rhythm.kind === "takt") {
+    const done = logsToday(t);
+    const pips = [];
+    done.forEach((l) => pips.push('<span class="pip pip-' + l.person + '">' + (l.person === "caro" ? "C" : "B") + "</span>"));
+    for (let i = done.length; i < (t.rhythm.max || t.rhythm.min); i++) pips.push('<span class="pip pip-open">·</span>');
+    head = '<span class="done-chips" title="heute">' + pips.join("") + "</span>";
+  } else if (st.kind === "over") head = '<span class="state is-over">überfällig</span>';
+  else if (st.kind === "due") head = '<span class="state is-due">fällig</span>';
+
+  const who = opts && opts.log
+    ? '<span class="who-group">' + PEOPLE.map((p) => '<button class="who" data-person="' + p.id + '" data-log="' + t.id + '" title="' + p.label + ' hat das erledigt" aria-label="' + esc(t.name) + " — " + p.label + ' hat das erledigt">' + p.initial + "</button>").join("") + "</span>"
+    : '<span class="right-num"><strong class="num">' + fmtMin(weeklyMinutes(t)) + "</strong>pro Woche</span>";
+
+  return '<li><div class="row ' + cls + '">' +
+    '<button class="main" data-edit="' + t.id + '" style="background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:0">' +
+    '<span class="name">' + esc(t.name) + "</span>" +
+    '<span class="meta">' + meta.join(" ") + "</span>" +
+    '<span class="meta">' + hist + "</span></button>" +
+    head + who + "</div></li>";
+}
+
+function renderHeute() {
+  const today = new Date();
+  const mine = state.logs.filter((l) => sameDay(l.at, today));
+  const per = {};
+  PEOPLE.forEach((p) => { per[p.id] = mine.filter((l) => l.person === p.id).reduce((s, l) => s + l.minutes, 0); });
+
+  const act = state.tasks.filter((t) => t.active);
+  const faellig = act.filter((t) => ["over", "due"].includes(statusOf(t).kind));
+  const laeuft = act.filter((t) => statusOf(t).kind === "ok");
+  const events = act.filter((t) => statusOf(t).kind === "event");
+
+  view.innerHTML =
+    '<section class="section-head"><h2>' + today.toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long" }) + "</h2>" +
+    '<span class="hint num">' + mine.length + " erfasst · " + fmtMin(per.caro + per.basti) + "</span></section>" +
+    '<div class="legend">' + PEOPLE.map((p) => '<span><span class="dot" style="background:var(--' + p.id + ')"></span>' + p.label + ' <b class="num">' + fmtMin(per[p.id]) + "</b></span>").join("") + "</div>" +
+
+    '<div class="section-head"><h2>Jetzt dran</h2><span class="eyebrow">Tippen = erledigt</span></div>' +
+    (faellig.length ? '<ul class="list">' + faellig.map((t) => taskRow(t, { log: true })).join("") + "</ul>"
+      : '<p class="hint">Nichts offen. Selten, aber es kommt vor.</p>') +
+
+    '<div class="section-head"><h2>Bei Ereignis</h2><span class="eyebrow">ohne festen Takt</span></div>' +
+    '<ul class="list">' + events.map((t) => taskRow(t, { log: true })).join("") + "</ul>" +
+
+    '<div class="section-head"><h2>Läuft</h2><span class="eyebrow">' + laeuft.length + " Aufgaben</span></div>" +
+    '<ul class="list">' + laeuft.map((t) => taskRow(t, { log: true })).join("") + "</ul>" +
+
+    '<p class="hint" style="margin-top:22px">Nicht dabei? <button class="linkish" data-new="1">Aufgabe anlegen</button></p>';
+}
+
+function renderKatalog() {
+  const chips = ["alle"].concat(AREAS.map((a) => a.id));
+  const list = state.tasks.filter((t) => state.area === "alle" || t.area === state.area);
+  const total = list.reduce((s, t) => s + weeklyMinutes(t), 0);
+  let html = '<div class="section-head"><h2>Aufgabenkatalog</h2><span class="hint num">' + list.length + " Aufgaben · " + fmtMin(total) + "/Woche</span></div>" +
+    '<div class="chiprow" style="margin:10px 0 4px">' +
+    chips.map((c) => '<button class="chip" data-area="' + c + '" aria-pressed="' + (state.area === c ? "true" : "false") + '">' +
+      (c === "alle" ? "Alle" : AREAS.find((a) => a.id === c).label) + "</button>").join("") + "</div>";
+
+  const groups = state.area === "alle" ? AREAS : AREAS.filter((a) => a.id === state.area);
+  groups.forEach((a) => {
+    const items = list.filter((t) => t.area === a.id);
+    if (!items.length) return;
+    const sum = items.reduce((s, t) => s + weeklyMinutes(t), 0);
+    html += '<div class="catalog-group"><div class="section-head" style="margin:0 0 2px"><span class="eyebrow">' + a.label +
+      '</span><span class="hint num">' + fmtMin(sum) + "/Woche</span></div>" +
+      '<ul class="list">' + items.map((t) => taskRow(t, { log: false })).join("") + "</ul></div>";
+  });
+  view.innerHTML = html;
+}
+
+function renderVerteilung() {
+  const days = 28;
+  const from = Date.now() - days * 864e5;
+  const recent = state.logs.filter((l) => new Date(l.at).getTime() >= from);
+  const byPerson = { caro: 0, basti: 0 };
+  recent.forEach((l) => { byPerson[l.person] += l.minutes; });
+  const sum = byPerson.caro + byPerson.basti || 1;
+  const pc = Math.round((byPerson.caro / sum) * 100);
+  const planned = state.tasks.filter((t) => t.active).reduce((s, t) => s + weeklyMinutes(t), 0);
+
+  const areaRows = AREAS.map((a) => {
+    const ids = state.tasks.filter((t) => t.area === a.id).map((t) => t.id);
+    const c = recent.filter((l) => ids.includes(l.taskId) && l.person === "caro").reduce((s, l) => s + l.minutes, 0);
+    const b = recent.filter((l) => ids.includes(l.taskId) && l.person === "basti").reduce((s, l) => s + l.minutes, 0);
+    return { label: a.label, c: c, b: b, t: c + b };
+  }).filter((r) => r.t > 0).sort((x, y) => y.t - x.t);
+  const maxArea = Math.max.apply(null, areaRows.map((r) => r.t));
+
+  const top = state.tasks.filter((t) => t.active).slice().sort((x, y) => weeklyMinutes(y) - weeklyMinutes(x)).slice(0, 6);
+
+  view.innerHTML =
+    '<div class="section-head"><h2>Wie die Last liegt</h2><span class="eyebrow">letzte 4 Wochen</span></div>' +
+    '<div class="total"><span class="big num">' + fmtMin(sum / 4) + '</span><span class="muted">erfasst pro Woche · geplant wären <span class="num">' + fmtMin(planned) + "</span></span></div>" +
+    '<div class="split" role="img" aria-label="Caro ' + pc + " Prozent, Basti " + (100 - pc) + ' Prozent">' +
+    '<span class="s-caro" style="flex:' + Math.max(byPerson.caro, 1) + '">' + (pc > 12 ? pc + "%" : "") + "</span>" +
+    '<span class="s-basti" style="flex:' + Math.max(byPerson.basti, 1) + '">' + (100 - pc > 12 ? 100 - pc + "%" : "") + "</span></div>" +
+    '<div class="legend">' + PEOPLE.map((p) => '<span><span class="dot" style="background:var(--' + p.id + ')"></span>' + p.label +
+      ' <b class="num">' + fmtMin(byPerson[p.id] / 4) + "</b> / Woche</span>").join("") + "</div>" +
+
+    '<div class="section-head"><h2>Nach Bereich</h2><span class="eyebrow">Minuten pro Woche</span></div>' +
+    areaRows.map((r) => '<div class="bar-row"><span>' + r.label + "</span>" +
+      '<span class="minibar" style="width:' + Math.round((r.t / maxArea) * 100) + '%">' +
+      '<i style="background:var(--caro);flex:' + Math.max(r.c, 0.001) + '"></i><i style="background:var(--basti);flex:' + Math.max(r.b, 0.001) + '"></i></span>' +
+      '<span class="num hint">' + fmtMin(r.t / 4) + "</span></div>").join("") +
+
+    '<div class="section-head"><h2>Die grössten Brocken</h2><span class="eyebrow">geplante Zeit</span></div>' +
+    '<ul class="list">' + top.map((t) => '<li><div class="row"><button class="main" data-edit="' + t.id + '" style="background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:0">' +
+      '<span class="name">' + esc(t.name) + '</span><span class="meta"><span class="num">' + esc(rhythmLabel(t)) + '</span><span class="sep">·</span>' +
+      personLabel(t.owner) + "</span></button>" +
+      '<span class="right-num"><strong class="num">' + fmtMin(weeklyMinutes(t)) + "</strong>pro Woche</span></div></li>").join("") + "</ul>" +
+
+    '<p class="hint" style="margin-top:22px">Zahlen aus Beispieldaten der letzten vier Wochen. ' +
+    '<button class="linkish" data-reset="1">Beispieldaten zurücksetzen</button></p>';
+}
+
+/* --- the entry sheet: this is where a task is described ----------------- */
+const overlay = document.getElementById("overlay");
+
+function newDraft() {
+  return { id: null, name: "", area: "haushalt", minutes: 15, owner: "wechselnd", single: false, coord: false, days: [], active: true,
+    rhythm: { kind: "takt", min: 1, max: 1, per: "woche", every: 2, unit: "wochen", trigger: "", estPerWeek: 1 } };
+}
+
+function openSheet(task) {
+  state.draft = task ? JSON.parse(JSON.stringify(task)) : newDraft();
+  const d = state.draft, r = d.rhythm;
+  const existing = task ? state.tasks.find((t) => t.id === task.id) : null;
+  const mpw = existing ? measuredPerWeek(existing) : 0;
+  const med = existing ? medianMinutes(existing) : null;
+  const count = existing ? state.logs.filter((l) => l.taskId === existing.id).length : 0;
+
+  overlay.innerHTML = '<div class="scrim" data-close="1"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-in">' +
+    '<div class="sheet-head"><h2 id="sheet-title">' + (task ? "Aufgabe bearbeiten" : "Neue Aufgabe") + "</h2>" +
+    '<button class="icon-btn" data-close="1" aria-label="Schliessen">✕</button></div>' +
+
+    '<div class="field"><label class="lab" for="f-name">Was ist zu tun?</label>' +
+    '<input type="text" id="f-name" data-f="name" placeholder="z. B. Altglas entsorgen" value="' + esc(d.name) + '"></div>' +
+
+    '<div class="field"><span class="lab">Bereich</span><div class="chiprow">' +
+    AREAS.map((a) => '<button class="chip" data-set-area="' + a.id + '" aria-pressed="' + (d.area === a.id ? "true" : "false") + '">' + a.label + "</button>").join("") + "</div></div>" +
+
+    '<div class="field"><span class="lab">Wie oft?</span>' +
+    '<div class="seg" role="group" aria-label="Art des Rhythmus">' +
+    '<button data-kind="takt" aria-pressed="' + (r.kind === "takt" ? "true" : "false") + '">Fester Takt</button>' +
+    '<button data-kind="intervall" aria-pressed="' + (r.kind === "intervall" ? "true" : "false") + '">Alle X Wochen</button>' +
+    '<button data-kind="ereignis" aria-pressed="' + (r.kind === "ereignis" ? "true" : "false") + '">Bei Ereignis</button></div>' +
+
+    '<div id="rh-takt" class="inline" style="margin-top:10px" ' + (r.kind === "takt" ? "" : "hidden") + '>' +
+    '<input type="number" min="1" max="12" id="f-min" data-f="rhythm.min" value="' + r.min + '" aria-label="mindestens"> <span class="muted">bis</span> ' +
+    '<input type="number" min="1" max="12" id="f-max" data-f="rhythm.max" value="' + (r.max || r.min) + '" aria-label="höchstens"> <span class="muted">mal pro</span> ' +
+    '<select id="f-per" data-f="rhythm.per" style="width:auto">' + Object.keys(PER).map((k) => '<option value="' + k + '"' + (r.per === k ? " selected" : "") + ">" + PER[k] + "</option>").join("") + "</select></div>" +
+
+    '<div id="rh-intervall" class="inline" style="margin-top:10px" ' + (r.kind === "intervall" ? "" : "hidden") + '>' +
+    '<span class="muted">alle</span> <input type="number" min="1" max="52" id="f-every" data-f="rhythm.every" value="' + r.every + '" aria-label="alle wie viele"> ' +
+    '<select id="f-unit" data-f="rhythm.unit" style="width:auto">' + Object.keys(UNIT).map((k) => '<option value="' + k + '"' + (r.unit === k ? " selected" : "") + ">" + UNIT[k] + "</option>").join("") + "</select></div>" +
+
+    '<div id="rh-ereignis" style="margin-top:10px" ' + (r.kind === "ereignis" ? "" : "hidden") + '>' +
+    '<input type="text" id="f-trigger" data-f="rhythm.trigger" placeholder="Auslöser, z. B. nach jedem Gast" value="' + esc(r.trigger || "") + '">' +
+    '<p class="hint" style="margin-top:6px">Kommt unter „Bei Ereignis“ und wird nicht als überfällig markiert. Für die Wochenrechnung: ca. ' +
+    '<input type="number" min="0" max="30" step="0.5" id="f-est" data-f="rhythm.estPerWeek" value="' + (r.estPerWeek || 1) + '" aria-label="geschätzt pro Woche"> mal pro Woche.</p></div>' +
+
+    '<div class="field" id="f-days-wrap" ' + (r.kind === "takt" && r.per !== "tag" ? "" : "hidden") + '><span class="lab">Feste Tage <span class="muted" style="font-weight:400">(optional)</span></span>' +
+    '<div class="chiprow">' + WEEKDAYS.map((w) => '<button class="chip" data-day="' + w + '" aria-pressed="' + (d.days.includes(w) ? "true" : "false") + '">' + w + "</button>").join("") + "</div></div>" +
+
+    (mpw > 0 ? '<div class="measured"><span class="grow">Gemessen aus ' + count + ' Einträgen: <b class="num">' + fmtNum(mpw) + "×/Woche</b>" +
+      (med ? ' · <b class="num">Ø ' + med + " min</b>" : "") + '</span><button class="btn btn-secondary" data-apply-measured="1" style="padding:7px 12px">Übernehmen</button></div>' : "") +
+
+    '<div class="field"><label class="lab" for="f-min-dur">Wie lange dauert es?</label>' +
+    '<div class="inline"><input type="number" min="1" max="480" id="f-min-dur" data-f="minutes" value="' + d.minutes + '"> <span class="muted">Minuten pro Mal</span></div></div>' +
+
+    '<div class="field"><span class="lab">Wer macht das normalerweise?</span><div class="chiprow">' +
+    PEOPLE.concat([{ id: "beide", label: "Beide" }, { id: "wechselnd", label: "Wechselnd" }])
+      .map((p) => '<button class="chip" data-owner="' + p.id + '" aria-pressed="' + (d.owner === p.id ? "true" : "false") + '">' + p.label + "</button>").join("") + "</div></div>" +
+
+    '<div style="margin-top:18px">' +
+    '<label class="switch"><input type="checkbox" data-f="single"' + (d.single ? " checked" : "") + '>' +
+    '<span><span class="sw-t">Jedes Mal einzeln erfassen</span><span class="sw-d">Für Sachen wie Hund spazieren: jede Runde zählt für sich, mit der Person die sie gemacht hat.</span></span></label>' +
+    '<label class="switch"><input type="checkbox" data-f="coord"' + (d.coord ? " checked" : "") + '>' +
+    '<span><span class="sw-t">Zählt als Koordination</span><span class="sw-d">Dran denken, planen, organisieren — Aufwand, der nicht in der reinen Ausführungszeit steckt.</span></span></label>' +
+    '<label class="switch"><input type="checkbox" data-f="active"' + (d.active ? " checked" : "") + '>' +
+    '<span><span class="sw-t">Aktiv</span><span class="sw-d">Inaktive Aufgaben bleiben im Katalog, tauchen aber nicht unter „Heute“ auf.</span></span></label></div>' +
+
+    '<div class="sheet-foot"><span class="load">Ergibt <strong class="num" id="f-load">–</strong> pro Woche</span>' +
+    (task ? '<button class="btn btn-danger" data-delete="' + task.id + '">Löschen</button>' : "") +
+    '<button class="btn" data-save="1">Speichern</button></div>' +
+    "</div></div>";
+  updateLoad();
+  const first = document.getElementById("f-name");
+  if (first && !task) first.focus();
+}
+
+function closeSheet() { state.draft = null; overlay.innerHTML = ""; }
+
+function updateLoad() {
+  const el = document.getElementById("f-load");
+  if (!el || !state.draft) return;
+  el.textContent = fmtMin(weeklyMinutes(state.draft));
+}
+
+function setDraftField(path, value) {
+  const parts = path.split(".");
+  let o = state.draft;
+  while (parts.length > 1) o = o[parts.shift()];
+  o[parts[0]] = value;
+  updateLoad();
+}
+
+/* --- actions ----------------------------------------------------------- */
+const toastEl = document.getElementById("toast");
+function toast(html) {
+  toastEl.innerHTML = '<div class="toast">' + html + "</div>";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.innerHTML = ""; }, 5000);
+}
+
+function logDone(taskId, person) {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t) return;
+  const minutes = medianMinutes(t) || t.minutes;
+  const entry = { id: "l" + state.seq++, taskId: t.id, person: person, at: new Date().toISOString(), minutes: minutes };
+  state.logs.push(entry);
+  save();
+  render();
+  toast('<span><b>' + esc(t.name) + "</b> · " + personLabel(person) + ' · <span class="num">' + fmtMin(minutes) + "</span></span>" +
+    '<button class="linkish" data-undo="' + entry.id + '">Rückgängig</button>');
+}
+
+function saveDraft() {
+  const d = state.draft;
+  if (!d.name.trim()) { toast("<span>Die Aufgabe braucht noch einen Namen.</span>"); document.getElementById("f-name").focus(); return; }
+  d.name = d.name.trim();
+  if (d.rhythm.kind === "takt" && d.rhythm.max < d.rhythm.min) d.rhythm.max = d.rhythm.min;
+  if (d.id) {
+    state.tasks = state.tasks.map((t) => (t.id === d.id ? d : t));
+  } else {
+    d.id = "t" + state.seq++;
+    state.tasks.push(d);
+  }
+  const name = d.name;
+  closeSheet(); save(); render();
+  toast("<span><b>" + esc(name) + "</b> gespeichert</span>");
+}
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-tab],[data-area],[data-log],[data-edit],[data-new],[data-close],[data-save],[data-delete],[data-set-area],[data-kind],[data-day],[data-owner],[data-apply-measured],[data-undo],[data-reset]");
+  if (!el) return;
+  const d = el.dataset;
+
+  if (d.tab) { state.view = d.tab; render(); fab.hidden = state.view !== "katalog"; window.scrollTo({ top: 0 }); return; }
+  if (d.area) { state.area = d.area; render(); return; }
+  if (d.log) { logDone(d.log, d.person); return; }
+  if (d.edit) { openSheet(state.tasks.find((t) => t.id === d.edit)); return; }
+  if (d.new !== undefined && el.hasAttribute("data-new")) { openSheet(null); return; }
+  if (d.close) { closeSheet(); return; }
+  if (d.save) { saveDraft(); return; }
+  if (d.reset) { state.tasks = []; try { localStorage.removeItem(STORE); } catch (err) {} const s = buildSeed(); state.tasks = s.tasks; state.logs = s.logs; state.seq = s.seq; save(); render(); toast("<span>Beispieldaten neu aufgebaut</span>"); return; }
+  if (d.undo) {
+    state.logs = state.logs.filter((l) => l.id !== d.undo);
+    save(); render(); toastEl.innerHTML = "";
+    return;
+  }
+  if (d.delete) {
+    const t = state.tasks.find((x) => x.id === d.delete);
+    state.tasks = state.tasks.filter((x) => x.id !== d.delete);
+    closeSheet(); save(); render();
+    toast("<span><b>" + esc(t.name) + "</b> gelöscht</span>");
+    return;
+  }
+
+  /* inside the sheet */
+  if (!state.draft) return;
+  if (d.setArea) { state.draft.area = d.setArea; el.parentElement.querySelectorAll("[data-set-area]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.setArea === d.setArea))); return; }
+  if (d.owner) { state.draft.owner = d.owner; el.parentElement.querySelectorAll("[data-owner]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.owner === d.owner))); return; }
+  if (d.day) {
+    const on = state.draft.days.includes(d.day);
+    state.draft.days = on ? state.draft.days.filter((x) => x !== d.day) : state.draft.days.concat([d.day]);
+    el.setAttribute("aria-pressed", String(!on));
+    return;
+  }
+  if (d.kind) {
+    state.draft.rhythm.kind = d.kind;
+    el.parentElement.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === d.kind)));
+    ["takt", "intervall", "ereignis"].forEach((k) => { document.getElementById("rh-" + k).hidden = k !== d.kind; });
+    document.getElementById("f-days-wrap").hidden = d.kind !== "takt" || state.draft.rhythm.per === "tag";
+    updateLoad();
+    return;
+  }
+  if (d.applyMeasured) {
+    const t = state.tasks.find((x) => x.id === state.draft.id);
+    const mpw = measuredPerWeek(t), med = medianMinutes(t);
+    const r = state.draft.rhythm;
+    if (r.kind === "takt") {
+      const perWeek = r.per === "tag" ? mpw / 7 : r.per === "monat" ? mpw * 4.345 : mpw;
+      r.min = Math.max(1, Math.floor(perWeek)); r.max = Math.max(r.min, Math.ceil(perWeek));
+      document.getElementById("f-min").value = r.min;
+      document.getElementById("f-max").value = r.max;
+    } else if (r.kind === "intervall") {
+      r.every = Math.max(1, Math.round(7 / mpw / UNIT_DAYS[r.unit]));
+      document.getElementById("f-every").value = r.every;
+    } else {
+      r.estPerWeek = Math.round(mpw * 2) / 2;
+      document.getElementById("f-est").value = r.estPerWeek;
+    }
+    if (med) { state.draft.minutes = med; document.getElementById("f-min-dur").value = med; }
+    updateLoad();
+    toast("<span>Gemessene Werte übernommen</span>");
+    return;
+  }
+});
+
+document.addEventListener("input", (e) => {
+  const f = e.target.dataset.f;
+  if (!f || !state.draft) return;
+  const v = e.target.type === "checkbox" ? e.target.checked : e.target.type === "number" ? Number(e.target.value) : e.target.value;
+  setDraftField(f, v);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.draft) closeSheet(); });
+
+/* --- boot -------------------------------------------------------------- */
+const fab = document.createElement("button");
+fab.className = "btn fab";
+fab.textContent = "＋ Aufgabe";
+fab.setAttribute("data-new", "");
+fab.hidden = true;
+document.body.appendChild(fab);
+
+const loaded = load();
+state.tasks = loaded.tasks;
+state.logs = loaded.logs;
+state.seq = loaded.seq || 1000;
+render();
+save();
+</script>
