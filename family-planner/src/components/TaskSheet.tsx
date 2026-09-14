@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import {
   WEEKDAYS, durationStats, emptyTask, fmtMinutes, fmtRate, measuredPerWeek, plannedPerWeek,
@@ -117,11 +117,11 @@ export function TaskSheet({ task, onClose }: { task: HouseholdTask | null; onClo
         {r.kind === 'takt' && (
           <>
             <div className="row">
-              <input type="number" min={1} max={12} value={r.min} aria-label="mindestens"
-                onChange={e => setRhythm({ ...r, min: Number(e.target.value) || 1 })} />
+              <NumberField value={r.min} min={1} max={30} label="mindestens"
+                onChange={min => setRhythm({ ...r, min, max: Math.max(min, r.max) })} />
               <span className="row-sep">bis</span>
-              <input type="number" min={1} max={12} value={r.max} aria-label="höchstens"
-                onChange={e => setRhythm({ ...r, max: Number(e.target.value) || 1 })} />
+              <NumberField value={r.max} min={1} max={30} label="höchstens"
+                onChange={max => setRhythm({ ...r, max })} />
               <span className="row-sep">mal pro</span>
               <select value={r.per} aria-label="Zeitraum"
                 onChange={e => setRhythm({ ...r, per: e.target.value as 'tag' | 'woche' | 'monat' })}>
@@ -152,8 +152,8 @@ export function TaskSheet({ task, onClose }: { task: HouseholdTask | null; onClo
         {r.kind === 'intervall' && (
           <div className="row">
             <span className="row-sep">alle</span>
-            <input type="number" min={1} max={52} value={r.every} aria-label="alle wie viele"
-              onChange={e => setRhythm({ ...r, every: Number(e.target.value) || 1 })} />
+            <NumberField value={r.every} min={1} max={52} label="alle wie viele"
+              onChange={every => setRhythm({ ...r, every })} />
             <select value={r.unit} aria-label="Einheit"
               onChange={e => setRhythm({ ...r, unit: e.target.value as 'tage' | 'wochen' | 'monate' })}>
               <option value="tage">Tage</option>
@@ -169,9 +169,9 @@ export function TaskSheet({ task, onClose }: { task: HouseholdTask | null; onClo
               onChange={e => setRhythm({ ...r, trigger: e.target.value })} />
             <p className="hint">
               Wird nie als überfällig markiert. Für die Wochenrechnung: ca.{' '}
-              <input className="hh-inline-num" type="number" min={0} max={30} step={0.5}
-                value={r.estPerWeek} aria-label="geschätzt pro Woche"
-                onChange={e => setRhythm({ ...r, estPerWeek: Number(e.target.value) || 0 })} />
+              <NumberField className="hh-inline-num" value={r.estPerWeek} min={0} max={30} step={0.5}
+                label="geschätzt pro Woche"
+                onChange={estPerWeek => setRhythm({ ...r, estPerWeek })} />
               {' '}mal pro Woche.
             </p>
           </>
@@ -203,8 +203,8 @@ export function TaskSheet({ task, onClose }: { task: HouseholdTask | null; onClo
           Richtwert für die Wochenrechnung. Schwankt es stark, unten „Dauer jedes Mal erfassen“.
         </p>
         <div className="row">
-          <input id="hh-minutes" type="number" min={1} max={600} value={draft.minutes}
-            onChange={e => patch({ minutes: Number(e.target.value) || 1 })} />
+          <NumberField id="hh-minutes" value={draft.minutes} min={1} max={600}
+            onChange={minutes => patch({ minutes })} />
           <span className="row-sep">Minuten pro Mal</span>
           {stats && stats.n >= 4 && (
             <span className="hh-tag">bisher {stats.min}–{stats.max} min</span>
@@ -253,6 +253,64 @@ export function TaskSheet({ task, onClose }: { task: HouseholdTask | null; onClo
         </div>
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * A number field that can be empty while it is being typed in.
+ *
+ * Binding the input straight to the number turned every cleared field back
+ * into 1 on the same keystroke, so the digit could never be deleted — only
+ * typed around, which is how "1× pro Woche" became "13×". The text is its own
+ * state while the field has focus: an empty field stays empty, the number is
+ * passed up as soon as it reads as one, and leaving the field settles it —
+ * empty goes back to the last value that made sense, out of range is pulled
+ * into it.
+ */
+function NumberField({ value, min, max, step, label, id, className, onChange }: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  label?: string;
+  id?: string;
+  className?: string;
+  onChange: (value: number) => void;
+}) {
+  const [text, setText] = useState(() => String(value));
+  const lastValid = useRef(value);
+
+  // Follow the value when something else changes it — "Übernehmen" does.
+  useEffect(() => {
+    if (value !== lastValid.current) {
+      lastValid.current = value;
+      setText(String(value));
+    }
+  }, [value]);
+
+  return (
+    <input type="number" inputMode={step ? 'decimal' : 'numeric'} id={id} className={className}
+      min={min} max={max} step={step} value={text} aria-label={label}
+      onChange={e => {
+        const raw = e.target.value;
+        setText(raw);
+        if (raw === '') return;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return;
+        lastValid.current = n;
+        onChange(n);
+      }}
+      onBlur={() => {
+        const n = Number(text);
+        if (text === '' || !Number.isFinite(n)) {
+          setText(String(lastValid.current));
+          return;
+        }
+        const settled = Math.min(max, Math.max(min, n));
+        lastValid.current = settled;
+        setText(String(settled));
+        onChange(settled);
+      }} />
   );
 }
 
