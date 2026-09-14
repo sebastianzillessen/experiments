@@ -5,6 +5,11 @@ take — and who did them. A clickable prototype of the entry screens, meant as
 the design basis for something that later moves into the
 [Familienplaner](../family-planner).
 
+> **This was the proposal; the feature itself now lives in the planner.** It is
+> built in [`../family-planner`](../family-planner) — Supabase-backed, shared
+> between phones, people taken from the family. This folder stays as the
+> design sketch it was, and is not kept in step with it.
+
 Single HTML file, no build, no backend. Open `index.html` in a browser.
 
 The interface is German; code and comments are English. It borrows the

@@ -13,14 +13,20 @@ import { menuEventsToPlanner } from '../lib/menuPlan.ts';
 import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
-  Assignment, Calendar, CachedEvent, Family, Member, MenuAssignment, MenuSource, MenuWeek,
-  OpenInvite, Person, PlannerEvent, Role, TimeFormat, WeatherDay,
+  Assignment, Calendar, CachedEvent, Family, HouseholdTask, Member, MenuAssignment, MenuSource,
+  MenuWeek, OpenInvite, Person, PlannerEvent, Role, TaskDate, TaskLog, TaskRhythm, TimeFormat,
+  WeatherDay,
 } from '../lib/types.ts';
+import { STARTER_TASKS } from '../lib/tasks.ts';
+import type { TaskDraft } from '../lib/tasks.ts';
 
 const NEUTRAL_COLOR = '#6b7280';
 // fp_calendar_assignments.occurrence uses this instead of NULL for an override
 // that applies to a whole series — a primary-key column cannot be null.
 const SERIES_WIDE = '-infinity';
+// The distribution looks at four weeks; a little more is kept so a month can
+// be paged back through without another round trip.
+const TASK_LOG_DAYS = 120;
 const LOGIN_LINK_WARNING = 'Dein Anmelde-Link war ungültig oder ist abgelaufen. Bitte fordere unten einen neuen Link an.';
 
 export type Screen = 'loading' | 'login' | 'create-family' | 'app';
@@ -68,6 +74,10 @@ type AppContextValue = {
   menuAssignments: MenuAssignment[];
   /** Imported lunches, already narrowed to the children who eat them. */
   menuEvents: PlannerEvent[];
+  /** The household catalog: what counts as work in this family. */
+  tasks: HouseholdTask[];
+  /** Every run of every task in the last few months, newest first. */
+  taskLogs: TaskLog[];
   members: Member[];
   openInvites: OpenInvite[];
   sync: SyncState;
@@ -83,7 +93,7 @@ type AppContextValue = {
   updateEvent: (id: string, input: NewEventInput, scope: EditScope, occurrence: string | null) => Promise<boolean>;
   deleteEvent: (id: string, scope: EditScope, occurrence: string | null) => Promise<boolean>;
   addPerson: (name: string) => Promise<boolean>;
-  updatePerson: (id: string, patch: Partial<Pick<Person, 'name' | 'shortName' | 'color' | 'aliases' | 'sortOrder'>>) => Promise<boolean>;
+  updatePerson: (id: string, patch: Partial<Pick<Person, 'name' | 'shortName' | 'color' | 'aliases' | 'sortOrder' | 'doesTasks'>>) => Promise<boolean>;
   deletePerson: (id: string) => Promise<boolean>;
   setAssignment: (event: PlannerEvent, personIds: string[], hidden: boolean) => Promise<boolean>;
   upsertCalendar: (input: { id?: string; label: string; url: string; username: string; password: string; color: string; enabled: boolean }) => Promise<boolean>;
@@ -97,6 +107,17 @@ type AppContextValue = {
   removeMenuAssignment: (sourceId: string, personId: string) => Promise<boolean>;
   importMenuWeek: (sourceId: string, year: number, week: number, pdfBase64?: string) => Promise<string | null>;
   deleteMenuWeek: (id: string) => Promise<boolean>;
+  /** Resolves to the task's id, so a new one can be filled in right away. */
+  upsertTask: (draft: TaskDraft, id?: string) => Promise<string | null>;
+  /** Adds planned days to a task; days it already has are left alone. */
+  addTaskDates: (taskId: string, dates: TaskDate[]) => Promise<boolean>;
+  removeTaskDate: (taskId: string, date: string) => Promise<boolean>;
+  deleteTask: (id: string) => Promise<boolean>;
+  addStarterTasks: () => Promise<boolean>;
+  /** Books one run. Resolves to the new log, or null when it failed. */
+  logTask: (taskId: string, personId: string, minutes: number) => Promise<TaskLog | null>;
+  setLogMinutes: (logId: string, minutes: number) => Promise<boolean>;
+  deleteTaskLog: (logId: string) => Promise<boolean>;
   setTimeFormat: (format: TimeFormat) => Promise<boolean>;
   createLinkInvite: (role: Role) => Promise<string | null>;
   updateMemberRole: (userId: string, role: Role) => Promise<boolean>;
@@ -129,6 +150,109 @@ type ManualRow = {
   fp_event_exceptions: { occurrence: string }[] | null;
 };
 
+type TaskRow = {
+  id: string;
+  name: string;
+  area: string;
+  rhythm_kind: string;
+  per_count_min: number | null;
+  per_count_max: number | null;
+  per_unit: string | null;
+  every_count: number | null;
+  every_unit: string | null;
+  trigger_label: string | null;
+  /** numeric(5,2) arrives as a string often enough to always go through Number. */
+  est_per_week: number | string | null;
+  minutes: number;
+  ask_duration: boolean;
+  log_each: boolean;
+  coordination: boolean;
+  weekdays: number[] | null;
+  owner_person_id: string | null;
+  active: boolean;
+  sort_order: number;
+};
+
+const TASK_COLUMNS = 'id, name, area, rhythm_kind, per_count_min, per_count_max, per_unit, '
+  + 'every_count, every_unit, trigger_label, est_per_week, minutes, ask_duration, log_each, '
+  + 'coordination, weekdays, owner_person_id, active, sort_order';
+
+function rowToRhythm(row: TaskRow): TaskRhythm {
+  if (row.rhythm_kind === 'intervall') {
+    return {
+      kind: 'intervall',
+      every: row.every_count ?? 1,
+      unit: (row.every_unit as 'tage' | 'wochen' | 'monate') ?? 'wochen',
+    };
+  }
+  if (row.rhythm_kind === 'ereignis') {
+    return {
+      kind: 'ereignis',
+      trigger: row.trigger_label ?? '',
+      estPerWeek: Number(row.est_per_week ?? 1),
+    };
+  }
+  return {
+    kind: 'takt',
+    min: row.per_count_min ?? 1,
+    max: row.per_count_max ?? row.per_count_min ?? 1,
+    per: (row.per_unit as 'tag' | 'woche' | 'monat') ?? 'woche',
+  };
+}
+
+const rowToTask = (row: TaskRow, dates: TaskDate[] = []): HouseholdTask => ({
+  dates,
+  id: row.id,
+  name: row.name,
+  area: row.area,
+  rhythm: rowToRhythm(row),
+  minutes: row.minutes,
+  askDuration: row.ask_duration,
+  logEach: row.log_each,
+  coordination: row.coordination,
+  weekdays: row.weekdays ?? [],
+  ownerPersonId: row.owner_person_id,
+  active: row.active,
+  sortOrder: row.sort_order,
+});
+
+/**
+ * The other direction: only the columns of the chosen rhythm are filled, the
+ * rest are cleared. Leaving a stale interval behind on a task that is now a
+ * daily one is exactly what fp_tasks_rhythm_chk refuses.
+ */
+function taskToRow(draft: TaskDraft, familyId: string): Record<string, unknown> {
+  const r = draft.rhythm;
+  return {
+    family_id: familyId,
+    name: draft.name.trim(),
+    area: draft.area.trim() || 'haushalt',
+    minutes: draft.minutes,
+    ask_duration: draft.askDuration,
+    log_each: draft.logEach,
+    coordination: draft.coordination,
+    weekdays: draft.weekdays,
+    owner_person_id: draft.ownerPersonId,
+    active: draft.active,
+    rhythm_kind: r.kind,
+    per_count_min: r.kind === 'takt' ? r.min : null,
+    per_count_max: r.kind === 'takt' ? Math.max(r.min, r.max) : null,
+    per_unit: r.kind === 'takt' ? r.per : null,
+    every_count: r.kind === 'intervall' ? r.every : null,
+    every_unit: r.kind === 'intervall' ? r.unit : null,
+    trigger_label: r.kind === 'ereignis' ? r.trigger.trim() : null,
+    est_per_week: r.kind === 'ereignis' ? r.estPerWeek : null,
+  };
+}
+
+const rowToLog = (row: Record<string, unknown>): TaskLog => ({
+  id: row.id as string,
+  taskId: row.task_id as string,
+  personId: (row.person_id as string) ?? null,
+  doneAt: row.done_at as string,
+  minutes: row.minutes as number,
+});
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [screen, setScreen] = useState<Screen>('loading');
   const [user, setUser] = useState<User | null>(null);
@@ -144,6 +268,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [menuSources, setMenuSources] = useState<MenuSource[]>([]);
   const [menuWeeks, setMenuWeeks] = useState<MenuWeek[]>([]);
   const [menuAssignments, setMenuAssignments] = useState<MenuAssignment[]>([]);
+  const [tasks, setTasks] = useState<HouseholdTask[]>([]);
+  const [taskLogs, setTaskLogs] = useState<TaskLog[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [openInvites, setOpenInvites] = useState<OpenInvite[]>([]);
   const [sync, setSync] = useState<SyncState>({ busy: false, message: null, error: null });
@@ -174,6 +300,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     aliases: (r.aliases as string[]) ?? [],
     userId: (r.user_id as string) ?? null,
     archivedAt: (r.archived_at as string) ?? null,
+    doesTasks: Boolean(r.does_tasks),
   }));
 
   const manualToSeries = useCallback((rows: ManualRow[], peopleList: Person[]): ManualSeries[] => {
@@ -205,8 +332,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadFamilyData = useCallback(async (fam: Family, currentRole: Role) => {
+    const logsSince = new Date(Date.now() - TASK_LOG_DAYS * 86_400_000).toISOString();
     const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes,
-           menuSourceRes, menuWeekRes, menuPeopleRes, weatherRes] = await Promise.all([
+           menuSourceRes, menuWeekRes, menuPeopleRes, weatherRes,
+           tasksRes, taskLogsRes, taskDatesRes] = await Promise.all([
       supabase.from('fp_people').select('*').eq('family_id', fam.id).is('archived_at', null).order('sort_order'),
       supabase.from('fp_events')
         .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, '
@@ -222,6 +351,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .eq('family_id', fam.id).order('from_date'),
       supabase.from('fp_menu_people').select('source_id, person_id, weekdays'),
       supabase.from('fp_weather_cache').select('days, plz, fetched_at').eq('family_id', fam.id).maybeSingle(),
+      supabase.from('fp_tasks').select(TASK_COLUMNS).eq('family_id', fam.id).order('sort_order'),
+      supabase.from('fp_task_logs').select('id, task_id, person_id, done_at, minutes')
+        .eq('family_id', fam.id).gte('done_at', logsSince).order('done_at', { ascending: false }),
+      supabase.from('fp_task_dates').select('task_id, due_date, note')
+        .eq('family_id', fam.id).order('due_date'),
     ]);
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
@@ -283,6 +417,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       personId: row.person_id as string,
       weekdays: (row.weekdays as number[]) ?? [],
     })));
+
+    const datesByTask = new Map<string, TaskDate[]>();
+    for (const row of taskDatesRes.data ?? []) {
+      const list = datesByTask.get(row.task_id as string) ?? [];
+      list.push({ date: row.due_date as string, note: (row.note as string) ?? null });
+      datesByTask.set(row.task_id as string, list);
+    }
+    setTasks(((tasksRes.data ?? []) as unknown as TaskRow[])
+      .map(row => rowToTask(row, datesByTask.get(row.id) ?? [])));
+    setTaskLogs((taskLogsRes.data ?? []).map(rowToLog));
 
     if (currentRole === 'owner') {
       const [membersRes, invitesRes] = await Promise.all([
@@ -598,7 +742,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fail, people.length, reload]);
 
-  const updatePerson = useCallback(async (id: string, patch: Partial<Pick<Person, 'name' | 'shortName' | 'color' | 'aliases' | 'sortOrder'>>) => {
+  const updatePerson = useCallback(async (id: string, patch: Partial<Pick<Person, 'name' | 'shortName' | 'color' | 'aliases' | 'sortOrder' | 'doesTasks'>>) => {
     try {
       const row: Record<string, unknown> = {};
       if (patch.name !== undefined) row.name = patch.name.trim();
@@ -606,6 +750,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (patch.color !== undefined) row.color = patch.color;
       if (patch.aliases !== undefined) row.aliases = patch.aliases.map(a => a.trim()).filter(Boolean);
       if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+      if (patch.doesTasks !== undefined) row.does_tasks = patch.doesTasks;
       const { error } = await supabase.from('fp_people').update(row).eq('id', id);
       if (error) throw error;
       await reload();
@@ -911,6 +1056,144 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fail, reload]);
 
+  /* ------------------------------------------------------------------ */
+  /* Household                                                           */
+  /* ------------------------------------------------------------------ */
+
+  const upsertTask = useCallback(async (draft: TaskDraft, id?: string) => {
+    try {
+      const fam = familyRef.current!;
+      const row = taskToRow(draft, fam.id);
+      let taskId = id ?? null;
+      if (id) {
+        const { error } = await supabase.from('fp_tasks').update(row).eq('id', id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from('fp_tasks')
+          .insert({ ...row, sort_order: tasks.length }).select('id').single();
+        if (error) throw error;
+        taskId = (data as { id: string }).id;
+      }
+      await reload();
+      return taskId;
+    } catch (e) {
+      fail(e, 'Die Aufgabe konnte nicht gespeichert werden');
+      return null;
+    }
+  }, [fail, reload, tasks.length]);
+
+  /**
+   * Days a list brought in. `ignoreDuplicates` rather than a merge: a date is
+   * a date, and pasting the same message twice must not double anything.
+   */
+  const addTaskDates = useCallback(async (taskId: string, dates: TaskDate[]) => {
+    if (!dates.length) return true;
+    try {
+      const fam = familyRef.current!;
+      const { error } = await supabase.from('fp_task_dates').upsert(
+        dates.map(d => ({
+          family_id: fam.id, task_id: taskId, due_date: d.date, note: d.note,
+        })),
+        { onConflict: 'task_id,due_date', ignoreDuplicates: true }
+      );
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Termine konnten nicht gespeichert werden');
+    }
+  }, [fail, reload]);
+
+  const removeTaskDate = useCallback(async (taskId: string, date: string) => {
+    try {
+      const { error } = await supabase.from('fp_task_dates')
+        .delete().eq('task_id', taskId).eq('due_date', date);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Der Termin konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
+  const deleteTask = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase.from('fp_tasks').delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Aufgabe konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
+  const addStarterTasks = useCallback(async () => {
+    try {
+      const fam = familyRef.current!;
+      const rows = STARTER_TASKS.map((d, i) => ({
+        ...taskToRow(d, fam.id), sort_order: tasks.length + i,
+      }));
+      const { error } = await supabase.from('fp_tasks').insert(rows);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Vorschläge konnten nicht angelegt werden');
+    }
+  }, [fail, reload, tasks.length]);
+
+  /**
+   * Booking a run is the one thing that happens several times a day, so it
+   * does not go through reload(): the row comes back from the insert and goes
+   * straight into the list. A tap that waits for nine queries is a tap that
+   * stops happening.
+   */
+  const logTask = useCallback(async (taskId: string, personId: string, minutes: number) => {
+    try {
+      const fam = familyRef.current!;
+      const { data, error } = await supabase.from('fp_task_logs').insert({
+        family_id: fam.id,
+        task_id: taskId,
+        person_id: personId,
+        minutes: Math.max(1, Math.round(minutes)),
+        created_by: userRef.current?.id ?? null,
+      }).select('id, task_id, person_id, done_at, minutes').single();
+      if (error) throw error;
+      const log = rowToLog(data as Record<string, unknown>);
+      setTaskLogs(prev => [log, ...prev]);
+      return log;
+    } catch (e) {
+      fail(e, 'Das konnte nicht erfasst werden');
+      return null;
+    }
+  }, [fail]);
+
+  const setLogMinutes = useCallback(async (logId: string, minutes: number) => {
+    const next = Math.max(1, Math.round(minutes));
+    setTaskLogs(prev => prev.map(l => (l.id === logId ? { ...l, minutes: next } : l)));
+    try {
+      const { error } = await supabase.from('fp_task_logs').update({ minutes: next }).eq('id', logId);
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      await reload();
+      return fail(e, 'Die Dauer konnte nicht geändert werden');
+    }
+  }, [fail, reload]);
+
+  const deleteTaskLog = useCallback(async (logId: string) => {
+    const before = taskLogs;
+    setTaskLogs(prev => prev.filter(l => l.id !== logId));
+    try {
+      const { error } = await supabase.from('fp_task_logs').delete().eq('id', logId);
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      setTaskLogs(before);
+      return fail(e, 'Der Eintrag konnte nicht entfernt werden');
+    }
+  }, [fail, taskLogs]);
+
   // One opportunistic refresh per session once the plan is on screen. The
   // Edge Function is a no-op while every calendar's cache is inside its TTL,
   // so several viewers opening the planner cost one fetch, not one each.
@@ -941,6 +1224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     screen, user, family, role, canEdit, isOwner, people, calendars,
     manualSeries, calendarEvents, weather, weatherFetchedAt,
     menuSources, menuWeeks, menuAssignments, menuEvents,
+    tasks, taskLogs,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
@@ -949,6 +1233,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setWeatherPlz, refreshWeather,
     upsertMenuSource, deleteMenuSource, setMenuAssignment, removeMenuAssignment,
     importMenuWeek, deleteMenuWeek,
+    upsertTask, deleteTask, addStarterTasks, addTaskDates, removeTaskDate,
+    logTask, setLogMinutes, deleteTaskLog,
     createLinkInvite, updateMemberRole, removeMember, reload,
   };
 

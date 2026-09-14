@@ -20,6 +20,8 @@ export type Person = {
   aliases: string[];
   userId: string | null;
   archivedAt: string | null;
+  /** Takes on household tasks, so the task list offers a button for them. */
+  doesTasks: boolean;
 };
 
 /** A connected calendar, as every member may see it (never the URL itself). */
@@ -180,3 +182,76 @@ export type WeatherDay = {
   sunshine: number;
   hours: number;
 };
+
+/* ------------------------------------------------------------ household */
+
+/** The three kinds of rhythm a household job actually has. */
+export type TaskRhythm =
+  | { kind: 'takt'; min: number; max: number; per: 'tag' | 'woche' | 'monat' }
+  | { kind: 'intervall'; every: number; unit: 'tage' | 'wochen' | 'monate' }
+  | { kind: 'ereignis'; trigger: string; estPerWeek: number }
+  /** No rhythm at all: the days are a list, in `dates`. */
+  | { kind: 'termine' };
+
+/** What the family means to do — not what it did, which is the logs. */
+export type HouseholdTask = {
+  id: string;
+  name: string;
+  area: string;
+  rhythm: TaskRhythm;
+  /** Planning figure in minutes per run. */
+  minutes: number;
+  /** Ask for the minutes on every log, for jobs whose length swings. */
+  askDuration: boolean;
+  /** Every run counts for itself, rather than one tick for the whole day. */
+  logEach: boolean;
+  /** The work is remembering and organising it, not doing it. */
+  coordination: boolean;
+  /** 1 = Monday … 7 = Sunday; empty when any day will do. */
+  weekdays: number[];
+  /** Who normally does it; null means whoever gets to it. */
+  ownerPersonId: string | null;
+  active: boolean;
+  sortOrder: number;
+  /** The planned days, ascending, for a task whose rhythm is a list. */
+  dates: TaskDate[];
+};
+
+/** One planned day, as it came out of the list someone sent. */
+export type TaskDate = {
+  date: string;
+  /** What the line said beyond the date, when it said more. */
+  note: string | null;
+};
+
+/** One run of one task, by one person. The only thing the split is built on. */
+export type TaskLog = {
+  id: string;
+  taskId: string;
+  personId: string | null;
+  doneAt: string;
+  minutes: number;
+};
+
+/**
+ * Areas every household has, offered when there is nothing to go on yet. The
+ * real list lives in fp_tasks.area and grows with the family — a flat with an
+ * Airbnb in it adds "Airbnb" once and it is there from then on.
+ */
+export const COMMON_AREAS: { id: string; label: string }[] = [
+  { id: 'haushalt', label: 'Haushalt' },
+  { id: 'kueche', label: 'Küche' },
+  { id: 'waesche', label: 'Wäsche' },
+  { id: 'entsorgung', label: 'Entsorgung' },
+  { id: 'einkauf', label: 'Einkauf' },
+  { id: 'kinder', label: 'Kinder' },
+  { id: 'tiere', label: 'Tiere' },
+  { id: 'garten', label: 'Garten' },
+];
+
+/** An area the family typed itself is shown as typed. */
+export function areaLabel(id: string): string {
+  const known = COMMON_AREAS.find(a => a.id === id);
+  if (known) return known.label;
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
