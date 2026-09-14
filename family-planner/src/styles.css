@@ -702,6 +702,27 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
 .hh-empty { max-width: 46ch; margin: 40px auto; text-align: center; }
 .hh-empty .row { justify-content: center; margin: 16px 0 8px; }
 
+/* --- the day's entries ------------------------------------------------- */
+.hh-log-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: .88rem; color: var(--ink-soft);
+  background: none; border: 0; padding: 2px 0; cursor: pointer;
+}
+.hh-log-toggle:hover { color: var(--ink); }
+.hh-daylog {
+  margin-top: 12px; padding: 10px 12px;
+  background: var(--paper-alt); border: 1px solid var(--rule); border-radius: var(--radius);
+}
+.hh-daylog-head { display: flex; align-items: center; gap: 10px; }
+.hh-daylog-head .grow { text-align: center; }
+.hh-daylog .hh-list { border-top: none; margin-top: 4px; }
+.hh-daylog .hh-row:last-child { border-bottom: none; }
+.hh-log-row { padding-left: 0; gap: 8px; }
+.hh-log-row::before { content: none; }
+.hh-log-time { flex: none; font-size: .85rem; color: var(--ink-soft); }
+.hh-log-row .hh-meta .hh-pip { width: 11px; height: 11px; }
+.hh-log-del { color: var(--danger); }
+
 /* --- the split --------------------------------------------------------- */
 .hh-total { margin: 6px 0 0; }
 .hh-total b { display: block; font-size: 1.9rem; letter-spacing: -.02em; line-height: 1.2; }

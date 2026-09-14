@@ -188,7 +188,11 @@ Three views:
   **− 12 min +** and *Rückgängig*, so a correction costs one more tap. A job
   with a daily rhythm shows one circle per expected run, filled in the colour
   of whoever did it: whether the dog has already been out is then a glance, not
-  a conversation.
+  a conversation. The day's summary at the top (*4 erfasst · 1 h 03*) opens the
+  entries themselves — time, job, person, minutes — where the length is
+  corrected in place and an entry can be dropped; the days page back, because
+  the correction usually occurs to someone the evening after. It stays folded
+  away by default: the list you came to tap belongs at the top.
 - **Aufgaben** — the catalog by area, with the planned load per area and per
   job, and the form behind every row.
 - **Verteilung** — minutes per week per person over the last four weeks,
