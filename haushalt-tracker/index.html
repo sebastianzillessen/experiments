@@ -233,6 +233,24 @@ label { display: block; }
 .switch .sw-t { display: block; font-weight: 600; font-size: .93rem; }
 .switch .sw-d { display: block; font-size: .84rem; color: var(--ink-soft); }
 
+/* --- duration entry ---------------------------------------------------- */
+.adj { display: flex; align-items: center; gap: 6px; }
+.adj button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--rule-strong); background: var(--paper-alt); color: var(--ink); font: inherit; line-height: 1; cursor: pointer; }
+.runbar { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--accent); background: var(--accent-wash); border-radius: var(--radius); }
+.runbar .rb-t { flex: 1 1 auto; min-width: 0; }
+.runbar .rb-t b { display: block; }
+.dur-total { text-align: center; margin: 18px 0 2px; font-size: 2.6rem; font-weight: 700; letter-spacing: -.02em; font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.dur-total.is-empty { color: var(--ink-soft); }
+.add-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.add-row button {
+  padding: 20px 6px; font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--rule-strong); border-radius: 14px; background: var(--surface); color: var(--ink);
+}
+.add-row button:hover, .add-row button:focus-visible { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+.add-row button:active { transform: translateY(1px); }
+.btn:disabled { opacity: .45; cursor: default; }
+.dur-note { text-align: center; color: var(--ink-soft); font-size: .86rem; }
+
 /* --- toast ------------------------------------------------------------- */
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 30;
@@ -293,8 +311,8 @@ const SEED = [
   ["Hundefutter auffüllen", "tiere", { kind: "takt", min: 1, max: 1, per: "woche" }, 5, "basti"],
   ["Java Futter bestellen", "tiere", { kind: "intervall", every: 6, unit: "wochen" }, 10, "basti", { coord: true }],
   ["Spülmaschine ausräumen", "haushalt", { kind: "takt", min: 1, max: 1, per: "tag" }, 6, "basti"],
-  ["Wäsche waschen & aufhängen", "haushalt", { kind: "takt", min: 3, max: 4, per: "woche" }, 20, "basti"],
-  ["Wäsche abhängen", "haushalt", { kind: "takt", min: 3, max: 4, per: "woche" }, 10, "wechselnd"],
+  ["Wäsche waschen & aufhängen", "haushalt", { kind: "takt", min: 3, max: 4, per: "woche" }, 20, "basti", { ask: true }],
+  ["Wäsche abhängen", "haushalt", { kind: "takt", min: 3, max: 4, per: "woche" }, 10, "wechselnd", { ask: true }],
   ["Wäsche verräumen", "haushalt", { kind: "takt", min: 2, max: 2, per: "woche" }, 15, "caro"],
   ["Online-Wocheneinkauf", "haushalt", { kind: "takt", min: 1, max: 1, per: "woche" }, 35, "basti", { coord: true }],
   ["Blumen giessen", "haushalt", { kind: "takt", min: 2, max: 2, per: "woche" }, 10, "caro"],
@@ -308,11 +326,11 @@ const SEED = [
   ["Airbnb Wäsche verräumen", "airbnb", { kind: "takt", min: 1, max: 1, per: "woche" }, 20, "caro"],
   ["Airbnb Supplies kontrollieren", "airbnb", { kind: "takt", min: 1, max: 1, per: "woche" }, 15, "caro", { coord: true }],
   ["Airbnb Reinigung organisieren", "airbnb", { kind: "ereignis", trigger: "nach jeder Buchung", estPerWeek: 1.5 }, 10, "caro", { coord: true }],
-  ["Airbnb Kontrolle nach Gast", "airbnb", { kind: "ereignis", trigger: "nach jedem Gast", estPerWeek: 1.5 }, 25, "basti"],
+  ["Airbnb Kontrolle nach Gast", "airbnb", { kind: "ereignis", trigger: "nach jedem Gast", estPerWeek: 1.5 }, 25, "basti", { ask: true }],
 ];
 
 /* --- state ------------------------------------------------------------- */
-let state = { tasks: [], logs: [], view: "heute", area: "alle", draft: null, seq: 1 };
+let state = { tasks: [], logs: [], view: "heute", area: "alle", draft: null, logDraft: null, running: null, seq: 1 };
 let toastTimer = null;
 
 function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -349,7 +367,7 @@ function buildSeed() {
 }
 
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ tasks: state.tasks, logs: state.logs, seq: state.seq })); } catch (e) { /* private window: stays in memory */ }
+  try { localStorage.setItem(STORE, JSON.stringify({ tasks: state.tasks, logs: state.logs, seq: state.seq, running: state.running })); } catch (e) { /* private window: stays in memory */ }
 }
 function load() {
   try {
@@ -379,6 +397,11 @@ function medianMinutes(t) {
   const v = state.logs.filter((l) => l.taskId === t.id).map((l) => l.minutes).sort((a, b) => a - b);
   if (!v.length) return null;
   return Math.round(v[Math.floor(v.length / 2)]);
+}
+function durationStats(t) {
+  const v = state.logs.filter((l) => l.taskId === t.id).map((l) => l.minutes).sort((a, b) => a - b);
+  if (!v.length) return { n: 0 };
+  return { n: v.length, min: v[0], max: v[v.length - 1], med: Math.round(v[Math.floor(v.length / 2)]) };
 }
 function lastLog(t) {
   let best = null;
@@ -439,6 +462,7 @@ function render() {
   if (state.view === "heute") renderHeute();
   else if (state.view === "katalog") renderKatalog();
   else renderVerteilung();
+  if (state.running) view.insertAdjacentHTML("afterbegin", runBanner());
 }
 
 function taskRow(t, opts) {
@@ -447,7 +471,11 @@ function taskRow(t, opts) {
   const last = lastLog(t);
   const meta = [];
   meta.push('<span class="num">' + esc(rhythmLabel(t)) + "</span>");
-  meta.push('<span class="sep">·</span><span class="num">' + fmtMin(t.minutes) + "</span>");
+  const ds = durationStats(t);
+  const spread = ds.n >= 4 && ds.max - ds.min >= 5
+    ? "Ø " + fmtMin(ds.med) + " (" + ds.min + "–" + ds.max + ")"
+    : fmtMin(t.minutes);
+  meta.push('<span class="sep">·</span><span class="num">' + spread + "</span>");
   if (t.coord) meta.push('<span class="tag tag-coord">Koordination</span>');
   const m = measuredPerWeek(t), p = plannedPerWeek(t);
   if (t.rhythm.kind !== "ereignis" && logsOf(t, 28).length >= 4 && Math.abs(m - p) / p > 0.3) {
@@ -575,7 +603,7 @@ function renderVerteilung() {
 const overlay = document.getElementById("overlay");
 
 function newDraft() {
-  return { id: null, name: "", area: "haushalt", minutes: 15, owner: "wechselnd", single: false, coord: false, days: [], active: true,
+  return { id: null, name: "", area: "haushalt", minutes: 15, owner: "wechselnd", single: false, coord: false, askDuration: false, days: [], active: true,
     rhythm: { kind: "takt", min: 1, max: 1, per: "woche", every: 2, unit: "wochen", trigger: "", estPerWeek: 1 } };
 }
 
@@ -586,6 +614,7 @@ function openSheet(task) {
   const mpw = existing ? measuredPerWeek(existing) : 0;
   const med = existing ? medianMinutes(existing) : null;
   const count = existing ? state.logs.filter((l) => l.taskId === existing.id).length : 0;
+  const ds = existing ? durationStats(existing) : { n: 0 };
 
   overlay.innerHTML = '<div class="scrim" data-close="1"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-in">' +
     '<div class="sheet-head"><h2 id="sheet-title">' + (task ? "Aufgabe bearbeiten" : "Neue Aufgabe") + "</h2>" +
@@ -624,7 +653,9 @@ function openSheet(task) {
       (med ? ' · <b class="num">Ø ' + med + " min</b>" : "") + '</span><button class="btn btn-secondary" data-apply-measured="1" style="padding:7px 12px">Übernehmen</button></div>' : "") +
 
     '<div class="field"><label class="lab" for="f-min-dur">Wie lange dauert es?</label>' +
-    '<div class="inline"><input type="number" min="1" max="480" id="f-min-dur" data-f="minutes" value="' + d.minutes + '"> <span class="muted">Minuten pro Mal</span></div></div>' +
+    '<p class="hint">Richtwert für die Wochenrechnung. Schwankt es stark, unten „Dauer jedes Mal erfassen“ einschalten.</p>' +
+    '<div class="inline"><input type="number" min="1" max="480" id="f-min-dur" data-f="minutes" value="' + d.minutes + '"> <span class="muted">Minuten pro Mal</span>' +
+    (ds.n >= 4 ? ' <span class="tag num">bisher ' + ds.min + "–" + ds.max + " min</span>" : "") + "</div></div>" +
 
     '<div class="field"><span class="lab">Wer macht das normalerweise?</span><div class="chiprow">' +
     PEOPLE.concat([{ id: "beide", label: "Beide" }, { id: "wechselnd", label: "Wechselnd" }])
@@ -633,6 +664,8 @@ function openSheet(task) {
     '<div style="margin-top:18px">' +
     '<label class="switch"><input type="checkbox" data-f="single"' + (d.single ? " checked" : "") + '>' +
     '<span><span class="sw-t">Jedes Mal einzeln erfassen</span><span class="sw-d">Für Sachen wie Hund spazieren: jede Runde zählt für sich, mit der Person die sie gemacht hat.</span></span></label>' +
+    '<label class="switch"><input type="checkbox" data-f="askDuration"' + (d.askDuration ? " checked" : "") + '>' +
+    '<span><span class="sw-t">Dauer jedes Mal erfassen</span><span class="sw-d">Beim Abhaken wird nach den Minuten gefragt — für Sachen, die mal 5 und mal 20 Minuten dauern. Sonst zählt der Richtwert.</span></span></label>' +
     '<label class="switch"><input type="checkbox" data-f="coord"' + (d.coord ? " checked" : "") + '>' +
     '<span><span class="sw-t">Zählt als Koordination</span><span class="sw-d">Dran denken, planen, organisieren — Aufwand, der nicht in der reinen Ausführungszeit steckt.</span></span></label>' +
     '<label class="switch"><input type="checkbox" data-f="active"' + (d.active ? " checked" : "") + '>' +
@@ -647,7 +680,7 @@ function openSheet(task) {
   if (first && !task) first.focus();
 }
 
-function closeSheet() { state.draft = null; overlay.innerHTML = ""; }
+function closeSheet() { state.draft = null; state.logDraft = null; overlay.innerHTML = ""; }
 
 function updateLoad() {
   const el = document.getElementById("f-load");
@@ -674,13 +707,79 @@ function toast(html) {
 function logDone(taskId, person) {
   const t = state.tasks.find((x) => x.id === taskId);
   if (!t) return;
-  const minutes = medianMinutes(t) || t.minutes;
-  const entry = { id: "l" + state.seq++, taskId: t.id, person: person, at: new Date().toISOString(), minutes: minutes };
+  if (t.askDuration) { openDurationSheet(t, person); return; }
+  commitLog(t, person, medianMinutes(t) || t.minutes);
+}
+
+function commitLog(t, person, minutes) {
+  const entry = { id: "l" + state.seq++, taskId: t.id, person: person, at: new Date().toISOString(), minutes: Math.max(1, Math.round(minutes)) };
   state.logs.push(entry);
   save();
   render();
-  toast('<span><b>' + esc(t.name) + "</b> · " + personLabel(person) + ' · <span class="num">' + fmtMin(minutes) + "</span></span>" +
+  toast('<span><b>' + esc(t.name) + "</b> · " + personLabel(person) + "</span>" +
+    '<span class="adj"><button data-adj="-5" data-entry="' + entry.id + '" aria-label="fünf Minuten weniger">−</button>' +
+    '<b class="num" id="t-min">' + fmtMin(entry.minutes) + "</b>" +
+    '<button data-adj="5" data-entry="' + entry.id + '" aria-label="fünf Minuten mehr">+</button></span>' +
     '<button class="linkish" data-undo="' + entry.id + '">Rückgängig</button>');
+  return entry;
+}
+
+/* --- how long did it take? ---------------------------------------------- */
+function openDurationSheet(t, person) {
+  state.logDraft = { taskId: t.id, person: person, minutes: 0 };
+  const ds = durationStats(t);
+  overlay.innerHTML = '<div class="scrim" data-close="1"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dur-title"><div class="sheet-in">' +
+    '<div class="sheet-head"><h2 id="dur-title">' + esc(t.name) + "</h2>" +
+    '<button class="icon-btn" data-close="1" aria-label="Abbrechen">✕</button></div>' +
+    '<p class="dur-note" style="margin-top:14px">' + personLabel(person) + " hat das gerade gemacht. Zeit zusammentippen:</p>" +
+    '<div class="dur-total is-empty" id="f-dur-view" role="status" aria-live="polite">0 min</div>' +
+    '<div class="add-row">' +
+    '<button data-dur-add="5">+5 min</button>' +
+    '<button data-dur-add="15">+15 min</button>' +
+    '<button data-dur-add="60">+1 h</button></div>' +
+    '<p class="dur-note" style="margin-top:12px"><button class="linkish" data-dur-reset="1">Zurücksetzen</button></p>' +
+    (ds.n >= 4 ? '<p class="dur-note">Bisher zwischen <span class="num">' + ds.min + "</span> und <span class=\"num\">" + ds.max + '</span> min, meistens <span class="num">' + ds.med + "</span>.</p>" : "") +
+    '<div class="sheet-foot"><button class="btn btn-quiet" data-dur-timer="1">Stoppuhr statt tippen</button>' +
+    '<button class="btn" data-dur-save="1" id="f-dur-save" disabled>Erfassen</button></div></div></div>';
+}
+
+function startTimer(taskId, person) {
+  state.running = { taskId: taskId, person: person, startedAt: Date.now() };
+  closeSheet(); save(); render(); tick();
+}
+function stopTimer(commit) {
+  const r = state.running;
+  if (!r) return;
+  const t = state.tasks.find((x) => x.id === r.taskId);
+  state.running = null;
+  if (commit && t) commitLog(t, r.person, Math.max(1, (Date.now() - r.startedAt) / 60000));
+  else { save(); render(); }
+}
+function fmtElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60), sec = s % 60;
+  if (m < 60) return m + ":" + String(sec).padStart(2, "0");
+  return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+}
+function runBanner() {
+  const r = state.running;
+  if (!r) return "";
+  const t = state.tasks.find((x) => x.id === r.taskId);
+  if (!t) return "";
+  return '<div class="runbar"><span class="rb-t"><b>' + esc(t.name) + "</b>" +
+    '<span class="hint">läuft seit <span class="num" id="run-elapsed">' + fmtElapsed(Date.now() - r.startedAt) + "</span> · " + personLabel(r.person) + "</span></span>" +
+    '<button class="btn" data-run-stop="1">Fertig</button>' +
+    '<button class="icon-btn" data-run-cancel="1" aria-label="Stoppuhr verwerfen">✕</button></div>';
+}
+let ticker = null;
+function tick() {
+  clearInterval(ticker);
+  if (!state.running) return;
+  ticker = setInterval(() => {
+    const el = document.getElementById("run-elapsed");
+    if (!state.running) { clearInterval(ticker); return; }
+    if (el) el.textContent = fmtElapsed(Date.now() - state.running.startedAt);
+  }, 1000);
 }
 
 function saveDraft() {
@@ -700,7 +799,7 @@ function saveDraft() {
 }
 
 document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-tab],[data-area],[data-log],[data-edit],[data-new],[data-close],[data-save],[data-delete],[data-set-area],[data-kind],[data-day],[data-owner],[data-apply-measured],[data-undo],[data-reset]");
+  const el = e.target.closest("[data-tab],[data-area],[data-log],[data-edit],[data-new],[data-close],[data-save],[data-delete],[data-set-area],[data-kind],[data-day],[data-owner],[data-apply-measured],[data-undo],[data-reset],[data-adj],[data-dur-add],[data-dur-reset],[data-dur-save],[data-dur-timer],[data-run-stop],[data-run-cancel]");
   if (!el) return;
   const d = el.dataset;
 
@@ -712,6 +811,37 @@ document.addEventListener("click", (e) => {
   if (d.close) { closeSheet(); return; }
   if (d.save) { saveDraft(); return; }
   if (d.reset) { state.tasks = []; try { localStorage.removeItem(STORE); } catch (err) {} const s = buildSeed(); state.tasks = s.tasks; state.logs = s.logs; state.seq = s.seq; save(); render(); toast("<span>Beispieldaten neu aufgebaut</span>"); return; }
+  if (d.adj) {
+    const entry = state.logs.find((l) => l.id === d.entry);
+    if (!entry) return;
+    entry.minutes = Math.max(1, entry.minutes + Number(d.adj));
+    save(); render();
+    const out = document.getElementById("t-min");
+    if (out) out.textContent = fmtMin(entry.minutes);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.innerHTML = ""; }, 5000);
+    return;
+  }
+  if (d.durAdd || d.durReset) {
+    if (!state.logDraft) return;
+    state.logDraft.minutes = d.durReset ? 0 : state.logDraft.minutes + Number(d.durAdd);
+    const out = document.getElementById("f-dur-view");
+    out.textContent = state.logDraft.minutes ? fmtMin(state.logDraft.minutes) : "0 min";
+    out.classList.toggle("is-empty", !state.logDraft.minutes);
+    document.getElementById("f-dur-save").disabled = !state.logDraft.minutes;
+    return;
+  }
+  if (d.durSave) {
+    const ld = state.logDraft, t = state.tasks.find((x) => x.id === ld.taskId);
+    if (!ld.minutes) return;
+    closeSheet();
+    commitLog(t, ld.person, ld.minutes);
+    return;
+  }
+  if (d.durTimer) { startTimer(state.logDraft.taskId, state.logDraft.person); return; }
+  if (d.durReset) return;
+  if (d.runStop) { stopTimer(true); return; }
+  if (d.runCancel) { stopTimer(false); return; }
   if (d.undo) {
     state.logs = state.logs.filter((l) => l.id !== d.undo);
     save(); render(); toastEl.innerHTML = "";
@@ -786,6 +916,8 @@ const loaded = load();
 state.tasks = loaded.tasks;
 state.logs = loaded.logs;
 state.seq = loaded.seq || 1000;
+state.running = loaded.running || null;
 render();
+tick();
 save();
 </script>
