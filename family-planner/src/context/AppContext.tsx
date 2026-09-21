@@ -15,10 +15,11 @@ import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
   Assignment, Calendar, CachedEvent, Family, HouseholdTask, Member, MenuAssignment, MenuSource,
-  MenuWeek, OpenInvite, Person, PlannerEvent, Role, TaskDate, TaskLog, TaskRhythm, TimeFormat,
-  Trip, TripIdea, WeatherDay,
+  Destination, MenuWeek, OpenInvite, Person, PlannerEvent, Role, TaskDate, TaskLog, TaskRhythm,
+  TimeFormat, Trip, TripIdea, WeatherDay,
 } from '../lib/types.ts';
 import { STARTER_TASKS } from '../lib/tasks.ts';
+import { STARTERS } from '../lib/destinations.ts';
 import type { TaskDraft } from '../lib/tasks.ts';
 
 const NEUTRAL_COLOR = '#6b7280';
@@ -48,8 +49,14 @@ export type NewEventInput = {
   repeat?: RepeatRule | null;
 };
 
+export type NewDestinationInput = {
+  name: string;
+  code: string | null;
+  group: string;
+};
+
 export type NewTripInput = {
-  canton: string;
+  destinationId: string;
   title: string;
   notes: string;
   fromDate: string | null;
@@ -90,9 +97,11 @@ type AppContextValue = {
   tasks: HouseholdTask[];
   /** Every run of every task in the last few months, newest first. */
   taskLogs: TaskLog[];
-  /** Trips to the cantons: planned, done, or just named. */
+  /** The family's own list of places to get through. */
+  destinations: Destination[];
+  /** Trips to those places: planned, done, or just named. */
   trips: Trip[];
-  /** The suggestions last fetched, per canton. */
+  /** The suggestions last fetched, per destination. */
   tripIdeas: TripIdea[];
   members: Member[];
   openInvites: OpenInvite[];
@@ -134,11 +143,18 @@ type AppContextValue = {
   logTask: (taskId: string, personId: string, minutes: number) => Promise<TaskLog | null>;
   setLogMinutes: (logId: string, minutes: number) => Promise<boolean>;
   deleteTaskLog: (logId: string) => Promise<boolean>;
+  /** Adds one place to the list. Resolves to its id, or null. */
+  addDestination: (input: NewDestinationInput) => Promise<string | null>;
+  updateDestination: (id: string, patch: Partial<NewDestinationInput>) => Promise<boolean>;
+  /** Removes a place — and with it, its trips and ideas. */
+  deleteDestination: (id: string) => Promise<boolean>;
+  /** Takes one of the ready-made lists, skipping anything already there. */
+  addStarterDestinations: (starterId: string) => Promise<boolean>;
   addTrip: (input: NewTripInput) => Promise<boolean>;
   updateTrip: (id: string, patch: Partial<NewTripInput> & { done?: boolean }) => Promise<boolean>;
   deleteTrip: (id: string) => Promise<boolean>;
   /** Asks the model for ideas. Resolves to null on success, or the message. */
-  fetchTripIdeas: (canton: string, wishes: string, refresh: boolean) => Promise<string | null>;
+  fetchTripIdeas: (destinationId: string, wishes: string, refresh: boolean) => Promise<string | null>;
   discardTripIdea: (id: string) => Promise<boolean>;
   setTimeFormat: (format: TimeFormat) => Promise<boolean>;
   createLinkInvite: (role: Role) => Promise<string | null>;
@@ -267,9 +283,17 @@ function taskToRow(draft: TaskDraft, familyId: string): Record<string, unknown> 
   };
 }
 
+const rowToDestination = (row: Record<string, unknown>): Destination => ({
+  id: row.id as string,
+  name: row.name as string,
+  code: (row.code as string) ?? null,
+  group: (row.group_name as string) ?? 'Ziele',
+  sortOrder: (row.sort_order as number) ?? 0,
+});
+
 const rowToTrip = (row: Record<string, unknown>): Trip => ({
   id: row.id as string,
-  canton: row.canton as string,
+  destinationId: row.destination_id as string,
   title: row.title as string,
   notes: (row.notes as string) ?? '',
   fromDate: (row.from_date as string) ?? null,
@@ -280,7 +304,7 @@ const rowToTrip = (row: Record<string, unknown>): Trip => ({
 });
 
 const tripToRow = (input: NewTripInput) => ({
-  canton: input.canton,
+  destination_id: input.destinationId,
   title: input.title.trim(),
   notes: input.notes.trim(),
   from_date: input.fromDate,
@@ -294,7 +318,7 @@ const tripToRow = (input: NewTripInput) => ({
 
 const rowToIdea = (row: Record<string, unknown>): TripIdea => ({
   id: row.id as string,
-  canton: row.canton as string,
+  destinationId: row.destination_id as string,
   title: row.title as string,
   summary: (row.summary as string) ?? '',
   highlights: (row.highlights as string[]) ?? [],
@@ -330,6 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [menuAssignments, setMenuAssignments] = useState<MenuAssignment[]>([]);
   const [tasks, setTasks] = useState<HouseholdTask[]>([]);
   const [taskLogs, setTaskLogs] = useState<TaskLog[]>([]);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [tripIdeas, setTripIdeas] = useState<TripIdea[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -397,7 +422,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const logsSince = new Date(Date.now() - TASK_LOG_DAYS * 86_400_000).toISOString();
     const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes,
            menuSourceRes, menuWeekRes, menuPeopleRes, weatherRes,
-           tasksRes, taskLogsRes, taskDatesRes, tripsRes, tripIdeasRes] = await Promise.all([
+           tasksRes, taskLogsRes, taskDatesRes, tripsRes, tripIdeasRes,
+           destinationsRes] = await Promise.all([
       supabase.from('fp_people').select('*').eq('family_id', fam.id).is('archived_at', null).order('sort_order'),
       supabase.from('fp_events')
         .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, '
@@ -419,11 +445,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from('fp_task_dates').select('task_id, due_date, note')
         .eq('family_id', fam.id).order('due_date'),
       supabase.from('fp_trips')
-        .select('id, canton, title, notes, from_date, to_date, done, done_on, source')
+        .select('id, destination_id, title, notes, from_date, to_date, done, done_on, source')
         .eq('family_id', fam.id).order('created_at'),
       supabase.from('fp_trip_ideas')
-        .select('id, canton, title, summary, highlights, duration, season, travel, wishes, generated_at')
+        .select('id, destination_id, title, summary, highlights, duration, season, travel, wishes, generated_at')
         .eq('family_id', fam.id).order('generated_at'),
+      supabase.from('fp_destinations')
+        .select('id, name, code, group_name, sort_order')
+        .eq('family_id', fam.id).order('group_name').order('sort_order'),
     ]);
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
@@ -496,6 +525,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .map(row => rowToTask(row, datesByTask.get(row.id) ?? [])));
     setTaskLogs((taskLogsRes.data ?? []).map(rowToLog));
 
+    setDestinations((destinationsRes.data ?? []).map(rowToDestination));
     setTrips((tripsRes.data ?? []).map(rowToTrip));
     setTripIdeas((tripIdeasRes.data ?? []).map(rowToIdea));
 
@@ -1268,8 +1298,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [fail, taskLogs]);
 
   /* ------------------------------------------------------------------ */
-  /* Cantons                                                             */
+  /* Trips                                                              */
   /* ------------------------------------------------------------------ */
+
+  const addDestination = useCallback(async (input: NewDestinationInput) => {
+    try {
+      const fam = familyRef.current!;
+      const group = input.group.trim() || 'Ziele';
+      const inGroup = destinations.filter(d => d.group === group).length;
+      const { data, error } = await supabase.from('fp_destinations').insert({
+        family_id: fam.id,
+        name: input.name.trim(),
+        code: input.code?.trim() || null,
+        group_name: group,
+        sort_order: inGroup,
+      }).select('id').single();
+      if (error) throw error;
+      await reload();
+      return (data as { id: string }).id;
+    } catch (e) {
+      fail(e, 'Das Ziel konnte nicht gespeichert werden');
+      return null;
+    }
+  }, [destinations, fail, reload]);
+
+  const updateDestination = useCallback(async (id: string, patch: Partial<NewDestinationInput>) => {
+    try {
+      const row: Record<string, unknown> = {};
+      if (patch.name !== undefined) row.name = patch.name.trim();
+      if (patch.code !== undefined) row.code = patch.code?.trim() || null;
+      if (patch.group !== undefined) row.group_name = patch.group.trim() || 'Ziele';
+      const { error } = await supabase.from('fp_destinations').update(row).eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Das Ziel konnte nicht geändert werden');
+    }
+  }, [fail, reload]);
+
+  const deleteDestination = useCallback(async (id: string) => {
+    try {
+      // The trips and ideas go with it — that is what the foreign keys say,
+      // and a trip to a place that is no longer on the list is an orphan.
+      const { error } = await supabase.from('fp_destinations').delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Das Ziel konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
+  const addStarterDestinations = useCallback(async (starterId: string) => {
+    const starter = STARTERS.find(s => s.id === starterId);
+    if (!starter) return false;
+    try {
+      const fam = familyRef.current!;
+      // Whatever the family already has under that name stays as it is.
+      const have = new Set(destinations.map(d => d.name.toLowerCase()));
+      const rows = starter.items
+        .filter(item => !have.has(item.name.toLowerCase()))
+        .map((item, i) => ({
+          family_id: fam.id,
+          name: item.name,
+          code: item.code ?? null,
+          group_name: starter.group,
+          sort_order: i,
+        }));
+      if (rows.length) {
+        const { error } = await supabase.from('fp_destinations').insert(rows);
+        if (error) throw error;
+      }
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Die Liste konnte nicht angelegt werden');
+    }
+  }, [destinations, fail, reload]);
 
   const addTrip = useCallback(async (input: NewTripInput) => {
     try {
@@ -1318,13 +1424,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [fail, reload]);
 
   /** Resolves to null on success, or the message to show. */
-  const fetchTripIdeas = useCallback(async (canton: string, wishes: string, refresh: boolean) => {
+  const fetchTripIdeas = useCallback(async (destinationId: string, wishes: string, refresh: boolean) => {
     const fam = familyRef.current;
     if (!fam) return 'Keine Familie geladen';
     setSync({ busy: true, message: 'Ideen werden geholt …', error: null });
     try {
       const { data, error } = await supabase.functions.invoke('family-trip-ideas', {
-        body: { family_id: fam.id, canton, wishes, refresh },
+        body: { family_id: fam.id, destination_id: destinationId, wishes, refresh },
       });
       // The function answers with a JSON body on failure too, and that message
       // is the useful one — "Edge Function returned a non-2xx status" is not.
@@ -1385,7 +1491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     screen, user, family, role, canEdit, isOwner, people, calendars,
     manualSeries, calendarEvents, weather, weatherFetchedAt,
     menuSources, menuWeeks, menuAssignments, menuEvents,
-    tasks, taskLogs, trips, tripIdeas,
+    tasks, taskLogs, destinations, trips, tripIdeas,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
@@ -1394,6 +1500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setWeatherPlz, refreshWeather,
     upsertMenuSource, deleteMenuSource, setMenuAssignment, removeMenuAssignment,
     importMenuWeek, deleteMenuWeek,
+    addDestination, updateDestination, deleteDestination, addStarterDestinations,
     addTrip, updateTrip, deleteTrip, fetchTripIdeas, discardTripIdea,
     upsertTask, deleteTask, addStarterTasks, addTaskDates, removeTaskDate,
     logTask, setLogMinutes, deleteTaskLog,

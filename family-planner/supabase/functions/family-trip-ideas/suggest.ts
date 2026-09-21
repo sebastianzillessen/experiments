@@ -30,7 +30,7 @@ const IdeasSchema = z.object({
 });
 
 export async function suggestTrips(
-  cantonName: string, wishes: string, origin: string | null, apiKey: string
+  place: { name: string; group: string }, wishes: string, origin: string | null, apiKey: string
 ): Promise<TripIdea[]> {
   // A few more goes than the default two: this is one deliberate tap by a
   // person waiting for it, and an overloaded minute should not become a
@@ -42,7 +42,7 @@ export async function suggestTrips(
     response = await client.messages.parse({
       model: MODEL,
       max_tokens: 16000,
-      messages: [{ role: 'user', content: buildPrompt(cantonName, wishes, origin) }],
+      messages: [{ role: 'user', content: buildPrompt(place, wishes, origin) }],
       output_config: { format: zodOutputFormat(IdeasSchema) },
     });
   } catch (e) {

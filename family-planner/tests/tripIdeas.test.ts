@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { MAX_IDEAS, buildPrompt, validateIdeas } from '../supabase/functions/family-trip-ideas/ideas.ts';
-import { CANTONS } from '../src/lib/cantons.ts';
+
+const GR = { name: 'Graubünden', group: 'Kantone der Schweiz' };
 
 describe('the brief', () => {
-  const prompt = buildPrompt('Graubünden', '', null);
+  const prompt = buildPrompt(GR, '', null);
 
-  it('names the canton and asks for a mix of lengths', () => {
-    expect(prompt).toContain('Kanton Graubünden');
+  it('names the destination and its list, and asks for a mix of lengths', () => {
+    expect(prompt).toContain('Graubünden');
+    expect(prompt).toContain('Kantone der Schweiz');
     expect(prompt).toContain('Tagesausflüge');
     expect(prompt).toContain('zwei Tage');
   });
 
   it('tells it to leave out what it is unsure of', () => {
     expect(prompt).toMatch(/nicht sicher bist, lass ihn weg/);
-    expect(prompt).toContain('wirklich im Kanton Graubünden liegen');
+    expect(prompt).toContain('wirklich in Graubünden liegen');
   });
 
   it('forbids the things that go stale', () => {
@@ -22,7 +23,7 @@ describe('the brief', () => {
   });
 
   it('asks for the journey time from home whenever home is known', () => {
-    const fromZurich = buildPrompt('Uri', '', 'Zürich');
+    const fromZurich = buildPrompt({ name: 'Uri', group: 'Kantone der Schweiz' }, '', 'Zürich');
     expect(fromZurich).toContain('Die Familie startet in Zürich');
     expect(fromZurich).toMatch(/travel die ungefähre Fahrzeit ab Zürich nennen/);
     // And it says what to do with somewhere too far for a day.
@@ -39,7 +40,7 @@ describe('the brief', () => {
   });
 
   it('passes the family\'s own wishes through', () => {
-    const withWishes = buildPrompt('Uri', 'mit Kinderwagen, max. 2 h Fahrt', null);
+    const withWishes = buildPrompt({ name: 'Uri', group: 'Ziele' }, 'mit Kinderwagen, max. 2 h Fahrt', null);
     expect(withWishes).toContain('mit Kinderwagen, max. 2 h Fahrt');
   });
 });
@@ -97,21 +98,6 @@ describe('what is kept of the answer', () => {
   it('tidies whitespace out of what it keeps', () => {
     const [kept] = validateIdeas({ ideas: [idea({ title: '  Rheinfall \n bei Schaffhausen ' })] });
     expect(kept.title).toBe('Rheinfall bei Schaffhausen');
-  });
-});
-
-describe('the canton list in the function', () => {
-  it('matches the one the app uses', () => {
-    // The Edge Function cannot import from src/, so it carries its own copy.
-    // This is the check that keeps the two from drifting apart.
-    const source = readFileSync(
-      new URL('../supabase/functions/family-trip-ideas/index.ts', import.meta.url), 'utf8'
-    );
-    const block = source.slice(source.indexOf('const CANTONS'), source.indexOf('};', source.indexOf('const CANTONS')));
-    const pairs = [...block.matchAll(/([A-Z]{2}): '([^']+)'/g)].map(m => [m[1], m[2]]);
-    expect(Object.fromEntries(pairs)).toEqual(
-      Object.fromEntries(CANTONS.map(c => [c.code, c.name]))
-    );
   });
 });
 

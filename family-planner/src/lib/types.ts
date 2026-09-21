@@ -259,12 +259,26 @@ export function areaLabel(id: string): string {
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
-/* -------------------------------------------------------------- cantons */
+/* ------------------------------------------------------------ destinations */
 
-/** A trip to one canton: planned, done, or just an idea with a name. */
+/**
+ * One place on a family's list. The list belongs to the family: the 26 cantons
+ * are a starting point it can take, not the shape of the feature.
+ */
+export type Destination = {
+  id: string;
+  name: string;
+  /** Short badge for the list — "GR", "1" — or null when a name is enough. */
+  code: string | null;
+  /** Free text: "Kantone der Schweiz", "Länder Europas". Progress is per group. */
+  group: string;
+  sortOrder: number;
+};
+
+/** A trip to one destination: planned, done, or just an idea with a name. */
 export type Trip = {
   id: string;
-  canton: string;
+  destinationId: string;
   title: string;
   notes: string;
   fromDate: string | null;
@@ -275,10 +289,10 @@ export type Trip = {
   source: 'eigen' | 'idee';
 };
 
-/** One suggestion from the model, as stored for a canton. */
+/** One suggestion from the model, as stored for a destination. */
 export type TripIdea = {
   id: string;
-  canton: string;
+  destinationId: string;
   title: string;
   summary: string;
   highlights: string[];
