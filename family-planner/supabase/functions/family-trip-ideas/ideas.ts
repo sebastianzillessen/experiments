@@ -27,7 +27,7 @@ const MAX_HIGHLIGHTS = 4;
  * is not, because nobody checks a plausible sentence until they are standing
  * in the car park.
  */
-export function buildPrompt(cantonName: string, wishes: string, plz: string | null): string {
+export function buildPrompt(cantonName: string, wishes: string, origin: string | null): string {
   const lines = [
     `Wir sind eine Familie mit kleinen Kindern in der Schweiz und wollen dieses Jahr jeden Kanton mindestens einmal besuchen. Jetzt geht es um den Kanton ${cantonName}.`,
     '',
@@ -39,7 +39,7 @@ export function buildPrompt(cantonName: string, wishes: string, plz: string | nu
     '- highlights: zwei bis drei konkrete Dinge vor Ort',
     '- duration: "tag" oder "zwei-tage"',
     '- season: wann es sich lohnt, in wenigen Worten ("im Sommer", "ganzjährig", "bei Schnee")',
-    '- travel: wie man hinkommt, in wenigen Worten (Auto, Zug, Bergbahn)',
+    '- travel: wie man hinkommt — Verkehrsmittel und ungefähre Fahrzeit',
     '',
     'Regeln:',
     `- Jeder Ort muss wirklich existieren und wirklich im Kanton ${cantonName} liegen. Wenn du dir bei einem Ort nicht sicher bist, lass ihn weg — vier gute Vorschläge sind besser als fünf, von denen einer erfunden ist.`,
@@ -47,10 +47,11 @@ export function buildPrompt(cantonName: string, wishes: string, plz: string | nu
     '- Fünf verschiedene Arten von Ausflug, nicht fünfmal dasselbe: Wasser, Berg, Tiere, Stadt, Museum, Bauernhof.',
     '- Deutsch, Schweizer Schreibweise: "ss" statt "ß".',
   ];
-  if (plz) {
+  if (origin) {
     lines.push(
       '',
-      `Die Familie wohnt in der Postleitzahl ${plz}. Schreib bei travel dazu, wie weit es von dort ungefähr ist.`
+      `Die Familie startet in ${origin}. Bei jedem Vorschlag muss travel die ungefähre Fahrzeit ab ${origin} nennen — etwa "rund 1 h 15 mit dem Auto" oder "2 h mit dem Zug, einmal umsteigen". Lieber grosszügig runden als genau tun.`,
+      `Wenn ein Ort von ${origin} aus für einen Tagesausflug zu weit weg ist, mach einen Zweitagesvorschlag daraus oder lass ihn weg.`
     );
   }
   if (wishes.trim()) {
@@ -96,4 +97,25 @@ export function validateIdeas(raw: unknown): TripIdea[] {
     if (out.length >= MAX_IDEAS) break;
   }
   return out;
+}
+
+/**
+ * What to say when the API itself says no.
+ *
+ * Overload is the common one and the one worth naming: it is not the family's
+ * fault, nothing is broken, and trying again in a minute usually works. The
+ * raw body ("529 {\"type\":\"error\"…") is true and unreadable, so it never
+ * reaches the screen.
+ */
+export function apiErrorMessage(status: number | undefined, fallback: string): string {
+  if (status === 429) {
+    return 'Claude ist gerade ausgelastet. Bitte in ein paar Minuten nochmal versuchen.';
+  }
+  if (status === 529 || (status !== undefined && status >= 500)) {
+    return 'Claude ist gerade überlastet. Bitte gleich nochmal versuchen — das geht meist schnell vorbei.';
+  }
+  if (status === 401 || status === 403) {
+    return 'Der Schlüssel für Claude wird nicht akzeptiert.';
+  }
+  return fallback;
 }

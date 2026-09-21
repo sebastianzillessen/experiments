@@ -111,7 +111,10 @@ export type Family = {
   timezone: string;
   weekStart: number;
   timeFormat: TimeFormat;
-  /** Swiss postal code the weather is fetched for, or null when unset. */
+  /**
+   * Swiss postal code. The weather is fetched for it, and the trip
+   * suggestions start their journeys there — one field, not two.
+   */
   weatherPlz: string | null;
 };
 

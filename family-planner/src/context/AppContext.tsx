@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase, hadAuthErrorInUrl, getPendingInviteToken, clearPendingInviteToken } from '../supabaseClient.ts';
 import { localToIso } from '../lib/dates.ts';
+import { functionErrorMessage } from '../lib/functionError.ts';
 import { calendarEventsToPlanner } from '../lib/merge.ts';
 import { menuEventsToPlanner } from '../lib/menuPlan.ts';
 import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
@@ -1102,9 +1103,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       // The function answers with a JSON body on failure too, and that message
       // is the useful one — "Edge Function returned a non-2xx status" is not.
+      // On a non-2xx supabase-js leaves `data` null and puts the response on
+      // the error, so both places have to be looked at.
       const message = (data as { error?: string } | null)?.error;
       if (message) throw new Error(message);
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Der Menüplan konnte nicht geholt werden'));
       await reload();
       setSync({ busy: false, message: null, error: null });
       return null;
@@ -1325,9 +1328,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       // The function answers with a JSON body on failure too, and that message
       // is the useful one — "Edge Function returned a non-2xx status" is not.
+      // On a non-2xx supabase-js leaves `data` null and puts the response on
+      // the error, so both places have to be looked at.
       const message = (data as { error?: string } | null)?.error;
       if (message) throw new Error(message);
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Die Ideen konnten nicht geholt werden'));
       await reload();
       setSync({ busy: false, message: null, error: null });
       return null;
