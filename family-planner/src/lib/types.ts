@@ -255,3 +255,34 @@ export function areaLabel(id: string): string {
   if (known) return known.label;
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
+
+/* -------------------------------------------------------------- cantons */
+
+/** A trip to one canton: planned, done, or just an idea with a name. */
+export type Trip = {
+  id: string;
+  canton: string;
+  title: string;
+  notes: string;
+  fromDate: string | null;
+  toDate: string | null;
+  done: boolean;
+  doneOn: string | null;
+  /** Whether the family wrote it or took it from a suggestion. */
+  source: 'eigen' | 'idee';
+};
+
+/** One suggestion from the model, as stored for a canton. */
+export type TripIdea = {
+  id: string;
+  canton: string;
+  title: string;
+  summary: string;
+  highlights: string[];
+  duration: 'tag' | 'zwei-tage';
+  season: string;
+  travel: string;
+  /** What was asked for when this batch was generated. */
+  wishes: string;
+  generatedAt: string;
+};

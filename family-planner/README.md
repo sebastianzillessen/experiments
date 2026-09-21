@@ -268,6 +268,48 @@ everyone is offered. The same tab fills an empty catalog with a starter list of
 ordinary jobs, which is faster than typing fourteen rows before seeing
 anything.
 
+## All 26 cantons
+
+A year's plan: visit every canton of Switzerland at least once with the
+children. Opened with the **🗺** button in the top bar — its own screen, like
+the household.
+
+The list is the feature: 26 rows, alphabetical, each showing what is planned
+or what was done there, with the count and a bar at the top (*2 von 26
+Kantonen · 3 geplant*) and the next dated trip beneath it. Filters narrow it to
+what is still open, what is booked, or what is behind you. A canton opens into
+its own sheet: the trips it has, a form for another, and the ideas.
+
+A **trip** is a title, an optional date (a second date when it runs overnight),
+a note, and a tick. Ticking it off is what marks the canton visited — nothing
+stores "visited" separately, because a flag beside the trips is a second truth
+to keep in step, and the trip already says when it was and what it was. A trip
+that has a date can be written into the week as it is saved, as an all-day
+entry in the *Familie* column, so it is not typed twice.
+
+### Ideas from Claude
+
+Per canton, on request: five suggestions, mostly day trips with one or two
+that run over two days, each with what you do there, two or three concrete
+things on the ground, when it is worth going and how to get there. The
+family's postal code — the one the weather already uses — goes in as the
+starting point, so the travel note is measured from home, and a free-text wish
+(*mit Kinderwagen*, *max. 2 h Fahrt*) is passed through.
+
+Suggestions are **proposals, not records**. One model answering out of what it
+knows: no web search, no live data. So the prompt forbids everything that goes
+stale — opening hours, prices, addresses — and leans on *leave it out if you
+are not sure*, because a plausible invented place is the failure nobody
+catches until they are standing in the car park. What comes back is validated
+before it is stored: no name, no idea. The screen says where the ideas come
+from and that the details want checking.
+
+A batch is cached per canton and handed back for free until someone asks for
+new ones or changes the wish, since each batch costs money. Taking one over
+writes an ordinary trip with the text as its note; nothing reaches the plan on
+its own. Details and the required `CLAUDE_API_KEY` are in
+`supabase/functions/family-trip-ideas/README.md`.
+
 ## Roles
 
 Deliberately different from Salärli's owner/admin/employee:
@@ -350,6 +392,8 @@ fp_families ─┬─ fp_memberships (user_id, role)        ← logins
              │                   └─ fp_menu_people      ← who eats, which days
              ├─ fp_tasks ─┬─ fp_task_logs                ← household work
              │             └─ fp_task_dates               ← when it has dates
+             ├─ fp_trips                                  ← the 26 cantons
+             ├─ fp_trip_ideas                             ← what Claude suggested
              └─ fp_invites
 ```
 
@@ -365,6 +409,14 @@ distribution is one indexed read. `fp_task_dates` holds one row per planned day
 for a job whose rhythm is a list — a list that arrives by message is edited by
 adding and removing single days, never by rewriting a rule.
 `fp_people.does_tasks` says who is offered as a button.
+
+The cantons themselves are **not** in the database: there are 26, the list last
+changed in 1979, and a table would only be a copy of the constitution that can
+drift — they live in `src/lib/cantons.ts`, and `fp_trips.canton` is a check
+constraint over the 26 codes (the test suite checks the list, the constraint
+and the Edge Function's own copy against each other). `fp_trip_ideas` holds one
+row per suggestion, written by the function with the service-role key and
+replaced wholesale when new ones are asked for.
 
 All-day entries use `start_date`/`end_date` (end **inclusive**, the way a
 person reads a planner); entries with a time add `starts_at`/`ends_at`. A

@@ -615,7 +615,7 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
    read down the page and tapped, and a card each would make twenty jobs look
    like twenty decisions. Person colours come from fp_people, so a household
    button and a planner column are recognisably the same person. */
-.hh-screen .topbar { flex-wrap: wrap; }
+.hh-screen .topbar, .cx-screen .topbar { flex-wrap: wrap; }
 @media (max-width: 700px) {
   /* Three tabs and a title do not fit a phone side by side, and the title is
      what gets clipped — so the tabs take a row of their own. */
@@ -623,12 +623,12 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
   .hh-screen .topbar-right .segmented { display: flex; width: 100%; }
   .hh-screen .topbar-right .segmented button { flex: 1; }
 }
-.hh-screen {
+.hh-screen, .cx-screen {
   position: fixed; inset: 0; z-index: 15; overflow: auto;
   background: var(--paper); color: var(--ink);
   display: flex; flex-direction: column;
 }
-.hh-body { width: 100%; max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 4px 90px; }
+.hh-body, .cx-body { width: 100%; max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 4px 90px; }
 .hh-num { font-variant-numeric: tabular-nums; }
 
 .hh-head {
@@ -795,12 +795,66 @@ body.kiosk .notice.warn { background: #2a2413; border-color: #4d4224; }
 .hh-parsed-line { display: block; font-weight: 400; overflow-wrap: anywhere; }
 
 /* The iPad on the wall shows the week, not the chores. */
-body.kiosk .hh-screen { display: none; }
+body.kiosk .hh-screen, body.kiosk .cx-screen { display: none; }
 body.kiosk .hh-tag-coord, body.kiosk .hh-chip[aria-pressed="true"] { background: #1b2a25; }
 body.kiosk .hh-runbar { background: #1b2a25; }
 
+
+/* --- cantons: all 26, once, with the children -------------------------
+   A ruled list again, one row per canton, with the state carried by a mark
+   rather than a word — 26 rows of "offen" would be 26 rows of noise. */
+.cx-progress { margin-top: 18px; }
+.cx-count { margin: 0; font-size: 1.05rem; }
+.cx-count b { font-size: 1.9rem; letter-spacing: -.02em; }
+.cx-bar {
+  display: flex; height: 12px; margin-top: 8px; overflow: hidden;
+  border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--paper-alt);
+}
+.cx-bar i { display: block; }
+.cx-bar-done { background: var(--accent); }
+.cx-bar-planned { background: #c9b98a; }
+.cx-progress .hint { margin: 8px 0 0; }
+
+.cx-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 2px; }
+
+.cx-row.is-besucht { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.cx-main { display: flex; align-items: center; gap: 10px; width: 100%; }
+.cx-code {
+  flex: none; width: 34px; text-align: center; padding: 3px 0;
+  font-size: .78rem; font-weight: 700; letter-spacing: .04em;
+  border: 1px solid var(--rule-strong); border-radius: 6px;
+  background: var(--surface); color: var(--ink-soft);
+}
+.cx-row.is-besucht .cx-code { border-color: var(--accent); color: var(--accent); }
+.cx-state { flex: none; width: 18px; text-align: center; font-weight: 700; }
+.cx-state.is-besucht { color: var(--accent); }
+.cx-state.is-geplant { color: #9a7020; }
+
+.cx-trips .hh-doer { align-items: flex-start; }
+/* Title, date and note are three lines, not one run-on sentence: the spans
+   are inline by default and ran straight into each other. */
+.cx-trips .hh-doer .grow > * { display: block; }
+.cx-trips .hh-doer .hint { margin-top: 1px; }
+.cx-done { text-decoration: line-through; text-decoration-color: var(--rule-strong); }
+.cx-notes { white-space: pre-wrap; }
+.cx-form { border-top: 1px solid var(--rule); margin-top: 12px; padding-top: 6px; }
+
+/* --- what the model suggested ------------------------------------------ */
+.cx-ideas { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cx-idea {
+  padding: 12px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface);
+}
+.cx-idea-head { display: flex; align-items: baseline; gap: 8px; }
+.cx-idea-text { margin: 6px 0 0; font-size: .92rem; }
+.cx-highlights { margin: 8px 0 0; padding-left: 18px; font-size: .88rem; color: var(--ink-soft); }
+.cx-idea .row { margin-top: 10px; }
+/* The wish and the button, each with a whole line: side by side the
+   placeholder is cut in half on a phone. */
+.cx-ask > input { flex: 1 1 100%; }
+
 @media print {
-  .hh-screen { display: none; }
+  .hh-screen, .cx-screen { display: none; }
   .no-print { display: none !important; }
   body { background: #fff; }
   .table-wrap { overflow: visible; padding: 0; }

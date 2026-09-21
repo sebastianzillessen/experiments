@@ -17,6 +17,7 @@ import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { Household } from './Household.tsx';
+import { Cantons } from './Cantons.tsx';
 import { AppVersion } from './AppVersion.tsx';
 import { KioskCurtain, useKiosk } from './KioskMode.tsx';
 import { WeatherCell, useWeatherDetail } from './Weather.tsx';
@@ -49,6 +50,7 @@ export function Planner() {
   const [anchor, setAnchor] = useState(() => todayKey(tz));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [householdOpen, setHouseholdOpen] = useState(false);
+  const [cantonsOpen, setCantonsOpen] = useState(false);
   const [quickAdd, setQuickAdd] = useState<QuickAddPrefill | null>(null);
   const [selected, setSelected] = useState<PlannerEvent | null>(null);
   const narrow = useIsNarrow();
@@ -119,6 +121,8 @@ export function Planner() {
           </div>
           <button className="icon-btn" title="Haushalt" aria-label="Haushalt"
             onClick={() => setHouseholdOpen(true)}>🧺</button>
+          <button className="icon-btn" title="Kantone" aria-label="Kantone"
+            onClick={() => setCantonsOpen(true)}>🗺</button>
           <button className="icon-btn" title="Kalender aktualisieren" aria-label="Kalender aktualisieren"
             onClick={() => refreshCalendars(true)} disabled={sync.busy}>⟳</button>
           <button className="icon-btn" title="Einstellungen" aria-label="Einstellungen"
@@ -232,6 +236,7 @@ export function Planner() {
       {selected && <EventSheet event={selected} onClose={() => setSelected(null)} />}
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
       {householdOpen && <Household onClose={() => setHouseholdOpen(false)} />}
+      {cantonsOpen && <Cantons onClose={() => setCantonsOpen(false)} />}
       {kiosk.asleep && <KioskCurtain onWake={kiosk.wake} />}
     </div>
   );
