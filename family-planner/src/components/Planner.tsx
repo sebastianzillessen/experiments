@@ -8,6 +8,8 @@ import {
 import { buildCells, buildSpanLanes } from '../lib/merge.ts';
 import { expandManualSeries } from '../lib/recurrence.ts';
 import { FAMILY_COLUMN, ROLE_LABELS } from '../lib/types.ts';
+import { PLAN, parseHash, routeHash } from '../lib/route.ts';
+import type { Route } from '../lib/route.ts';
 import type { SpanLane } from '../lib/merge.ts';
 import type { PlannerEvent, TimeFormat } from '../lib/types.ts';
 import type { ClockParts } from '../lib/dates.ts';
@@ -23,6 +25,29 @@ import { KioskCurtain, useKiosk } from './KioskMode.tsx';
 import { WeatherCell, useWeatherDetail } from './Weather.tsx';
 
 type View = 'week' | 'month';
+
+/**
+ * The screen the address bar is pointing at.
+ *
+ * Every navigation is a new hash entry, so the phone's back button walks back
+ * out of a canton to the list and out of the list to the plan — which is what
+ * a back button is for, and what the old overlays ignored.
+ */
+function useHashRoute(): [Route, (next: Route) => void] {
+  const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
+  useEffect(() => {
+    const onChange = () => setRoute(parseHash(window.location.hash));
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  const go = useCallback((next: Route) => {
+    const hash = routeHash(next);
+    // Assigning the same hash fires no event, so the state is set either way.
+    if (window.location.hash === hash) setRoute(next);
+    else window.location.hash = hash;
+  }, []);
+  return [route, go];
+}
 
 /** Below this width the table becomes a day-by-day list — a phone cannot show six columns. */
 function useIsNarrow(): boolean {
@@ -49,8 +74,7 @@ export function Planner() {
   const [view, setView] = useState<View>('week');
   const [anchor, setAnchor] = useState(() => todayKey(tz));
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [householdOpen, setHouseholdOpen] = useState(false);
-  const [cantonsOpen, setCantonsOpen] = useState(false);
+  const [route, go] = useHashRoute();
   const [quickAdd, setQuickAdd] = useState<QuickAddPrefill | null>(null);
   const [selected, setSelected] = useState<PlannerEvent | null>(null);
   const narrow = useIsNarrow();
@@ -83,7 +107,13 @@ export function Planner() {
   const [detailedWeather, toggleWeather] = useWeatherDetail();
   const byDate = useMemo(() => new Map(weather.map(d => [d.date, d])), [weather]);
 
-  const backToToday = useCallback(() => { setView('week'); setAnchor(todayKey(tz)); }, [tz]);
+  const backToToday = useCallback(() => {
+    // Also the way back out of a screen: the iPad on the wall that was left on
+    // the cantons overnight has to wake up showing the week.
+    go(PLAN);
+    setView('week');
+    setAnchor(todayKey(tz));
+  }, [go, tz]);
   const pullCalendars = useCallback(() => {
     refreshCalendars(false);
     refreshWeather(false);
@@ -120,9 +150,9 @@ export function Planner() {
               onClick={() => setView('month')}>Monat</button>
           </div>
           <button className="icon-btn" title="Haushalt" aria-label="Haushalt"
-            onClick={() => setHouseholdOpen(true)}>🧺</button>
+            onClick={() => go({ name: 'household' })}>🧺</button>
           <button className="icon-btn" title="Kantone" aria-label="Kantone"
-            onClick={() => setCantonsOpen(true)}>🗺</button>
+            onClick={() => go({ name: 'cantons', canton: null })}>🗺</button>
           <button className="icon-btn" title="Kalender aktualisieren" aria-label="Kalender aktualisieren"
             onClick={() => refreshCalendars(true)} disabled={sync.busy}>⟳</button>
           <button className="icon-btn" title="Einstellungen" aria-label="Einstellungen"
@@ -235,8 +265,11 @@ export function Planner() {
       {quickAdd && <QuickAddSheet prefill={quickAdd} onClose={() => setQuickAdd(null)} />}
       {selected && <EventSheet event={selected} onClose={() => setSelected(null)} />}
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
-      {householdOpen && <Household onClose={() => setHouseholdOpen(false)} />}
-      {cantonsOpen && <Cantons onClose={() => setCantonsOpen(false)} />}
+      {route.name === 'household' && <Household onClose={() => go(PLAN)} />}
+      {route.name === 'cantons' && (
+        <Cantons canton={route.canton} onClose={() => go(PLAN)}
+          onCanton={canton => go({ name: 'cantons', canton })} />
+      )}
       {kiosk.asleep && <KioskCurtain onWake={kiosk.wake} />}
     </div>
   );

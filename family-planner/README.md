@@ -272,7 +272,22 @@ anything.
 
 A year's plan: visit every canton of Switzerland at least once with the
 children. Opened with the **🗺** button in the top bar — its own screen, like
-the household.
+the household, and its own address:
+
+| Address | Screen |
+| --- | --- |
+| `#/kantone` | the list of all 26 |
+| `#/kantone/GR` | Graubünden, open |
+| `#/haushalt` | the household screen |
+
+Hash routes rather than paths, because the planner is a static bundle behind a
+worker and `/kantone` would be a 404 on a hard reload unless the host learns
+about every screen. `#/kantone/GR` needs nothing from anybody, works in the
+installed app, and survives being sent into a chat — which is the point: a
+canton can be handed to the other parent as a link. Every navigation is a new
+history entry, so the phone's back button walks back out of a canton to the
+list and out of the list to the plan. A link with a typo in it lands on the
+list, or on the plan, rather than on nothing.
 
 The list is the feature: 26 rows, alphabetical, each showing what is planned
 or what was done there, with the count and a bar at the top (*2 von 26

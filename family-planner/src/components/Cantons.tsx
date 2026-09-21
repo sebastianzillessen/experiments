@@ -16,14 +16,23 @@ const STATE_LABEL: Record<CantonState, string> = {
   besucht: 'besucht', geplant: 'geplant', offen: 'offen',
 };
 
-/** All 26 cantons, once, with the children — and where the family stands. */
-export function Cantons({ onClose }: { onClose: () => void }) {
+/**
+ * All 26 cantons, once, with the children — and where the family stands.
+ *
+ * Which canton is open comes from the address (#/kantone/GR), not from state,
+ * so a canton can be sent to the other parent as a link and the back button
+ * closes it.
+ */
+export function Cantons({ canton: open, onCanton, onClose }: {
+  canton: string | null;
+  onCanton: (canton: string | null) => void;
+  onClose: () => void;
+}) {
   const { family, trips, canEdit } = useApp();
   const tz = family?.timezone ?? 'Europe/Zurich';
   const today = todayKey(tz);
 
   const [filter, setFilter] = useState<Filter>('alle');
-  const [open, setOpen] = useState<string | null>(null);
 
   const done = progress(trips);
   const next = nextTrip(trips, today);
@@ -72,7 +81,7 @@ export function Cantons({ onClose }: { onClose: () => void }) {
             const mine = sortTrips(tripsOf(trips, canton.code));
             return (
               <li key={canton.code} className={`hh-row cx-row is-${state}`}>
-                <button className="hh-main cx-main" onClick={() => setOpen(canton.code)}>
+                <button className="hh-main cx-main" onClick={() => onCanton(canton.code)}>
                   <span className="cx-code" aria-hidden="true">{canton.code}</span>
                   <span className="grow">
                     <span className="hh-name">{canton.name}</span>
@@ -97,7 +106,7 @@ export function Cantons({ onClose }: { onClose: () => void }) {
         )}
       </main>
 
-      {open && <CantonSheet canton={open} onClose={() => setOpen(null)} />}
+      {open && <CantonSheet canton={open} onClose={() => onCanton(null)} />}
     </div>
   );
 }
