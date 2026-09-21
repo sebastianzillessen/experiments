@@ -32,18 +32,22 @@ const IdeasSchema = z.object({
 export async function suggestTrips(
   place: { name: string; group: string }, wishes: string, origin: string | null, apiKey: string
 ): Promise<TripIdea[]> {
-  // A few more goes than the default two: this is one deliberate tap by a
-  // person waiting for it, and an overloaded minute should not become a
-  // shrug. The SDK backs off between tries.
-  const client = new Anthropic({ apiKey, maxRetries: 4 });
+  // Two goes, not four: somebody is standing in front of the screen waiting,
+  // and four attempts with backoff turns a busy minute into a very long one.
+  // An overload now says so in words they can act on.
+  const client = new Anthropic({ apiKey, maxRetries: 2 });
 
   let response;
   try {
     response = await client.messages.parse({
       model: MODEL,
-      max_tokens: 16000,
+      // Five suggestions come to about a thousand tokens; 16000 was the
+      // default ceiling, not an estimate.
+      max_tokens: 4000,
       messages: [{ role: 'user', content: buildPrompt(place, wishes, origin) }],
-      output_config: { format: zodOutputFormat(IdeasSchema) },
+      // Naming day trips is recall and judgement, not hard reasoning, and the
+      // family is waiting: medium thinks enough for this and finishes sooner.
+      output_config: { format: zodOutputFormat(IdeasSchema), effort: 'medium' },
     });
   } catch (e) {
     if (e instanceof Anthropic.APIError) {

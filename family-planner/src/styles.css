@@ -868,6 +868,24 @@ body.kiosk .hh-runbar { background: #1b2a25; }
 .tr-foot { display: flex; gap: 14px; justify-content: flex-end; border-top: 1px solid var(--rule); padding-top: 10px; margin-top: 18px; }
 .tr-form .row > .grow { display: flex; flex-direction: column; }
 
+/* Something to look at while the model works: the empty space where the
+   answer goes is the one place people watch, and it used to stay empty. */
+.tr-waiting {
+  display: flex; align-items: flex-start; gap: 12px; margin-top: 12px;
+  padding: 14px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface);
+}
+.tr-waiting b { display: block; }
+.tr-waiting .hint { display: block; margin-top: 2px; }
+.tr-dots { display: flex; gap: 4px; flex: none; padding-top: 6px; }
+.tr-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: .3; }
+@media (prefers-reduced-motion: no-preference) {
+  .tr-dots i { animation: tr-pulse 1.2s ease-in-out infinite; }
+  .tr-dots i:nth-child(2) { animation-delay: .2s; }
+  .tr-dots i:nth-child(3) { animation-delay: .4s; }
+  @keyframes tr-pulse { 50% { opacity: 1; } }
+}
+
 /* The preview of a generated list: many short rows, so they stay tight — and
    not bold, which `.stack label` would otherwise make them. */
 .tr-picks li { padding: 4px 0; }

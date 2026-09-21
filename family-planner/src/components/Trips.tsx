@@ -318,6 +318,29 @@ function ListGenerator({ onDone }: { onDone: () => void }) {
         </button>
       </div>
       {error && <p className="notice danger">{error}</p>}
+      {working && <Waiting what="Claude stellt die Liste zusammen" />}
+    </div>
+  );
+}
+
+/**
+ * The wait, where the answer will be.
+ *
+ * A disabled button and a toast at the foot of the screen were all there was
+ * to see while the model worked, and the place you were looking at — the empty
+ * space the ideas go into — stayed empty for the best part of a minute. That
+ * reads as nothing happening.
+ */
+function Waiting({ what }: { what: string }) {
+  return (
+    <div className="tr-waiting" role="status">
+      <span className="tr-dots" aria-hidden="true"><i /><i /><i /></span>
+      <span>
+        <b>{what} …</b>
+        <span className="hint">
+          Das dauert meist eine halbe Minute. Der Bildschirm kann offen bleiben.
+        </span>
+      </span>
     </div>
   );
 }
@@ -612,6 +635,7 @@ function Ideas({ place, ideas }: { place: Destination; ideas: TripIdea[] }) {
         </button>
       </div>
       {error && <p className="notice danger">{error}</p>}
+      {working && <Waiting what={`Claude sucht Ausflüge für ${place.name}`} />}
 
       {ideas.length > 0 && (
         <>

@@ -12,7 +12,10 @@
 
 export type Locality = { name: string; canton: string };
 
-const LOOKUP_TIMEOUT_MS = 4_000;
+// Short, because this waits in front of the model call: the directory answers
+// in a fraction of a second or it is having a bad day, and the bare code will
+// do either way.
+const LOOKUP_TIMEOUT_MS = 2_500;
 
 /**
  * The first locality of the answer. A code can cover several — 8134 comes
