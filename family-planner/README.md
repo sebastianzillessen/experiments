@@ -268,52 +268,61 @@ everyone is offered. The same tab fills an empty catalog with a starter list of
 ordinary jobs, which is faster than typing fourteen rows before seeing
 anything.
 
-## All 26 cantons
+## Ausflüge
 
-A year's plan: visit every canton of Switzerland at least once with the
-children. Opened with the **🗺** button in the top bar — its own screen, like
-the household, and its own address:
+A list of places the family wants to get through, and the trips that tick them
+off. Opened with the **🗺** button in the top bar — its own screen, like the
+household, and its own address:
 
 | Address | Screen |
 | --- | --- |
-| `#/kantone` | the list of all 26 |
-| `#/kantone/GR` | Graubünden, open |
+| `#/ausfluege` | the list |
+| `#/ausfluege/<id>` | that destination, open |
 | `#/haushalt` | the household screen |
 
 Hash routes rather than paths, because the planner is a static bundle behind a
-worker and `/kantone` would be a 404 on a hard reload unless the host learns
-about every screen. `#/kantone/GR` needs nothing from anybody, works in the
+worker and `/ausfluege` would be a 404 on a hard reload unless the host learns
+about every screen. `#/ausfluege/<id>` needs nothing from anybody, works in the
 installed app, and survives being sent into a chat — which is the point: a
-canton can be handed to the other parent as a link. Every navigation is a new
-history entry, so the phone's back button walks back out of a canton to the
-list and out of the list to the plan. A link with a typo in it lands on the
-list, or on the plan, rather than on nothing.
+destination can be handed to the other parent as a link. Every navigation is a
+new history entry, so the phone's back button walks back out of a destination
+to the list and out of the list to the plan. A link to something deleted lands
+on the list, not on nothing.
 
-The list is the feature: 26 rows, alphabetical, each showing what is planned
-or what was done there, with the count and a bar at the top (*2 von 26
-Kantonen · 3 geplant*) and the next dated trip beneath it. Filters narrow it to
-what is still open, what is booked, or what is behind you. A canton opens into
-its own sheet: the trips it has, a form for another, and the ideas.
+### The list belongs to the family
+
+It started as the 26 cantons in a constant, which was right for the family that
+asked and wrong for everyone else: the next one wants the countries of Europe.
+So the destinations are rows in `fp_destinations` — a name, an optional badge
+(*GR*), and a free-text group. Two ready-made lists are offered to a family
+that has none (**all 26 cantons**, **45 countries of Europe**), and both are a
+starting point: every entry can be renamed, removed, or joined by one somebody
+thinks belongs there.
+
+The group is what progress is counted over, so a family can work through the
+cantons and a holiday list at the same time without one polluting the other's
+count. It is free text, the same bargain `fp_tasks.area` strikes: no migration
+the day someone invents a corner of their own life.
 
 A **trip** is a title, an optional date (a second date when it runs overnight),
-a note, and a tick. Ticking it off is what marks the canton visited — nothing
-stores "visited" separately, because a flag beside the trips is a second truth
-to keep in step, and the trip already says when it was and what it was. A trip
-that has a date can be written into the week as it is saved, as an all-day
-entry in the *Familie* column, so it is not typed twice.
+a note, and a tick. Ticking it off is what marks the destination visited —
+nothing stores "visited" separately, because a flag beside the trips is a
+second truth to keep in step, and the trip already says when it was and what it
+was. A trip that has a date can be written into the week as it is saved, as an
+all-day entry in the *Familie* column, so it is not typed twice.
 
 ### Ideas from Claude
 
-Per canton, on request: five suggestions, mostly day trips with one or two
+Per destination, on request: five suggestions, mostly day trips with one or two
 that run over two days, each with what you do there, two or three concrete
 things on the ground, when it is worth going, and **how far it is from home**.
 
-Home is the postal code the family already keeps for the weather — **one
-field, not two**. A code is not something anyone measures a journey from, so
-the function resolves it first: openplzapi.org serves the Swiss post office's
-own directory, keyless, and `8134` becomes *Adliswil ZH*. If that lookup is
-slow or down, the prompt names the bare code instead; a vaguer travel estimate
-is a worse suggestion, not a broken one.
+Home is the postal code the family already keeps for the weather — **one field,
+not two**. A code is not something anyone measures a journey from, so the
+function resolves it first: openplzapi.org serves the Swiss post office's own
+directory, keyless, and `8134` becomes *Adliswil ZH*. If that lookup is slow or
+down, the prompt names the bare code instead; a vaguer travel estimate is a
+worse suggestion, not a broken one.
 
 Every suggestion then has to name the means and the rough journey time from
 there ("rund 1 h 15 mit dem Auto"), and somewhere too far for a day becomes a
@@ -323,13 +332,13 @@ two-day suggestion or is dropped. A free-text wish (*mit Kinderwagen*, *max.
 Suggestions are **proposals, not records**. One model answering out of what it
 knows: no web search, no live data. So the prompt forbids everything that goes
 stale — opening hours, prices, addresses — and leans on *leave it out if you
-are not sure*, because a plausible invented place is the failure nobody
-catches until they are standing in the car park. What comes back is validated
-before it is stored: no name, no idea. The screen says where the ideas come
-from and that the details want checking.
+are not sure*, because a plausible invented place is the failure nobody catches
+until they are standing in the car park. What comes back is validated before it
+is stored: no name, no idea. The screen says where the ideas come from and that
+the details want checking.
 
-A batch is cached per canton and handed back for free until someone asks for
-new ones or changes the wish, since each batch costs money. Taking one over
+A batch is cached per destination and handed back for free until someone asks
+for new ones or changes the wish, since each batch costs money. Taking one over
 writes an ordinary trip with the text as its note; nothing reaches the plan on
 its own. Details and the required `CLAUDE_API_KEY` are in
 `supabase/functions/family-trip-ideas/README.md`.
@@ -416,8 +425,8 @@ fp_families ─┬─ fp_memberships (user_id, role)        ← logins
              │                   └─ fp_menu_people      ← who eats, which days
              ├─ fp_tasks ─┬─ fp_task_logs                ← household work
              │             └─ fp_task_dates               ← when it has dates
-             ├─ fp_trips                                  ← the 26 cantons
-             ├─ fp_trip_ideas                             ← what Claude suggested
+             ├─ fp_destinations ─┬─ fp_trips             ← places and the trips
+             │                    └─ fp_trip_ideas        ← what Claude suggested
              └─ fp_invites
 ```
 
@@ -434,13 +443,13 @@ for a job whose rhythm is a list — a list that arrives by message is edited by
 adding and removing single days, never by rewriting a rule.
 `fp_people.does_tasks` says who is offered as a button.
 
-The cantons themselves are **not** in the database: there are 26, the list last
-changed in 1979, and a table would only be a copy of the constitution that can
-drift — they live in `src/lib/cantons.ts`, and `fp_trips.canton` is a check
-constraint over the 26 codes (the test suite checks the list, the constraint
-and the Edge Function's own copy against each other). `fp_trip_ideas` holds one
-row per suggestion, written by the function with the service-role key and
-replaced wholesale when new ones are asked for.
+`fp_destinations` is the family's own list — one row per place, grouped by free
+text. The first version had the 26 cantons as a constant with a check
+constraint; the migration that generalised it carries every canton a family had
+written a trip for into a real row, so nothing was stranded. `fp_trip_ideas`
+holds one row per suggestion, written by the function with the service-role key
+and replaced wholesale when new ones are asked for. Deleting a destination
+takes its trips and ideas with it, which is what the foreign keys say.
 
 All-day entries use `start_date`/`end_date` (end **inclusive**, the way a
 person reads a planner); entries with a time add `starts_at`/`ends_at`. A

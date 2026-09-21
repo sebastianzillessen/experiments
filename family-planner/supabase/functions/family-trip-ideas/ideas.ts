@@ -19,17 +19,19 @@ const MAX_HIGHLIGHTS = 4;
 /**
  * The brief.
  *
- * Three things it has to get right — real places, in this canton, worth the
- * drive with children — and three it must not do: invent a place, quote
+ * Three things it has to get right — real places, at this destination, worth
+ * the drive with children — and three it must not do: invent a place, quote
  * anything that goes stale (opening hours, prices, what a ticket costs), or
  * hand back five variations of the same afternoon. The honesty rule is the
  * same one the menu importer uses: a shorter list is fine, a made-up entry
  * is not, because nobody checks a plausible sentence until they are standing
  * in the car park.
  */
-export function buildPrompt(cantonName: string, wishes: string, origin: string | null): string {
+export function buildPrompt(
+  place: { name: string; group: string }, wishes: string, origin: string | null
+): string {
   const lines = [
-    `Wir sind eine Familie mit kleinen Kindern in der Schweiz und wollen dieses Jahr jeden Kanton mindestens einmal besuchen. Jetzt geht es um den Kanton ${cantonName}.`,
+    `Wir sind eine Familie mit kleinen Kindern und arbeiten eine Liste von Zielen ab: ${place.group}. Jetzt geht es um ${place.name}.`,
     '',
     `Schlag ${MAX_IDEAS} Ausflüge vor: mehrheitlich Tagesausflüge, ein bis zwei Vorschläge für zwei Tage mit einer Übernachtung.`,
     '',
@@ -42,7 +44,7 @@ export function buildPrompt(cantonName: string, wishes: string, origin: string |
     '- travel: wie man hinkommt — Verkehrsmittel und ungefähre Fahrzeit',
     '',
     'Regeln:',
-    `- Jeder Ort muss wirklich existieren und wirklich im Kanton ${cantonName} liegen. Wenn du dir bei einem Ort nicht sicher bist, lass ihn weg — vier gute Vorschläge sind besser als fünf, von denen einer erfunden ist.`,
+    `- Jeder Ort muss wirklich existieren und wirklich in ${place.name} liegen. Wenn du dir bei einem Ort nicht sicher bist, lass ihn weg — vier gute Vorschläge sind besser als fünf, von denen einer erfunden ist.`,
     '- Keine Öffnungszeiten, keine Preise, keine Telefonnummern und keine Adressen. Das ändert sich, und falsche Angaben sind schlimmer als keine.',
     '- Fünf verschiedene Arten von Ausflug, nicht fünfmal dasselbe: Wasser, Berg, Tiere, Stadt, Museum, Bauernhof.',
     '- Deutsch, Schweizer Schreibweise: "ss" statt "ß".',

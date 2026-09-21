@@ -1,14 +1,14 @@
 // Supabase Edge Function: family-trip-ideas
 //
-// Trip suggestions for one canton, for a family working through all 26.
+// Trip suggestions for one destination on a family's list.
 //
-//   POST { family_id: uuid, canton: "GR", wishes?: string, refresh?: boolean }
+//   POST { family_id: uuid, destination_id: uuid, wishes?: string, refresh?: boolean }
 //   → { ideas: [{ id, title, summary, highlights, duration, season, travel }],
 //       cached: boolean, generated_at: string }
 //
-// Cached per canton: asking twice for the same canton costs money and returns
-// much the same thing, so the stored batch is handed back unless `refresh` is
-// set or the wishes have changed. The family's postal code — the one the
+// Cached per destination: asking twice costs money and returns much the same
+// thing, so the stored batch is handed back unless `refresh` is set or the
+// wishes have changed. The family's postal code — the one the
 // weather already uses, resolved to a place name — goes in with it, so every
 // suggestion carries the journey from home.
 //
@@ -23,18 +23,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CLAUDE_API_KEY = Deno.env.get('CLAUDE_API_KEY') ?? null;
-
-// The 26 codes and their German names. Duplicated from src/lib/cantons.ts
-// because an Edge Function cannot import from the app — the test suite checks
-// the two against each other, and against the check constraint.
-const CANTONS: Record<string, string> = {
-  AG: 'Aargau', AR: 'Appenzell Ausserrhoden', AI: 'Appenzell Innerrhoden',
-  BL: 'Basel-Landschaft', BS: 'Basel-Stadt', BE: 'Bern', FR: 'Freiburg',
-  GE: 'Genf', GL: 'Glarus', GR: 'Graubünden', JU: 'Jura', LU: 'Luzern',
-  NE: 'Neuenburg', NW: 'Nidwalden', OW: 'Obwalden', SG: 'St. Gallen',
-  SH: 'Schaffhausen', SZ: 'Schwyz', SO: 'Solothurn', TI: 'Tessin',
-  TG: 'Thurgau', UR: 'Uri', VD: 'Waadt', VS: 'Wallis', ZG: 'Zug', ZH: 'Zürich',
-};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,16 +44,16 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return jsonResponse({ error: 'Unauthorized' }, 401);
 
-  let body: { family_id?: string; canton?: string; wishes?: string; refresh?: boolean };
+  let body: { family_id?: string; destination_id?: string; wishes?: string; refresh?: boolean };
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
   }
   const familyId = body.family_id;
-  const canton = (body.canton ?? '').toUpperCase();
+  const destinationId = body.destination_id;
   if (!familyId) return jsonResponse({ error: 'family_id required' }, 400);
-  if (!CANTONS[canton]) return jsonResponse({ error: 'Diesen Kanton gibt es nicht' }, 400);
+  if (!destinationId) return jsonResponse({ error: 'destination_id required' }, 400);
   const wishes = (body.wishes ?? '').trim().slice(0, 400);
 
   const asUser = createClient(SUPABASE_URL, ANON_KEY, {
@@ -89,14 +77,23 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Nur Owner und Bearbeiter dürfen Ideen holen' }, 403);
   }
 
+  // The destination has to be this family's: the id comes from the client.
+  const { data: place } = await admin
+    .from('fp_destinations')
+    .select('id, name, group_name')
+    .eq('id', destinationId)
+    .eq('family_id', familyId)
+    .maybeSingle();
+  if (!place) return jsonResponse({ error: 'Dieses Ziel gibt es nicht' }, 404);
+
   const { data: cached } = await admin
     .from('fp_trip_ideas')
-    .select('id, canton, title, summary, highlights, duration, season, travel, wishes, generated_at')
+    .select('id, destination_id, title, summary, highlights, duration, season, travel, wishes, generated_at')
     .eq('family_id', familyId)
-    .eq('canton', canton)
+    .eq('destination_id', destinationId)
     .order('generated_at');
 
-  // Same canton, same wishes, nothing newer asked for: hand back what is
+  // Same destination, same wishes, nothing newer asked for: hand back what is
   // already paid for.
   if (!body.refresh && cached?.length && (cached[0].wishes ?? '') === wishes) {
     return jsonResponse({
@@ -121,22 +118,28 @@ Deno.serve(async (req) => {
 
   let ideas;
   try {
-    ideas = await suggestTrips(CANTONS[canton], wishes, origin, CLAUDE_API_KEY);
+    ideas = await suggestTrips(
+      { name: place.name as string, group: place.group_name as string },
+      wishes, origin, CLAUDE_API_KEY
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Die Ideen konnten nicht geholt werden';
     return jsonResponse({ error: message.slice(0, 200) }, 502);
   }
   if (!ideas.length) {
-    return jsonResponse({ error: 'Für diesen Kanton kamen keine brauchbaren Vorschläge zurück' }, 502);
+    return jsonResponse({ error: 'Für dieses Ziel kamen keine brauchbaren Vorschläge zurück' }, 502);
   }
 
   // A batch replaces the one before it: these are proposals, not records, and
   // half-old suggestions beside new ones would only be confusing.
   const generatedAt = new Date().toISOString();
-  await admin.from('fp_trip_ideas').delete().eq('family_id', familyId).eq('canton', canton);
+  await admin.from('fp_trip_ideas')
+    .delete().eq('family_id', familyId).eq('destination_id', destinationId);
   const { data: stored, error: storeErr } = await admin.from('fp_trip_ideas').insert(
-    ideas.map(idea => ({ ...idea, family_id: familyId, canton, wishes, generated_at: generatedAt }))
-  ).select('id, canton, title, summary, highlights, duration, season, travel');
+    ideas.map(idea => ({
+      ...idea, family_id: familyId, destination_id: destinationId, wishes, generated_at: generatedAt,
+    }))
+  ).select('id, destination_id, title, summary, highlights, duration, season, travel');
   if (storeErr || !stored) {
     return jsonResponse({ error: 'Die Ideen konnten nicht gespeichert werden' }, 500);
   }

@@ -19,7 +19,7 @@ import type { QuickAddPrefill } from './QuickAddSheet.tsx';
 import { EventSheet } from './EventSheet.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { Household } from './Household.tsx';
-import { Cantons } from './Cantons.tsx';
+import { Trips } from './Trips.tsx';
 import { AppVersion } from './AppVersion.tsx';
 import { KioskCurtain, useKiosk } from './KioskMode.tsx';
 import { WeatherCell, useWeatherDetail } from './Weather.tsx';
@@ -151,8 +151,8 @@ export function Planner() {
           </div>
           <button className="icon-btn" title="Haushalt" aria-label="Haushalt"
             onClick={() => go({ name: 'household' })}>🧺</button>
-          <button className="icon-btn" title="Kantone" aria-label="Kantone"
-            onClick={() => go({ name: 'cantons', canton: null })}>🗺</button>
+          <button className="icon-btn" title="Ausflüge" aria-label="Ausflüge"
+            onClick={() => go({ name: 'trips', destination: null })}>🗺</button>
           <button className="icon-btn" title="Kalender aktualisieren" aria-label="Kalender aktualisieren"
             onClick={() => refreshCalendars(true)} disabled={sync.busy}>⟳</button>
           <button className="icon-btn" title="Einstellungen" aria-label="Einstellungen"
@@ -266,9 +266,9 @@ export function Planner() {
       {selected && <EventSheet event={selected} onClose={() => setSelected(null)} />}
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
       {route.name === 'household' && <Household onClose={() => go(PLAN)} />}
-      {route.name === 'cantons' && (
-        <Cantons canton={route.canton} onClose={() => go(PLAN)}
-          onCanton={canton => go({ name: 'cantons', canton })} />
+      {route.name === 'trips' && (
+        <Trips destination={route.destination} onClose={() => go(PLAN)}
+          onDestination={destination => go({ name: 'trips', destination })} />
       )}
       {kiosk.asleep && <KioskCurtain onWake={kiosk.wake} />}
     </div>
