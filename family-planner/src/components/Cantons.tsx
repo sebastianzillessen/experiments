@@ -272,7 +272,7 @@ function TripForm({ canton, trip, onDone }: {
  * an ordinary trip; nothing here ends up in the plan on its own.
  */
 function Ideas({ canton, ideas }: { canton: string; ideas: TripIdea[] }) {
-  const { canEdit, addTrip, fetchTripIdeas, discardTripIdea, sync } = useApp();
+  const { canEdit, family, addTrip, fetchTripIdeas, discardTripIdea, sync } = useApp();
   const [wishes, setWishes] = useState(() => ideas[0]?.wishes ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -314,6 +314,11 @@ function Ideas({ canton, ideas }: { canton: string; ideas: TripIdea[] }) {
           Kindern, mit Wünschen, wenn ihr welche habt.
         </p>
       )}
+      <p className="hint">
+        {family?.weatherPlz
+          ? <>Fahrzeiten ab <b>{family.weatherPlz}</b>.</>
+          : <>Ohne PLZ steht keine Fahrzeit dabei — unter Einstellungen → Anzeige eintragen.</>}
+      </p>
       <div className="row cx-ask">
         <input type="text" value={wishes} placeholder="Wünsche, z. B. mit Kinderwagen"
           aria-label="Wünsche" onChange={e => setWishes(e.target.value)} />

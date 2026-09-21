@@ -291,10 +291,19 @@ entry in the *Familie* column, so it is not typed twice.
 
 Per canton, on request: five suggestions, mostly day trips with one or two
 that run over two days, each with what you do there, two or three concrete
-things on the ground, when it is worth going and how to get there. The
-family's postal code — the one the weather already uses — goes in as the
-starting point, so the travel note is measured from home, and a free-text wish
-(*mit Kinderwagen*, *max. 2 h Fahrt*) is passed through.
+things on the ground, when it is worth going, and **how far it is from home**.
+
+Home is the postal code the family already keeps for the weather — **one
+field, not two**. A code is not something anyone measures a journey from, so
+the function resolves it first: openplzapi.org serves the Swiss post office's
+own directory, keyless, and `8134` becomes *Adliswil ZH*. If that lookup is
+slow or down, the prompt names the bare code instead; a vaguer travel estimate
+is a worse suggestion, not a broken one.
+
+Every suggestion then has to name the means and the rough journey time from
+there ("rund 1 h 15 mit dem Auto"), and somewhere too far for a day becomes a
+two-day suggestion or is dropped. A free-text wish (*mit Kinderwagen*, *max.
+2 h Fahrt*) is passed through as well.
 
 Suggestions are **proposals, not records**. One model answering out of what it
 knows: no web search, no live data. So the prompt forbids everything that goes

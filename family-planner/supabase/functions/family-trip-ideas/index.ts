@@ -8,13 +8,15 @@
 //
 // Cached per canton: asking twice for the same canton costs money and returns
 // much the same thing, so the stored batch is handed back unless `refresh` is
-// set or the wishes have changed. The family's postal code (the one the
-// weather already uses) goes in as the starting point when it is set.
+// set or the wishes have changed. The family's postal code — the one the
+// weather already uses, resolved to a place name — goes in with it, so every
+// suggestion carries the journey from home.
 //
 // Secrets: SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY come
 // from the runtime; CLAUDE_API_KEY is set with `supabase secrets set`.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.4';
+import { lookupPlz, originLabel } from './plz.ts';
 import { suggestTrips } from './suggest.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -89,7 +91,7 @@ Deno.serve(async (req) => {
 
   const { data: cached } = await admin
     .from('fp_trip_ideas')
-    .select('id, title, summary, highlights, duration, season, travel, wishes, generated_at')
+    .select('id, canton, title, summary, highlights, duration, season, travel, wishes, generated_at')
     .eq('family_id', familyId)
     .eq('canton', canton)
     .order('generated_at');
@@ -110,12 +112,16 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Ideen sind nicht konfiguriert — CLAUDE_API_KEY fehlt' }, 500);
   }
 
+  // Where the family leaves from: the one postal code it already keeps,
+  // turned into a place the model can measure a journey from.
   const { data: family } = await admin
     .from('fp_families').select('weather_plz').eq('id', familyId).maybeSingle();
+  const plz = (family?.weather_plz as string | null) ?? null;
+  const origin = originLabel(plz, plz ? await lookupPlz(plz) : null);
 
   let ideas;
   try {
-    ideas = await suggestTrips(CANTONS[canton], wishes, family?.weather_plz ?? null, CLAUDE_API_KEY);
+    ideas = await suggestTrips(CANTONS[canton], wishes, origin, CLAUDE_API_KEY);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Die Ideen konnten nicht geholt werden';
     return jsonResponse({ error: message.slice(0, 200) }, 502);
@@ -130,7 +136,7 @@ Deno.serve(async (req) => {
   await admin.from('fp_trip_ideas').delete().eq('family_id', familyId).eq('canton', canton);
   const { data: stored, error: storeErr } = await admin.from('fp_trip_ideas').insert(
     ideas.map(idea => ({ ...idea, family_id: familyId, canton, wishes, generated_at: generatedAt }))
-  ).select('id, title, summary, highlights, duration, season, travel');
+  ).select('id, canton, title, summary, highlights, duration, season, travel');
   if (storeErr || !stored) {
     return jsonResponse({ error: 'Die Ideen konnten nicht gespeichert werden' }, 500);
   }
