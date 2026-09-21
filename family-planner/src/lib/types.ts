@@ -275,6 +275,12 @@ export type Destination = {
   sortOrder: number;
 };
 
+/** One place a generated list proposes, before anybody has said yes to it. */
+export type DestinationDraft = { name: string; code: string | null };
+
+/** What comes back from "Liste erzeugen": a name, the places, and a caveat. */
+export type GeneratedList = { group: string; items: DestinationDraft[]; note: string };
+
 /** A trip to one destination: planned, done, or just an idea with a name. */
 export type Trip = {
   id: string;

@@ -15,8 +15,8 @@ import type { ManualSeries, RepeatRule } from '../lib/recurrence.ts';
 import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
   Assignment, Calendar, CachedEvent, Family, HouseholdTask, Member, MenuAssignment, MenuSource,
-  Destination, MenuWeek, OpenInvite, Person, PlannerEvent, Role, TaskDate, TaskLog, TaskRhythm,
-  TimeFormat, Trip, TripIdea, WeatherDay,
+  Destination, DestinationDraft, GeneratedList, MenuWeek, OpenInvite, Person, PlannerEvent, Role,
+  TaskDate, TaskLog, TaskRhythm, TimeFormat, Trip, TripIdea, WeatherDay,
 } from '../lib/types.ts';
 import { STARTER_TASKS } from '../lib/tasks.ts';
 import { STARTERS } from '../lib/destinations.ts';
@@ -150,6 +150,10 @@ type AppContextValue = {
   deleteDestination: (id: string) => Promise<boolean>;
   /** Takes one of the ready-made lists, skipping anything already there. */
   addStarterDestinations: (starterId: string) => Promise<boolean>;
+  /** Adds several places at once. Resolves to how many were new. */
+  addDestinations: (group: string, items: DestinationDraft[]) => Promise<number>;
+  /** Asks the model for a list. Resolves to the list, or the message to show. */
+  generateDestinationList: (request: string) => Promise<{ list?: GeneratedList; error?: string }>;
   addTrip: (input: NewTripInput) => Promise<boolean>;
   updateTrip: (id: string, patch: Partial<NewTripInput> & { done?: boolean }) => Promise<boolean>;
   deleteTrip: (id: string) => Promise<boolean>;
@@ -1350,32 +1354,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fail, reload]);
 
-  const addStarterDestinations = useCallback(async (starterId: string) => {
-    const starter = STARTERS.find(s => s.id === starterId);
-    if (!starter) return false;
+  const addDestinations = useCallback(async (group: string, items: DestinationDraft[]) => {
     try {
       const fam = familyRef.current!;
-      // Whatever the family already has under that name stays as it is.
+      // Whatever the family already has under that name stays as it is: a
+      // second list that overlaps the first must not double its entries.
       const have = new Set(destinations.map(d => d.name.toLowerCase()));
-      const rows = starter.items
-        .filter(item => !have.has(item.name.toLowerCase()))
+      const rows = items
+        .filter(item => item.name.trim() && !have.has(item.name.trim().toLowerCase()))
         .map((item, i) => ({
           family_id: fam.id,
-          name: item.name,
-          code: item.code ?? null,
-          group_name: starter.group,
+          name: item.name.trim(),
+          code: item.code?.trim() || null,
+          group_name: group.trim() || 'Ziele',
           sort_order: i,
         }));
       if (rows.length) {
         const { error } = await supabase.from('fp_destinations').insert(rows);
         if (error) throw error;
+        await reload();
       }
-      await reload();
-      return true;
+      return rows.length;
     } catch (e) {
-      return fail(e, 'Die Liste konnte nicht angelegt werden');
+      fail(e, 'Die Liste konnte nicht angelegt werden');
+      return 0;
     }
   }, [destinations, fail, reload]);
+
+  const addStarterDestinations = useCallback(async (starterId: string) => {
+    const starter = STARTERS.find(s => s.id === starterId);
+    if (!starter) return false;
+    await addDestinations(starter.group, starter.items.map(i => ({ name: i.name, code: i.code ?? null })));
+    return true;
+  }, [addDestinations]);
+
+  /** Resolves to the list, or to the message to show. */
+  const generateDestinationList = useCallback(async (request: string) => {
+    const fam = familyRef.current;
+    if (!fam) return { error: 'Keine Familie geladen' };
+    setSync({ busy: true, message: 'Liste wird erzeugt …', error: null });
+    try {
+      const { data, error } = await supabase.functions.invoke('family-destination-list', {
+        body: { family_id: fam.id, request },
+      });
+      const message = (data as { error?: string } | null)?.error;
+      if (message) throw new Error(message);
+      if (error) throw new Error(await functionErrorMessage(error, 'Die Liste konnte nicht erzeugt werden'));
+      setSync({ busy: false, message: null, error: null });
+      return { list: data as GeneratedList };
+    } catch (e) {
+      const text = e instanceof Error ? e.message : 'Die Liste konnte nicht erzeugt werden';
+      setSync({ busy: false, message: null, error: null });
+      return { error: text };
+    }
+  }, []);
 
   const addTrip = useCallback(async (input: NewTripInput) => {
     try {
@@ -1501,6 +1533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertMenuSource, deleteMenuSource, setMenuAssignment, removeMenuAssignment,
     importMenuWeek, deleteMenuWeek,
     addDestination, updateDestination, deleteDestination, addStarterDestinations,
+    addDestinations, generateDestinationList,
     addTrip, updateTrip, deleteTrip, fetchTripIdeas, discardTripIdea,
     upsertTask, deleteTask, addStarterTasks, addTaskDates, removeTaskDate,
     logTask, setLogMinutes, deleteTaskLog,
