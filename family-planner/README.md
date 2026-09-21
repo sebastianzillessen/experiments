@@ -341,7 +341,8 @@ A batch is cached per destination and handed back for free until someone asks
 for new ones or changes the wish, since each batch costs money. Taking one over
 writes an ordinary trip with the text as its note; nothing reaches the plan on
 its own. Details and the required `CLAUDE_API_KEY` are in
-`supabase/functions/family-trip-ideas/README.md`.
+`supabase/functions/family-trip-ideas/README.md`; the list generator is
+`supabase/functions/family-destination-list/README.md` and needs the same key.
 
 ## Roles
 
