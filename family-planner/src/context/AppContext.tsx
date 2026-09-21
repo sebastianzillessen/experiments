@@ -15,7 +15,7 @@ import type { CalendarCacheEntry } from '../lib/merge.ts';
 import type {
   Assignment, Calendar, CachedEvent, Family, HouseholdTask, Member, MenuAssignment, MenuSource,
   MenuWeek, OpenInvite, Person, PlannerEvent, Role, TaskDate, TaskLog, TaskRhythm, TimeFormat,
-  WeatherDay,
+  Trip, TripIdea, WeatherDay,
 } from '../lib/types.ts';
 import { STARTER_TASKS } from '../lib/tasks.ts';
 import type { TaskDraft } from '../lib/tasks.ts';
@@ -45,6 +45,17 @@ export type NewEventInput = {
   personIds: string[];
   /** null = one-off. */
   repeat?: RepeatRule | null;
+};
+
+export type NewTripInput = {
+  canton: string;
+  title: string;
+  notes: string;
+  fromDate: string | null;
+  toDate: string | null;
+  done: boolean;
+  doneOn: string | null;
+  source: 'eigen' | 'idee';
 };
 
 /**
@@ -78,6 +89,10 @@ type AppContextValue = {
   tasks: HouseholdTask[];
   /** Every run of every task in the last few months, newest first. */
   taskLogs: TaskLog[];
+  /** Trips to the cantons: planned, done, or just named. */
+  trips: Trip[];
+  /** The suggestions last fetched, per canton. */
+  tripIdeas: TripIdea[];
   members: Member[];
   openInvites: OpenInvite[];
   sync: SyncState;
@@ -118,6 +133,12 @@ type AppContextValue = {
   logTask: (taskId: string, personId: string, minutes: number) => Promise<TaskLog | null>;
   setLogMinutes: (logId: string, minutes: number) => Promise<boolean>;
   deleteTaskLog: (logId: string) => Promise<boolean>;
+  addTrip: (input: NewTripInput) => Promise<boolean>;
+  updateTrip: (id: string, patch: Partial<NewTripInput> & { done?: boolean }) => Promise<boolean>;
+  deleteTrip: (id: string) => Promise<boolean>;
+  /** Asks the model for ideas. Resolves to null on success, or the message. */
+  fetchTripIdeas: (canton: string, wishes: string, refresh: boolean) => Promise<string | null>;
+  discardTripIdea: (id: string) => Promise<boolean>;
   setTimeFormat: (format: TimeFormat) => Promise<boolean>;
   createLinkInvite: (role: Role) => Promise<string | null>;
   updateMemberRole: (userId: string, role: Role) => Promise<boolean>;
@@ -245,6 +266,44 @@ function taskToRow(draft: TaskDraft, familyId: string): Record<string, unknown> 
   };
 }
 
+const rowToTrip = (row: Record<string, unknown>): Trip => ({
+  id: row.id as string,
+  canton: row.canton as string,
+  title: row.title as string,
+  notes: (row.notes as string) ?? '',
+  fromDate: (row.from_date as string) ?? null,
+  toDate: (row.to_date as string) ?? null,
+  done: Boolean(row.done),
+  doneOn: (row.done_on as string) ?? null,
+  source: row.source === 'idee' ? 'idee' : 'eigen',
+});
+
+const tripToRow = (input: NewTripInput) => ({
+  canton: input.canton,
+  title: input.title.trim(),
+  notes: input.notes.trim(),
+  from_date: input.fromDate,
+  to_date: input.toDate,
+  done: input.done,
+  // Ticked off without ever having had a date: the day it was ticked is the
+  // best answer available, and an empty "when" reads like a mistake.
+  done_on: input.done ? (input.doneOn ?? input.fromDate ?? new Date().toISOString().slice(0, 10)) : null,
+  source: input.source,
+});
+
+const rowToIdea = (row: Record<string, unknown>): TripIdea => ({
+  id: row.id as string,
+  canton: row.canton as string,
+  title: row.title as string,
+  summary: (row.summary as string) ?? '',
+  highlights: (row.highlights as string[]) ?? [],
+  duration: row.duration === 'zwei-tage' ? 'zwei-tage' : 'tag',
+  season: (row.season as string) ?? '',
+  travel: (row.travel as string) ?? '',
+  wishes: (row.wishes as string) ?? '',
+  generatedAt: (row.generated_at as string) ?? '',
+});
+
 const rowToLog = (row: Record<string, unknown>): TaskLog => ({
   id: row.id as string,
   taskId: row.task_id as string,
@@ -270,6 +329,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [menuAssignments, setMenuAssignments] = useState<MenuAssignment[]>([]);
   const [tasks, setTasks] = useState<HouseholdTask[]>([]);
   const [taskLogs, setTaskLogs] = useState<TaskLog[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [tripIdeas, setTripIdeas] = useState<TripIdea[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [openInvites, setOpenInvites] = useState<OpenInvite[]>([]);
   const [sync, setSync] = useState<SyncState>({ busy: false, message: null, error: null });
@@ -335,7 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const logsSince = new Date(Date.now() - TASK_LOG_DAYS * 86_400_000).toISOString();
     const [peopleRes, eventsRes, calendarsRes, cacheRes, assignRes,
            menuSourceRes, menuWeekRes, menuPeopleRes, weatherRes,
-           tasksRes, taskLogsRes, taskDatesRes] = await Promise.all([
+           tasksRes, taskLogsRes, taskDatesRes, tripsRes, tripIdeasRes] = await Promise.all([
       supabase.from('fp_people').select('*').eq('family_id', fam.id).is('archived_at', null).order('sort_order'),
       supabase.from('fp_events')
         .select('id, title, notes, all_day, start_date, end_date, starts_at, ends_at, '
@@ -356,6 +417,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .eq('family_id', fam.id).gte('done_at', logsSince).order('done_at', { ascending: false }),
       supabase.from('fp_task_dates').select('task_id, due_date, note')
         .eq('family_id', fam.id).order('due_date'),
+      supabase.from('fp_trips')
+        .select('id, canton, title, notes, from_date, to_date, done, done_on, source')
+        .eq('family_id', fam.id).order('created_at'),
+      supabase.from('fp_trip_ideas')
+        .select('id, canton, title, summary, highlights, duration, season, travel, wishes, generated_at')
+        .eq('family_id', fam.id).order('generated_at'),
     ]);
 
     const nextPeople = mapPeople(peopleRes.data ?? []);
@@ -427,6 +494,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTasks(((tasksRes.data ?? []) as unknown as TaskRow[])
       .map(row => rowToTask(row, datesByTask.get(row.id) ?? [])));
     setTaskLogs((taskLogsRes.data ?? []).map(rowToLog));
+
+    setTrips((tripsRes.data ?? []).map(rowToTrip));
+    setTripIdeas((tripIdeasRes.data ?? []).map(rowToIdea));
 
     if (currentRole === 'owner') {
       const [membersRes, invitesRes] = await Promise.all([
@@ -1194,6 +1264,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fail, taskLogs]);
 
+  /* ------------------------------------------------------------------ */
+  /* Cantons                                                             */
+  /* ------------------------------------------------------------------ */
+
+  const addTrip = useCallback(async (input: NewTripInput) => {
+    try {
+      const fam = familyRef.current!;
+      const { error } = await supabase.from('fp_trips').insert({
+        ...tripToRow(input), family_id: fam.id, created_by: userRef.current?.id ?? null,
+      });
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Der Ausflug konnte nicht gespeichert werden');
+    }
+  }, [fail, reload]);
+
+  const updateTrip = useCallback(async (
+    id: string, patch: Partial<NewTripInput> & { done?: boolean }
+  ) => {
+    try {
+      const current = trips.find(t => t.id === id);
+      if (!current) return false;
+      const next: NewTripInput = { ...current, ...patch };
+      // Ticking one off keeps the day it happened; unticking clears it.
+      const row = tripToRow(next);
+      if (patch.done === true && !current.done && patch.doneOn === undefined) {
+        row.done_on = current.fromDate ?? new Date().toISOString().slice(0, 10);
+      }
+      const { error } = await supabase.from('fp_trips').update(row).eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Der Ausflug konnte nicht geändert werden');
+    }
+  }, [fail, reload, trips]);
+
+  const deleteTrip = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase.from('fp_trips').delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+      return true;
+    } catch (e) {
+      return fail(e, 'Der Ausflug konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
+  /** Resolves to null on success, or the message to show. */
+  const fetchTripIdeas = useCallback(async (canton: string, wishes: string, refresh: boolean) => {
+    const fam = familyRef.current;
+    if (!fam) return 'Keine Familie geladen';
+    setSync({ busy: true, message: 'Ideen werden geholt …', error: null });
+    try {
+      const { data, error } = await supabase.functions.invoke('family-trip-ideas', {
+        body: { family_id: fam.id, canton, wishes, refresh },
+      });
+      // The function answers with a JSON body on failure too, and that message
+      // is the useful one — "Edge Function returned a non-2xx status" is not.
+      const message = (data as { error?: string } | null)?.error;
+      if (message) throw new Error(message);
+      if (error) throw error;
+      await reload();
+      setSync({ busy: false, message: null, error: null });
+      return null;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Die Ideen konnten nicht geholt werden';
+      setSync({ busy: false, message: null, error: message });
+      return message;
+    }
+  }, [reload]);
+
+  const discardTripIdea = useCallback(async (id: string) => {
+    setTripIdeas(prev => prev.filter(i => i.id !== id));
+    try {
+      const { error } = await supabase.from('fp_trip_ideas').delete().eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      await reload();
+      return fail(e, 'Die Idee konnte nicht entfernt werden');
+    }
+  }, [fail, reload]);
+
   // One opportunistic refresh per session once the plan is on screen. The
   // Edge Function is a no-op while every calendar's cache is inside its TTL,
   // so several viewers opening the planner cost one fetch, not one each.
@@ -1224,7 +1380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     screen, user, family, role, canEdit, isOwner, people, calendars,
     manualSeries, calendarEvents, weather, weatherFetchedAt,
     menuSources, menuWeeks, menuAssignments, menuEvents,
-    tasks, taskLogs,
+    tasks, taskLogs, trips, tripIdeas,
     members, openInvites, sync, authError, setAuthError, loginWarning, setLoginWarning,
     inviteToken,
     createFamily, addEvent, updateEvent, deleteEvent,
@@ -1233,6 +1389,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setWeatherPlz, refreshWeather,
     upsertMenuSource, deleteMenuSource, setMenuAssignment, removeMenuAssignment,
     importMenuWeek, deleteMenuWeek,
+    addTrip, updateTrip, deleteTrip, fetchTripIdeas, discardTripIdea,
     upsertTask, deleteTask, addStarterTasks, addTaskDates, removeTaskDate,
     logTask, setLogMinutes, deleteTaskLog,
     createLinkInvite, updateMemberRole, removeMember, reload,
