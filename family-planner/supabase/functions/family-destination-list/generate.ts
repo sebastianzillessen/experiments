@@ -22,17 +22,20 @@ const ListSchema = z.object({
 });
 
 export async function generateList(request: string, apiKey: string): Promise<GeneratedList> {
-  // Lists are asked for once and looked at, so an overloaded minute should not
-  // become a shrug; the SDK backs off between tries.
-  const client = new Anthropic({ apiKey, maxRetries: 4 });
+  // Two goes: somebody is waiting in front of the screen, and four attempts
+  // with backoff turns a busy minute into a very long one.
+  const client = new Anthropic({ apiKey, maxRetries: 2 });
 
   let response;
   try {
     response = await client.messages.parse({
       model: MODEL,
-      max_tokens: 16000,
+      // A hundred entries of a name and a short code, with room to spare.
+      max_tokens: 8000,
       messages: [{ role: 'user', content: buildPrompt(request) }],
-      output_config: { format: zodOutputFormat(ListSchema) },
+      // Listing the Bundesländer is recall, not reasoning: low is enough, and
+      // it is the difference between waiting and waiting too long.
+      output_config: { format: zodOutputFormat(ListSchema), effort: 'low' },
     });
   } catch (e) {
     if (e instanceof Anthropic.APIError) {
