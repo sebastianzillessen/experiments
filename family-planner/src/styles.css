@@ -330,8 +330,13 @@ td:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
   border-left-width: 0;
   border-top-left-radius: 0; border-bottom-left-radius: 0;
 }
-.chip:hover, .chip.is-lit { background: var(--paper-alt); }
-.chip.is-lit { border-color: var(--rule-strong); }
+.chip.is-lit { background: var(--paper-alt); border-color: var(--rule-strong); }
+/* Only where a pointer can hover without tapping: on a touch screen the first
+   tap goes to the hover, and a chip that changes under the finger can swallow
+   the click that was meant to open the entry. */
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover { background: var(--paper-alt); }
+}
 
 /* --- phone list layout ------------------------------------------------- */
 

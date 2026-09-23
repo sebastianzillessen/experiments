@@ -62,6 +62,25 @@ function useIsNarrow(): boolean {
   return narrow;
 }
 
+/**
+ * Whether the pointer is a mouse rather than a finger.
+ *
+ * A touch screen has no hover to give: iOS spends the first tap on one, and if
+ * the page changes under the finger in response, that tap never becomes a
+ * click. So the highlight below is for pointers that can actually hover.
+ */
+function useCanHover(): boolean {
+  const query = '(hover: hover) and (pointer: fine)';
+  const [canHover, setCanHover] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = (ev: MediaQueryListEvent) => setCanHover(ev.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return canHover;
+}
+
 export function Planner() {
   const {
     family, role, people, manualSeries, calendarEvents, menuEvents, canEdit, sync,
@@ -101,8 +120,17 @@ export function Planner() {
   // mouseover bubbles once on the way in, so moving along a band never
   // flickers through an unlit frame.
   const [lit, setLit] = useState<string | null>(null);
+  const canHover = useCanHover();
   const litFrom = (e: { target: EventTarget | null }) =>
     setLit((e.target as HTMLElement | null)?.closest<HTMLElement>('[data-span]')?.dataset.span ?? null);
+  // Focus lights the run as well, for anyone walking the week by keyboard —
+  // but only where the browser would draw a focus ring anyway. A tap focuses
+  // too, and the band must not grow under the finger that is still tapping.
+  const litFromFocus = (e: { target: EventTarget | null }) => {
+    const el = e.target as HTMLElement | null;
+    if (!el?.matches?.(':focus-visible')) return;
+    litFrom(e);
+  };
 
   const [detailedWeather, toggleWeather] = useWeatherDetail();
   const byDate = useMemo(() => new Map(weather.map(d => [d.date, d])), [weather]);
@@ -185,8 +213,9 @@ export function Planner() {
                 ))}
               </tr>
             </thead>
-            <tbody onMouseOver={litFrom} onMouseLeave={() => setLit(null)}
-              onFocus={litFrom} onBlur={() => setLit(null)}>
+            <tbody onMouseOver={canHover ? litFrom : undefined}
+              onMouseLeave={canHover ? () => setLit(null) : undefined}
+              onFocus={litFromFocus} onBlur={() => setLit(null)}>
               {days.map(day => (
                 <tr key={day} className={[
                   day === today ? 'is-today' : '',
