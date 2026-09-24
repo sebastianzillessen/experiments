@@ -39,6 +39,12 @@ const WINDOW_DAYS_AHEAD = 400;
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_BYTES = 5 * 1024 * 1024;
 
+// How long a feed may keep answering "not modified" before the whole thing is
+// downloaded again. An ETag that never changes would otherwise keep a deleted
+// event on the plan for good, and re-reading a calendar four times a day is
+// cheap next to that.
+const MAX_REVALIDATE_MS = 6 * 60 * 60 * 1000;
+
 type SyncBody = { action?: 'sync' | 'save'; family_id?: string; force?: boolean; calendar_id?: string };
 type SaveBody = {
   calendar_id?: string;
@@ -291,7 +297,14 @@ Deno.serve(async (req) => {
       }
 
       const url = normalizeCalendarUrl(storedUrl);
-      const fetched = await fetchIcs(url, username, password, cache?.etag ?? null);
+      // The ETag is what lets an unchanged feed answer with 304 instead of
+      // sending everything again — and it is also the one thing that can pin a
+      // deleted event on the plan. So it is left off when somebody pressed ⟳,
+      // which means "I do not trust what I am looking at", and once the stored
+      // copy has gone MAX_REVALIDATE_MS without actually being replaced.
+      const cachedAt = cache?.fetched_at ? Date.parse(cache.fetched_at as string) : 0;
+      const mayRevalidate = !body.force && Date.now() - cachedAt < MAX_REVALIDATE_MS;
+      const fetched = await fetchIcs(url, username, password, mayRevalidate ? (cache?.etag as string | null) ?? null : null);
 
       if (fetched.notModified) {
         await admin.from('fp_calendars')
