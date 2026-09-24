@@ -21,6 +21,11 @@ Vereinfachte Lohnabrechnung (VAV/VAVplus) für Kinderbetreuung im Privathaushalt
   Registrieren eingelöst (`handle_new_user`), sodass kein eigener Haushalt angelegt
   wird; ein bereits angemeldeter Nutzer löst ihn über `accept_invite_by_token` ein.
   Jeder Link gilt für eine Person (Single-Use).
+- **Monat abschliessen.** In der Monatsabrechnung kann ein Monat abgeschlossen
+  (signiert) werden. Danach sind die Einsätze dieses Monats gesperrt — sie lassen
+  sich nicht mehr ändern oder löschen (per Datenbank-Trigger erzwungen) und
+  verschwinden aus der Stundenerfassung. Owner/Admins können einen Monat bei
+  Bedarf wieder öffnen.
 - **Stundenlohn oder Monatslohn.** Pro Person wählbar. Monatslohn-Angestellte
   erfassen keine Stunden; der Monat wird unter „Stundenerfassung" bestätigt. Ferien
   und Feiertage sind im Monatslohn enthalten (keine separate Zulage). Die

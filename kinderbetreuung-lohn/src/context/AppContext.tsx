@@ -107,6 +107,11 @@ type AppContextValue = {
   // Mint a URL invite for someone whose email we don't know. Returns the full
   // shareable link (…?invite=<token>) or null on failure.
   createLinkInvite: (args: { role: Role; employeeId?: string | null }) => Promise<string | null>;
+  // Months (YYYY-MM) that are signed off / locked for this household. Their
+  // shifts are read-only (DB-enforced) and hidden from the Einsätze overview.
+  lockedMonths: Set<string>;
+  signOffMonth: (month: string) => Promise<boolean>;
+  reopenMonth: (month: string) => Promise<boolean>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -130,6 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [members, setMembers] = useState<Map<string, Member>>(new Map());
   const [openInvites, setOpenInvites] = useState<OpenInvite[]>([]);
+  const [lockedMonths, setLockedMonths] = useState<Set<string>>(new Set());
   const [data, setDataState] = useState<AppState>(() => sanitizeState({}));
   const [ui, setUi] = useState<Ui>({ login: true, create: false, strip: false, invite: null });
   const [sync, setSync] = useState<SyncState>({ visible: false, state: 'idle', warn: null });
@@ -234,18 +240,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadFromCloud = useCallback(async (hh: string) => {
-    const [profileRes, shiftsRes, settingsRes, householdRes, employeesRes, wagesRes] = await Promise.all([
+    const [profileRes, shiftsRes, settingsRes, householdRes, employeesRes, wagesRes, locksRes] = await Promise.all([
       supabase.from('household_profile').select('*').eq('household_id', hh).maybeSingle(),
       supabase.from('shifts').select('id, date, hours, note, start_time, end_time, entered_by, employee_id').eq('household_id', hh).order('date'),
       supabase.from('pay_settings').select('id, effective_month, data').eq('household_id', hh).order('effective_month'),
       supabase.from('households').select('name').eq('id', hh).maybeSingle(),
       supabase.from('employees').select('id, data, user_id, archived_at').eq('household_id', hh).order('created_at'),
       // employee_wages has no household_id; RLS already scopes rows to this household.
-      supabase.from('employee_wages').select('id, employee_id, effective_month, hourly_rate, monthly_salary').order('effective_month')
+      supabase.from('employee_wages').select('id, employee_id, effective_month, hourly_rate, monthly_salary').order('effective_month'),
+      supabase.from('payroll_locks').select('month').eq('household_id', hh)
     ]);
     if (profileRes.error) throw profileRes.error;
     if (shiftsRes.error) throw shiftsRes.error;
     if (settingsRes.error) throw settingsRes.error;
+    if (locksRes.error) throw locksRes.error;
+    setLockedMonths(new Set((locksRes.data || []).map(r => String(r.month).slice(0, 7))));
     if (householdRes.error) throw householdRes.error;
     if (employeesRes.error) throw employeesRes.error;
     if (wagesRes.error) throw wagesRes.error;
@@ -404,6 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setMembers(new Map());
         setOpenInvites([]);
+        setLockedMonths(new Set());
         setData(sanitizeState({}));
         showLogin();
       }
@@ -813,6 +823,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updated_at: new Date().toISOString()
     });
     if (profErr) throw profErr;
+    // A full re-import replaces everything, so drop month sign-offs first — the
+    // shifts trigger would otherwise block deleting locked shifts.
+    { const { error } = await supabase.from('payroll_locks').delete().eq('household_id', hh); if (error) throw error; }
+    setLockedMonths(new Set());
     // Order matters: FK + period-lock triggers. Drop dependents first
     // (shifts → employee_wages → pay_settings → employees), then re-insert in
     // dependency order, remapping employee ids from the imported file.
@@ -879,6 +893,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const hh = householdIdRef.current;
     setSyncStatus('pending');
     try {
+      // Drop month sign-offs first — the shifts trigger would otherwise block
+      // deleting locked shifts.
+      const { error: delLocksErr } = await supabase.from('payroll_locks').delete().eq('household_id', hh);
+      if (delLocksErr) throw delLocksErr;
+      setLockedMonths(new Set());
       // Dependency order: shifts → employee_wages → pay_settings → employees.
       const { error: delShiftsErr } = await supabase.from('shifts').delete().eq('household_id', hh);
       if (delShiftsErr) throw delShiftsErr;
@@ -967,6 +986,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [setSyncStatus]);
 
+  // Sign off a month (YYYY-MM): its shifts become read-only (DB trigger) and drop
+  // out of the Einsätze overview.
+  const signOffMonth = useCallback(async (month: string): Promise<boolean> => {
+    setSyncStatus('pending');
+    try {
+      const { error } = await supabase.from('payroll_locks').insert({
+        household_id: householdIdRef.current,
+        month: `${month}-01`,
+        created_by: userRef.current?.id
+      });
+      if (error) throw error;
+      setLockedMonths(prev => new Set(prev).add(month));
+      setSyncStatus('ok');
+      return true;
+    } catch (e) { setSyncStatus('error', e); return false; }
+  }, [setSyncStatus]);
+
+  const reopenMonth = useCallback(async (month: string): Promise<boolean> => {
+    setSyncStatus('pending');
+    try {
+      const { error } = await supabase.from('payroll_locks').delete()
+        .eq('household_id', householdIdRef.current)
+        .eq('month', `${month}-01`);
+      if (error) throw error;
+      setLockedMonths(prev => { const next = new Set(prev); next.delete(month); return next; });
+      setSyncStatus('ok');
+      return true;
+    } catch (e) { setSyncStatus('error', e); return false; }
+  }, [setSyncStatus]);
+
   const value = useMemo<AppContextValue>(() => ({
     user, role, householdId, members, openInvites, data, ui, sync,
     authError, setAuthError, loginWarning, setLoginWarning,
@@ -977,7 +1026,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateHouseholdName, updateEmployer, addShift, deleteShift,
     addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
-    importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite
+    importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite,
+    lockedMonths, signOffMonth, reopenMonth
   }), [
     user, role, householdId, members, openInvites, data, ui, sync, authError, loginWarning,
     recoveryMode,
@@ -986,7 +1036,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateHouseholdName, updateEmployer, addShift, deleteShift,
     addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
-    importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite
+    importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite,
+    lockedMonths, signOffMonth, reopenMonth
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

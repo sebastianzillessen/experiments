@@ -212,7 +212,7 @@ export function reportScope(data: AppState, role: string | null, ownId: string |
 }
 
 export function MonatTab() {
-  const { activeTab, data, role, user } = useApp();
+  const { activeTab, data, role, user, lockedMonths, signOffMonth, reopenMonth } = useApp();
   const [month, setMonth] = useState(currentMonth);
   const [empSel, setEmpSel] = useState('');
   // Counts in-flight QR-bill generations so printing can wait for a stable DOM.
@@ -220,6 +220,19 @@ export function MonatTab() {
 
   const ownId = data.employees.find(e => e.userId && e.userId === user?.id)?.id ?? null;
   const scope = reportScope(data, role, ownId, empSel);
+  const isAdmin = role === 'owner' || role === 'admin';
+  const monthLocked = lockedMonths.has(month);
+  const monthHasShifts = data.shifts.some(s => s.date.startsWith(month));
+
+  async function onSignOff() {
+    if (!confirm(`Monat ${monthLabel(month)} abschliessen? Die Einsätze dieses Monats werden gesperrt und können danach nicht mehr geändert werden. Sie verschwinden aus der Stundenerfassung.`)) return;
+    await signOffMonth(month);
+  }
+
+  async function onReopen() {
+    if (!confirm(`Abrechnung ${monthLabel(month)} wieder öffnen? Die Einsätze dieses Monats werden wieder bearbeitbar.`)) return;
+    await reopenMonth(month);
+  }
 
   async function onPrint() {
     // Wait for the QR-bill to finish injecting so the print preview isn't
@@ -279,6 +292,26 @@ export function MonatTab() {
           </div>
         </div>
       </div>
+
+      {isAdmin && (monthLocked || monthHasShifts) && (
+        <div className="card no-print" id="signoff-card">
+          {monthLocked ? (
+            <>
+              <div className="info" id="signoff-status">✓ <strong>{monthLabel(month)}</strong> ist abgeschlossen — die Einsätze sind gesperrt und können nicht mehr geändert werden.</div>
+              <div className="btn-row">
+                <button className="btn btn-secondary" id="btn-reopen-month" onClick={onReopen}>Abrechnung wieder öffnen</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="section-sub">Wenn die Stunden für {monthLabel(month)} stimmen, schliesse den Monat ab. Danach sind die Einsätze gesperrt und verschwinden aus der Stundenerfassung.</div>
+              <div className="btn-row">
+                <button className="btn" id="btn-signoff-month" onClick={onSignOff}>Monat abschliessen</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div id="monat-doc">{doc}</div>
     </section>
