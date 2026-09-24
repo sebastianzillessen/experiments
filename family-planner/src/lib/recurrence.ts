@@ -95,6 +95,7 @@ export function expandSeries(
     byDay: series.repeat.weekdays.map(weekday => ({ ordinal: null, weekday })),
     byMonthDay: [],
     byMonth: [],
+    bySetPos: [],
   };
 
   const skipped = new Set(series.exceptions);

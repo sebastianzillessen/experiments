@@ -386,6 +386,7 @@ type Rule = {
   byDay: { ordinal: number | null; weekday: number }[];
   byMonthDay: number[];
   byMonth: number[];
+  bySetPos: number[];
 };
 
 export function parseRRule(value: string): Rule | null {
@@ -416,7 +417,9 @@ export function parseRRule(value: string): Rule | null {
     untilKey,
     byDay,
     byMonthDay: (parts.BYMONTHDAY || '').split(',').filter(Boolean).map(Number),
-    byMonth: (parts.BYMONTH || '').split(',').filter(Boolean).map(Number)
+    byMonth: (parts.BYMONTH || '').split(',').filter(Boolean).map(Number),
+    bySetPos: (parts.BYSETPOS || '').split(',').filter(Boolean)
+      .map(Number).filter(n => Number.isInteger(n) && n !== 0)
   };
 }
 
@@ -469,10 +472,13 @@ export function expandRule(startKey: string, rule: Rule | null, windowFrom: stri
     // Monday-based week start: the planner and Swiss calendars both use it.
     const startOfWeek = (key: string) => addDaysToKey(key, -((weekdayOfKey(key) + 6) % 7));
     for (let week = startOfWeek(startKey); week <= hardEnd && guard++ < 2000; week = addDaysToKey(week, 7 * rule.interval)) {
+      const keys: string[] = [];
       for (let offset = 0; offset < 7; offset++) {
         const key = addDaysToKey(week, offset);
+        if (weekdays.includes(weekdayOfKey(key))) keys.push(key);
+      }
+      for (const key of applySetPos(keys, rule.bySetPos)) {
         if (key < startKey || key > hardEnd) continue;
-        if (!weekdays.includes(weekdayOfKey(key))) continue;
         if (!emit(key)) return out;
       }
     }
@@ -487,7 +493,7 @@ export function expandRule(startKey: string, rule: Rule | null, windowFrom: stri
       const y = Math.floor(total / 12);
       const m = (total % 12) + 1;
       if (toDateKey(y, m, 1) > hardEnd) break;
-      const days = candidateDaysInMonth(y, m, rule, startDay);
+      const days = applySetPos(candidateDaysInMonth(y, m, rule, startDay), rule.bySetPos);
       for (const day of days) {
         const key = toDateKey(y, m, day);
         if (key < startKey || key > hardEnd) continue;
@@ -503,18 +509,39 @@ export function expandRule(startKey: string, rule: Rule | null, windowFrom: stri
     const y = sy + i * rule.interval;
     if (toDateKey(y, 1, 1) > hardEnd) break;
     const months = rule.byMonth.length ? rule.byMonth : [sm];
+    const keys: string[] = [];
     for (const m of months) {
       const days = rule.byDay.length || rule.byMonthDay.length
         ? candidateDaysInMonth(y, m, rule, sd)
         : [Math.min(sd, daysInMonth(y, m))];
-      for (const day of days) {
-        const key = toDateKey(y, m, day);
-        if (key < startKey || key > hardEnd) continue;
-        if (!emit(key)) return out;
-      }
+      for (const day of days) keys.push(toDateKey(y, m, day));
+    }
+    // A yearly rule's set spans the year, so BYSETPOS counts across it.
+    for (const key of applySetPos(keys.sort(), rule.bySetPos)) {
+      if (key < startKey || key > hardEnd) continue;
+      if (!emit(key)) return out;
     }
   }
   return out;
+}
+
+/**
+ * BYSETPOS: of everything one interval produced, keep what sits at these
+ * positions — 1 is the first, -1 the last.
+ *
+ * "First Thursday of the month" is written FREQ=MONTHLY;BYDAY=TH;BYSETPOS=1.
+ * Drop the BYSETPOS and the same rule means every Thursday of the month, so
+ * ignoring it does not lose occurrences, it invents them.
+ */
+function applySetPos<T>(items: T[], positions: number[]): T[] {
+  if (!positions.length) return items;
+  const picked = new Set<number>();
+  for (const pos of positions) {
+    const i = pos > 0 ? pos - 1 : items.length + pos;
+    if (i >= 0 && i < items.length) picked.add(i);
+  }
+  // Back into the order the interval produced them, whatever order they were asked for in.
+  return [...picked].sort((a, b) => a - b).map(i => items[i]);
 }
 
 /** Days of one month selected by BYMONTHDAY / BYDAY (with ordinal), else the anchor day. */
@@ -575,6 +602,7 @@ export function expandIcs(text: string, opts: ExpandOptions): IcsEvent[] {
 
   const out: IcsEvent[] = [];
   const seen = new Set<string>();
+  const placed = new Set<RawEvent>();
 
   const emitEvent = (ev: RawEvent, occurrenceKey: string, shiftDays: number) => {
     const built = buildEvent(ev, occurrenceKey, shiftDays, tz);
@@ -589,7 +617,7 @@ export function expandIcs(text: string, opts: ExpandOptions): IcsEvent[] {
   for (const ev of masters) {
     if (ev.status === 'CANCELLED') continue;
     try {
-      expandMaster(ev, tz, from, to, maxEvents, overrides, emitEvent);
+      expandMaster(ev, tz, from, to, maxEvents, overrides, emitEvent, placed);
     } catch (e) {
       // A single unreadable event costs that event, not the whole calendar.
       console.warn('[ics] skipping event', ev.uid, e);
@@ -598,10 +626,12 @@ export function expandIcs(text: string, opts: ExpandOptions): IcsEvent[] {
   }
 
   // Overrides whose master never produced the occurrence (moved out of window
-  // by the master's own rule) still belong on the plan.
+  // by the master's own rule) still belong on the plan. The ones the master
+  // did place are skipped: emitting them again at their own start date puts
+  // the same evening on the plan twice, under two different occurrence keys.
   for (const [, perUid] of overrides) {
     for (const [, ev] of perUid) {
-      if (ev.status === 'CANCELLED') continue;
+      if (ev.status === 'CANCELLED' || placed.has(ev)) continue;
       try {
         const wc = ev.dtstart ? parseWallClock(ev.dtstart, tz) : null;
         if (!wc) continue;
@@ -624,7 +654,8 @@ function expandMaster(
   to: string,
   maxEvents: number,
   overrides: Map<string, Map<string, RawEvent>>,
-  emitEvent: (ev: RawEvent, occurrenceKey: string, shiftDays: number) => void
+  emitEvent: (ev: RawEvent, occurrenceKey: string, shiftDays: number) => void,
+  placed: Set<RawEvent>
 ): void {
     const start = ev.dtstart ? parseWallClock(ev.dtstart, tz) : null;
     if (!start) return;
@@ -649,6 +680,7 @@ function expandMaster(
       if (excluded.has(key)) continue;
       const override = perUid?.get(key);
       if (override) {
+        placed.add(override);
         if (override.status !== 'CANCELLED') emitEvent(override, key, 0);
         continue;
       }

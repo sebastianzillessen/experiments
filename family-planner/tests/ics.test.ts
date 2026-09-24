@@ -255,11 +255,72 @@ describe('expandRule', () => {
       .toEqual(['2026-09-01', '2026-09-04', '2026-09-07']);
   });
 
+  it('reads BYSETPOS: the first Thursday of the month, not every Thursday', () => {
+    // The shape iCloud writes for "first Thursday". Ignoring BYSETPOS turns
+    // FREQ=MONTHLY;BYDAY=TH into every Thursday there is — four times too many.
+    const rule = parseRRule('FREQ=MONTHLY;BYDAY=TH;BYSETPOS=1');
+    expect(expandRule('2026-06-04', rule, '2026-09-01', '2026-12-31', 100))
+      .toEqual(['2026-09-03', '2026-10-01', '2026-11-05', '2026-12-03']);
+  });
+
+  it('counts BYSETPOS from the end when it is negative', () => {
+    const rule = parseRRule('FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1');
+    expect(expandRule('2026-09-25', rule, '2026-09-01', '2026-11-30', 100))
+      .toEqual(['2026-09-25', '2026-10-30', '2026-11-27']);
+  });
+
+  it('takes several BYSETPOS positions, in date order', () => {
+    const rule = parseRRule('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=-1,1');
+    expect(expandRule('2026-09-07', rule, '2026-09-01', '2026-10-31', 100))
+      .toEqual(['2026-09-07', '2026-09-28', '2026-10-05', '2026-10-26']);
+  });
+
+  it('picks out of the whole year for a yearly rule', () => {
+    const rule = parseRRule('FREQ=YEARLY;BYMONTH=3,11;BYDAY=SU;BYSETPOS=-1');
+    expect(expandRule('2026-03-01', rule, '2026-01-01', '2027-12-31', 100))
+      .toEqual(['2026-11-29', '2027-11-28']);
+  });
+
+  it('leaves a rule without BYSETPOS alone', () => {
+    const rule = parseRRule('FREQ=MONTHLY;BYDAY=TH');
+    expect(expandRule('2026-09-03', rule, '2026-09-01', '2026-09-30', 100))
+      .toEqual(['2026-09-03', '2026-09-10', '2026-09-17', '2026-09-24']);
+  });
+
   it('caps runaway rules at maxEvents', () => {
     const rule = parseRRule('FREQ=DAILY');
     const keys = expandRule('2026-01-01', rule, '2026-01-01', '2026-12-31', 10);
     expect(keys).toHaveLength(10);
     expect(keys[9]).toBe(addDaysToKey('2026-01-01', 9));
+  });
+});
+
+describe('a moved occurrence of a recurring event', () => {
+  // Straight out of the family's own iCloud feed: "first Thursday of the
+  // month", with October's moved a week on.
+  const ics = calendar(
+    vevent([
+      'UID:stammtisch@example.com', 'SUMMARY:Stammtisch',
+      'DTSTART;TZID=Europe/Zurich:20260604T193000',
+      'DTEND;TZID=Europe/Zurich:20260604T221500',
+      'RRULE:FREQ=MONTHLY;BYDAY=TH;BYSETPOS=1',
+      'EXDATE;TZID=Europe/Zurich:20260903T193000',
+    ]),
+    vevent([
+      'UID:stammtisch@example.com', 'SUMMARY:Stammtisch',
+      'RECURRENCE-ID;TZID=Europe/Zurich:20261001T193000',
+      'DTSTART;TZID=Europe/Zurich:20261008T183000',
+      'DTEND;TZID=Europe/Zurich:20261008T221500',
+    ]),
+  );
+
+  it('stands on the day it was moved to, once', () => {
+    const days = expandIcs(ics, { from: '2026-10-01', to: '2026-10-31', tz: TZ }).map(e => e.startDate);
+    expect(days).toEqual(['2026-10-08']);
+  });
+
+  it('leaves the month out entirely when its one date was excluded', () => {
+    expect(expandIcs(ics, { from: '2026-09-01', to: '2026-09-30', tz: TZ })).toEqual([]);
   });
 });
 
