@@ -253,8 +253,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (profileRes.error) throw profileRes.error;
     if (shiftsRes.error) throw shiftsRes.error;
     if (settingsRes.error) throw settingsRes.error;
-    if (locksRes.error) throw locksRes.error;
-    setLockedMonths(new Set((locksRes.data || []).map(r => String(r.month).slice(0, 7))));
+    // Tolerate a missing payroll_locks table (migration not yet applied on this
+    // DB) so a frontend deploy that runs ahead of the migration doesn't break
+    // data loading — just treat it as "no months signed off".
+    if (locksRes.error) {
+      console.warn('payroll_locks unavailable (migration not applied yet?):', locksRes.error);
+      setLockedMonths(new Set());
+    } else {
+      setLockedMonths(new Set((locksRes.data || []).map(r => String(r.month).slice(0, 7))));
+    }
     if (householdRes.error) throw householdRes.error;
     if (employeesRes.error) throw employeesRes.error;
     if (wagesRes.error) throw wagesRes.error;
