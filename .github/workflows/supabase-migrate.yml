@@ -1,7 +1,7 @@
 name: Apply Supabase migrations
 
-# On push to main, apply any new SQL migrations in supabase/migrations/
-# to the linked Supabase project. Requires two repository secrets:
+# On push to main, apply any new Salärli SQL migrations to the linked Supabase
+# project. Requires two repository secrets:
 #   - SUPABASE_ACCESS_TOKEN: personal access token from
 #     https://supabase.com/dashboard/account/tokens
 #   - SUPABASE_DB_PASSWORD:  the project's database password from
@@ -20,15 +20,13 @@ permissions:
   contents: read
 
 concurrency:
+  # Shared with the Family Planner job: both push to the same database.
   group: supabase-migrate
   cancel-in-progress: false
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: kinderbetreuung-lohn
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -38,7 +36,26 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.116.0
+
+      # Salärli and the Family Planner share one Supabase project but keep their
+      # migrations in separate folders. `supabase db push` refuses to run when
+      # the remote history holds versions missing locally, so push from a temp
+      # project that holds BOTH histories: the Family Planner migrations already
+      # applied are then "known", and only the new Salärli ones are pending.
+      # (Mirror of family-planner-supabase.yml, which does the same the other way.)
+      - name: Assemble the combined migration history
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/salaerli-project/supabase/migrations
+          cp kinderbetreuung-lohn/supabase/config.toml /tmp/salaerli-project/supabase/config.toml
+          cp kinderbetreuung-lohn/supabase/migrations/*.sql /tmp/salaerli-project/supabase/migrations/
+          cp family-planner/supabase/migrations/*.sql /tmp/salaerli-project/supabase/migrations/
+          ls -1 /tmp/salaerli-project/supabase/migrations/
+
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        working-directory: /tmp/salaerli-project
+
       - name: Push migrations
         run: supabase db push --include-all
+        working-directory: /tmp/salaerli-project
