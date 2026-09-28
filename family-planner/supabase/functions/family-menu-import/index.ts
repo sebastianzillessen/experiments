@@ -28,6 +28,8 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CLAUDE_API_KEY = Deno.env.get('CLAUDE_API_KEY') ?? null;
 
 const FETCH_TIMEOUT_MS = 20_000;
+/** One automatic import per family per half hour, whichever screen asks. */
+const AUTO_THROTTLE_MS = 30 * 60_000;
 const MAX_BYTES = 8 * 1024 * 1024;
 
 const corsHeaders = {
@@ -83,7 +85,7 @@ Deno.serve(async (req) => {
 
   let body: {
     family_id?: string; source_id?: string;
-    year?: number; week?: number; pdf_base64?: string;
+    year?: number; week?: number; pdf_base64?: string; auto?: boolean;
   };
   try {
     body = await req.json();
@@ -132,6 +134,32 @@ Deno.serve(async (req) => {
   const { data: family } = await admin
     .from('fp_families').select('timezone').eq('id', familyId).maybeSingle();
   const tz = family?.timezone || 'Europe/Zurich';
+
+  // Asked for on its own, because the function and the migration deploy from
+  // the same merge without a guaranteed order: if this column is not there
+  // yet, the worst case is a half hour without a brake, not a family losing
+  // its time zone to a failed select.
+  const { data: throttle } = await admin
+    .from('fp_families').select('menu_import_attempted_at').eq('id', familyId).maybeSingle();
+
+  // Every screen fetches a missing week by itself, so the brake has to sit
+  // here rather than on the devices: they cannot see each other, and this is
+  // where the PDF and the model call are paid for. Pressing the button is
+  // never held back — a button that silently does nothing is worse than a
+  // second call.
+  const lastAttempt = throttle?.menu_import_attempted_at
+    ? Date.parse(throttle.menu_import_attempted_at as string) : 0;
+  const since = Date.now() - lastAttempt;
+  if (body.auto && since < AUTO_THROTTLE_MS) {
+    return jsonResponse({
+      skipped: 'throttled', retry_in_ms: AUTO_THROTTLE_MS - since,
+    });
+  }
+  // Stamped before the work, not after: a call that dies halfway through still
+  // spent the money, and must still hold the next one off.
+  await admin.from('fp_families')
+    .update({ menu_import_attempted_at: new Date().toISOString() })
+    .eq('id', familyId);
 
   const current = isoWeek(todayInZone(tz));
   const year = Number.isInteger(body.year) ? body.year! : current.year;

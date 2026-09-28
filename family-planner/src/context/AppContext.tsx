@@ -130,7 +130,9 @@ type AppContextValue = {
   deleteMenuSource: (id: string) => Promise<boolean>;
   setMenuAssignment: (sourceId: string, personId: string, weekdays: number[]) => Promise<boolean>;
   removeMenuAssignment: (sourceId: string, personId: string) => Promise<boolean>;
-  importMenuWeek: (sourceId: string, year: number, week: number, pdfBase64?: string) => Promise<string | null>;
+  importMenuWeek: (
+    sourceId: string, year: number, week: number, pdfBase64?: string, auto?: boolean,
+  ) => Promise<string | null>;
   deleteMenuWeek: (id: string) => Promise<boolean>;
   /** Resolves to the task's id, so a new one can be filled in right away. */
   upsertTask: (draft: TaskDraft, id?: string) => Promise<string | null>;
@@ -1126,15 +1128,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Resolves to null on success, or the message to show. */
   const importMenuWeek = useCallback(async (
-    sourceId: string, year: number, week: number, pdfBase64?: string
+    sourceId: string, year: number, week: number, pdfBase64?: string, auto?: boolean
   ) => {
     const fam = familyRef.current;
     if (!fam) return 'Keine Familie geladen';
     setSync({ busy: true, message: null, error: null });
     try {
       const { data, error } = await supabase.functions.invoke('family-menu-import', {
-        body: { family_id: fam.id, source_id: sourceId, year, week, pdf_base64: pdfBase64 },
+        body: {
+          family_id: fam.id, source_id: sourceId, year, week, pdf_base64: pdfBase64, auto,
+        },
       });
+      // Another screen got there first, or this family already asked within
+      // the half hour. Nothing happened and nothing is wrong.
+      if ((data as { skipped?: string } | null)?.skipped) {
+        setSync({ busy: false, message: null, error: null });
+        return null;
+      }
       // The function answers with a JSON body on failure too, and that message
       // is the useful one — "Edge Function returned a non-2xx status" is not.
       // On a non-2xx supabase-js leaves `data` null and puts the response on
@@ -1147,7 +1157,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Der Menüplan konnte nicht geholt werden';
-      setSync({ busy: false, message: null, error: message });
+      // A week the school has not published yet is the normal case for the
+      // automatic fetch. Reporting it would leave a red box on the kitchen
+      // wall all weekend for something nobody did wrong.
+      setSync({ busy: false, message: null, error: auto ? null : message });
       return message;
     }
   }, [reload]);

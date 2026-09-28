@@ -148,6 +148,7 @@ function MenuSourceCard({ source }: { source: MenuSource }) {
         </div>
       )}
       {sync.busy && <p className="hint">Der Menüplan wird gelesen …</p>}
+      <AutoImportNote />
 
       <ul className="settings-list">
         {weeks.map(week => (
@@ -169,6 +170,17 @@ function MenuSourceCard({ source }: { source: MenuSource }) {
 
       {editing && <MenuSourceForm source={source} onClose={() => setEditing(false)} />}
     </div>
+  );
+}
+
+/** Says what happens when nobody presses the button. */
+function AutoImportNote() {
+  return (
+    <p className="hint">
+      Fehlende Wochen holt die App selbst, sobald der Planer irgendwo offen ist: die
+      laufende Woche jederzeit, die nächste ab Freitagnachmittag. Höchstens einmal pro
+      halbe Stunde für die ganze Familie — egal, auf wie vielen Geräten er offen ist.
+    </p>
   );
 }
 
