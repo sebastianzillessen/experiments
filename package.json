@@ -23,6 +23,6 @@
     "@cloudflare/workers-types": "^4.20260520.1"
   },
   "dependencies": {
-    "xlsx": "^0.18.5"
+    "@e965/xlsx": "^0.20.3"
   }
 }
