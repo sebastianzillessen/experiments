@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attemptKey, dueMenuImports, isoWeekOf, wallClock } from '../src/lib/menuSchedule.ts';
+import { dueMenuImports, isoWeekOf, wallClock } from '../src/lib/menuSchedule.ts';
 import type { MenuSource } from '../src/lib/types.ts';
 
 const TZ = 'Europe/Zurich';
@@ -19,9 +19,13 @@ const KITA = source('kita');
 
 function due(over: Partial<Parameters<typeof dueMenuImports>[0]> = {}) {
   return dueMenuImports({
-    nowMs: FRIDAY_AFTERNOON, timeZone: TZ, sources: [KITA], weeks: [], attempts: {}, ...over,
+    nowMs: FRIDAY_AFTERNOON, timeZone: TZ, sources: [KITA], weeks: [], ...over,
   });
 }
+
+/** The current week, which is due whenever it is missing. */
+const THIS_WEEK = { sourceId: 'kita', year: 2026, week: 37 };
+const NEXT_WEEK = { sourceId: 'kita', year: 2026, week: 38 };
 
 describe('wallClock', () => {
   it('reads the day and hour in the family zone, not in UTC', () => {
@@ -49,56 +53,56 @@ describe('isoWeekOf', () => {
 });
 
 describe('dueMenuImports', () => {
-  it('asks for the coming week once Friday afternoon comes round', () => {
-    expect(due()).toEqual([{ sourceId: 'kita', year: 2026, week: 38 }]);
+  it('wants the current week too, so a source added midweek fills in at once', () => {
+    // Wednesday: the coming week is nobody's business yet, but today's is.
+    expect(due({ nowMs: at('2026-09-09T10:00:00') })).toEqual([THIS_WEEK]);
   });
 
-  it('waits until the afternoon', () => {
-    expect(due({ nowMs: at('2026-09-11T12:59:00') })).toEqual([]);
-    expect(due({ nowMs: at('2026-09-11T13:00:00') })).toHaveLength(1);
+  it('adds the coming week once Friday afternoon comes round', () => {
+    expect(due()).toEqual([THIS_WEEK, NEXT_WEEK]);
   });
 
-  it('stays quiet earlier in the week', () => {
-    // Monday to Thursday the coming week is nobody's business yet.
-    for (const day of ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10']) {
-      expect(due({ nowMs: at(`${day}T13:00:00`) })).toEqual([]);
-    }
+  it('waits until the afternoon for the coming week', () => {
+    expect(due({ nowMs: at('2026-09-11T12:59:00') })).toEqual([THIS_WEEK]);
+    expect(due({ nowMs: at('2026-09-11T13:00:00') })).toEqual([THIS_WEEK, NEXT_WEEK]);
   });
 
-  it('keeps trying over the weekend, when the school publishes late', () => {
-    expect(due({ nowMs: at('2026-09-12T09:00:00') })).toHaveLength(1);
-    expect(due({ nowMs: at('2026-09-13T20:00:00') })).toHaveLength(1);
+  it('keeps asking over the weekend, when the school publishes late', () => {
+    expect(due({ nowMs: at('2026-09-12T09:00:00') })).toEqual([THIS_WEEK, NEXT_WEEK]);
+    expect(due({ nowMs: at('2026-09-13T20:00:00') })).toEqual([THIS_WEEK, NEXT_WEEK]);
   });
 
-  it('stops once the week is there', () => {
-    expect(due({ weeks: [{ sourceId: 'kita', year: 2026, week: 38 }] })).toEqual([]);
+  it('asks for today before Monday, because a plan for today is worth more', () => {
+    expect(due()[0]).toEqual(THIS_WEEK);
   });
 
-  it('is not satisfied by another source having it', () => {
+  it('stops once a week is there', () => {
+    expect(due({ weeks: [THIS_WEEK] })).toEqual([NEXT_WEEK]);
+    expect(due({ weeks: [THIS_WEEK, NEXT_WEEK] })).toEqual([]);
+  });
+
+  it('is not satisfied by another source having the week', () => {
     expect(due({
       sources: [KITA, source('schule')],
-      weeks: [{ sourceId: 'schule', year: 2026, week: 38 }],
-    })).toEqual([{ sourceId: 'kita', year: 2026, week: 38 }]);
+      weeks: [{ sourceId: 'schule', year: 2026, week: 37 }, { sourceId: 'schule', year: 2026, week: 38 }],
+    })).toEqual([THIS_WEEK, NEXT_WEEK]);
   });
 
   it('leaves a disabled source alone', () => {
     expect(due({ sources: [source('kita', false)] })).toEqual([]);
   });
 
-  it('waits an hour before asking again for a PDF that was not up yet', () => {
-    const key = attemptKey({ sourceId: 'kita', year: 2026, week: 38 });
-    const justTried = { [key]: FRIDAY_AFTERNOON - 59 * 60_000 };
-    expect(due({ attempts: justTried })).toEqual([]);
-    expect(due({ attempts: { [key]: FRIDAY_AFTERNOON - 61 * 60_000 } })).toHaveLength(1);
-  });
-
   it('counts the week across the turn of the year', () => {
-    // Friday 2026-12-25 — the week that follows is 53, still of 2026.
-    expect(due({ nowMs: at('2026-12-25T14:00:00') }))
-      .toEqual([{ sourceId: 'kita', year: 2026, week: 53 }]);
-    // Friday 2027-01-01 — the week that follows is the first of 2027.
-    expect(due({ nowMs: at('2027-01-01T14:00:00') }))
-      .toEqual([{ sourceId: 'kita', year: 2027, week: 1 }]);
+    // Friday 2026-12-25: the week that follows is 53, still of 2026.
+    expect(due({ nowMs: at('2026-12-25T14:00:00') })).toEqual([
+      { sourceId: 'kita', year: 2026, week: 52 },
+      { sourceId: 'kita', year: 2026, week: 53 },
+    ]);
+    // Friday 2027-01-01 is itself still week 53 of 2026; next is week 1 of 2027.
+    expect(due({ nowMs: at('2027-01-01T14:00:00') })).toEqual([
+      { sourceId: 'kita', year: 2026, week: 53 },
+      { sourceId: 'kita', year: 2027, week: 1 },
+    ]);
   });
 
   it('has nothing to do without a source', () => {

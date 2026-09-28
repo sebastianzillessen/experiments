@@ -8,7 +8,6 @@ import {
   unknownPlaceholders,
 } from '../../supabase/functions/family-menu-import/patterns.ts';
 import type { MenuSource } from '../lib/types.ts';
-import { useKioskSettings } from './KioskMode.tsx';
 import { Sheet } from './Sheet.tsx';
 
 /** "7.9." — the rest of the app writes dates this way, not as ISO. */
@@ -174,21 +173,13 @@ function MenuSourceCard({ source }: { source: MenuSource }) {
   );
 }
 
-/**
- * Says who fetches the menu when nobody presses the button.
- *
- * The kiosk screen does it, so on any other device this has to say so —
- * otherwise a family with the tablet switched off waits for a plan that is
- * never coming.
- */
+/** Says what happens when nobody presses the button. */
 function AutoImportNote() {
-  const kiosk = useKioskSettings();
   return (
     <p className="hint">
-      {kiosk.enabled
-        ? 'Dieses Gerät holt die nächste Woche ab Freitagnachmittag selbst, sobald sie fehlt.'
-        : 'Automatisch geholt wird die nächste Woche ab Freitagnachmittag — aber nur auf dem '
-          + 'Gerät im Kiosk-Modus (Anzeige → Kiosk-Modus). Sonst hier von Hand.'}
+      Fehlende Wochen holt die App selbst, sobald der Planer irgendwo offen ist: die
+      laufende Woche jederzeit, die nächste ab Freitagnachmittag. Höchstens einmal pro
+      halbe Stunde für die ganze Familie — egal, auf wie vielen Geräten er offen ist.
     </p>
   );
 }

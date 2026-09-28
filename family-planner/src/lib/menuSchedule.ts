@@ -1,29 +1,26 @@
-// When the wall tablet should fetch next week's lunch menu by itself.
+// Which weeks of the lunch menu are missing and worth fetching now.
 //
-// The import is a button in the settings, which means somebody has to remember
-// it. The screen in the kitchen is on anyway, so it does the remembering: from
-// Friday afternoon it pulls the coming week for every source that has not been
-// fetched yet.
+// The import used to be a button somebody had to remember. Any screen with
+// edit rights now fetches what is missing, so the plan fills itself in from
+// whichever device happens to be open.
 //
-// Only the kiosk screen runs this, which is what makes it safe: one device, so
-// two tablets cannot both pay for the same import. Deciding *what* is due is
-// kept here, away from timers and the network, so it can be tested.
+// Nothing here guards against two screens doing it at once: that brake sits in
+// the Edge Function, on the family, because the devices cannot see each other
+// and the function is where the work is paid for. This module only answers
+// "what is missing", away from timers and the network, so it can be tested.
 
 import type { MenuSource } from './types.ts';
 
 /** Friday, and the hour of the afternoon the school has usually published. */
-const DUE_WEEKDAY = 5;
-const DUE_HOUR = 13;
-/** A PDF that is not up yet is the normal case, so asking again is cheap-ish
- *  but not free: every attempt reads the file and costs a model call. */
-const RETRY_AFTER_MS = 60 * 60_000;
+const NEXT_WEEK_WEEKDAY = 5;
+const NEXT_WEEK_HOUR = 13;
 
 const DAY_MS = 86_400_000;
 
 export type DueImport = { sourceId: string; year: number; week: number };
 
-/** The key an attempt is remembered under. */
-export function attemptKey(due: DueImport): string {
+/** Identifies one week of one source. */
+export function weekKey(due: DueImport): string {
   return `${due.sourceId}|${due.year}|${due.week}`;
 }
 
@@ -58,37 +55,38 @@ export function isoWeekOf(dateKey: string): { year: number; week: number } {
 }
 
 /**
- * What the tablet should fetch right now — usually nothing.
+ * What is missing right now — usually nothing.
  *
- * `weeks` is what is already stored, `attempts` when each was last tried, so a
- * source whose PDF is not published yet is retried rather than hammered.
+ * The current week counts at any moment: a source added on a Tuesday should
+ * fill in on that Tuesday, not wait for the weekend. The coming week only
+ * counts from Friday afternoon, because before that the school has not
+ * published it and asking is pure noise against their server.
  */
 export function dueMenuImports(input: {
   nowMs: number;
   timeZone: string;
   sources: MenuSource[];
   weeks: { sourceId: string; year: number; week: number }[];
-  attempts: Record<string, number>;
-  retryAfterMs?: number;
 }): DueImport[] {
-  const { nowMs, timeZone, sources, weeks, attempts } = input;
-  const retryAfter = input.retryAfterMs ?? RETRY_AFTER_MS;
-
+  const { nowMs, timeZone, sources, weeks } = input;
   const now = wallClock(nowMs, timeZone);
-  if (now.weekday < DUE_WEEKDAY) return [];
-  if (now.weekday === DUE_WEEKDAY && now.hour < DUE_HOUR) return [];
 
-  // The week that starts on Monday. From Monday to Thursday this would be the
-  // week after the one on screen, which nobody is asking for yet — hence the
-  // weekday gate above.
-  const [y, m, d] = now.date.split('-').map(Number);
-  const target = isoWeekOf(new Date(Date.UTC(y, m - 1, d) + 7 * DAY_MS).toISOString().slice(0, 10));
+  const wanted = [isoWeekOf(now.date)];
+  const afternoon = now.weekday > NEXT_WEEK_WEEKDAY
+    || (now.weekday === NEXT_WEEK_WEEKDAY && now.hour >= NEXT_WEEK_HOUR);
+  if (afternoon) wanted.push(isoWeekOf(addDays(now.date, 7)));
 
   const stored = new Set(weeks.map(w => `${w.sourceId}|${w.year}|${w.week}`));
+  const enabled = sources.filter(source => source.enabled);
 
-  return sources
-    .filter(source => source.enabled)
-    .map(source => ({ sourceId: source.id, year: target.year, week: target.week }))
-    .filter(due => !stored.has(attemptKey(due)))
-    .filter(due => nowMs - (attempts[attemptKey(due)] ?? 0) >= retryAfter);
+  // The current week first: a plan for today beats a plan for Monday.
+  return wanted
+    .flatMap(({ year, week }) => enabled.map(source => ({ sourceId: source.id, year, week })))
+    .filter(due => !stored.has(weekKey(due)));
+}
+
+/** yyyy-mm-dd, n days on. */
+function addDays(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + days * DAY_MS).toISOString().slice(0, 10);
 }
