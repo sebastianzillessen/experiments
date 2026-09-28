@@ -132,19 +132,23 @@ Deno.serve(async (req) => {
   if (!source) return jsonResponse({ error: 'Diese Menüplan-Quelle gibt es nicht' }, 404);
 
   const { data: family } = await admin
-    .from('fp_families')
-    .select('timezone, menu_import_attempted_at')
-    .eq('id', familyId)
-    .maybeSingle();
+    .from('fp_families').select('timezone').eq('id', familyId).maybeSingle();
   const tz = family?.timezone || 'Europe/Zurich';
+
+  // Asked for on its own, because the function and the migration deploy from
+  // the same merge without a guaranteed order: if this column is not there
+  // yet, the worst case is a half hour without a brake, not a family losing
+  // its time zone to a failed select.
+  const { data: throttle } = await admin
+    .from('fp_families').select('menu_import_attempted_at').eq('id', familyId).maybeSingle();
 
   // Every screen fetches a missing week by itself, so the brake has to sit
   // here rather than on the devices: they cannot see each other, and this is
   // where the PDF and the model call are paid for. Pressing the button is
   // never held back — a button that silently does nothing is worse than a
   // second call.
-  const lastAttempt = family?.menu_import_attempted_at
-    ? Date.parse(family.menu_import_attempted_at as string) : 0;
+  const lastAttempt = throttle?.menu_import_attempted_at
+    ? Date.parse(throttle.menu_import_attempted_at as string) : 0;
   const since = Date.now() - lastAttempt;
   if (body.auto && since < AUTO_THROTTLE_MS) {
     return jsonResponse({
