@@ -8,6 +8,7 @@ import {
   unknownPlaceholders,
 } from '../../supabase/functions/family-menu-import/patterns.ts';
 import type { MenuSource } from '../lib/types.ts';
+import { useKioskSettings } from './KioskMode.tsx';
 import { Sheet } from './Sheet.tsx';
 
 /** "7.9." — the rest of the app writes dates this way, not as ISO. */
@@ -148,6 +149,7 @@ function MenuSourceCard({ source }: { source: MenuSource }) {
         </div>
       )}
       {sync.busy && <p className="hint">Der Menüplan wird gelesen …</p>}
+      <AutoImportNote />
 
       <ul className="settings-list">
         {weeks.map(week => (
@@ -169,6 +171,25 @@ function MenuSourceCard({ source }: { source: MenuSource }) {
 
       {editing && <MenuSourceForm source={source} onClose={() => setEditing(false)} />}
     </div>
+  );
+}
+
+/**
+ * Says who fetches the menu when nobody presses the button.
+ *
+ * The kiosk screen does it, so on any other device this has to say so —
+ * otherwise a family with the tablet switched off waits for a plan that is
+ * never coming.
+ */
+function AutoImportNote() {
+  const kiosk = useKioskSettings();
+  return (
+    <p className="hint">
+      {kiosk.enabled
+        ? 'Dieses Gerät holt die nächste Woche ab Freitagnachmittag selbst, sobald sie fehlt.'
+        : 'Automatisch geholt wird die nächste Woche ab Freitagnachmittag — aber nur auf dem '
+          + 'Gerät im Kiosk-Modus (Anzeige → Kiosk-Modus). Sonst hier von Hand.'}
+    </p>
   );
 }
 

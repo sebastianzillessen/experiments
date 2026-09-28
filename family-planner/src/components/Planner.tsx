@@ -22,6 +22,7 @@ import { Household } from './Household.tsx';
 import { Trips } from './Trips.tsx';
 import { AppVersion } from './AppVersion.tsx';
 import { KioskCurtain, useKiosk } from './KioskMode.tsx';
+import { useMenuAutoImport } from './MenuAutoImport.tsx';
 import { WeatherCell, useWeatherDetail } from './Weather.tsx';
 
 type View = 'week' | 'month';
@@ -147,6 +148,7 @@ export function Planner() {
     refreshWeather(false);
   }, [refreshCalendars, refreshWeather]);
   const kiosk = useKiosk(pullCalendars, backToToday);
+  useMenuAutoImport();
 
   // Bring today into view whenever it is among the days on screen. Paging to
   // another week or month finds nothing to scroll to and is left alone.
