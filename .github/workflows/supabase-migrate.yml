@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: 2.116.0
+          version: 2.119.0
 
       # Salärli and the Family Planner share one Supabase project but keep their
       # migrations in separate folders. `supabase db push` refuses to run when
