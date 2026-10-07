@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: 2.116.0
+          version: 2.120.0
 
       # `supabase db push` refuses to run when the remote migration history
       # contains versions that are missing locally — and the two experiments
