@@ -22,7 +22,8 @@ const PS_NUMERIC_FIELDS: { domId: string; key: NumericKey; step: number; label: 
   { domId: 'ps-admin-fee-employer',key: 'adminFeeEmployer', step: 0.01,  label: 'Verwaltungskosten (% der AHV/IV/EO-Beiträge)' },
   { domId: 'ps-withholding-tax',   key: 'withholdingTax',   step: 0.01,  label: 'Quellensteuer (VAV, einheitlich 5 %)' },
   { domId: 'ps-uvg-bu-employer',   key: 'uvgBuEmployer',    step: 0.001, label: 'UVG-BU Arbeitgeber (%)' },
-  { domId: 'ps-uvg-nbu-employee',  key: 'uvgNbuEmployee',   step: 0.001, label: 'UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)' }
+  { domId: 'ps-uvg-nbu-employee',  key: 'uvgNbuEmployee',   step: 0.001, label: 'UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)' },
+  { domId: 'ps-ahv-pensioner-allowance', key: 'ahvPensionerAllowanceMonthly', step: 50, label: 'AHV-Rentnerfreibetrag (CHF/Monat)' }
 ];
 
 type PsUi =
@@ -374,7 +375,23 @@ export function EinstellungenTab() {
             <label htmlFor="ps-uvg-enabled">UVG via {ausgleichskasseLabel(canton)} abrechnen (VAVplus). Wenn deaktiviert: separate UVG abschliessen und ausserhalb dieses Tools abrechnen.</label>
           </div>
           <div className="grid-2">
-            {PS_NUMERIC_FIELDS.slice(8).map(f => (
+            {PS_NUMERIC_FIELDS.slice(8, 10).map(f => (
+              <div key={f.domId}>
+                <label htmlFor={f.domId}>{f.label}</label>
+                <input type="number" id={f.domId} step={f.step} min="0"
+                  value={draft?.fields[f.key] ?? ''}
+                  disabled={locked}
+                  onChange={e => setDraft(d => d ? { ...d, fields: { ...d.fields, [f.key]: e.target.value } } : d)} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>AHV-Rentner/innen</h3>
+          <div className="section-sub">Für Mitarbeitende im AHV-Referenzalter: Nur der Lohn über diesem monatlichen Freibetrag ist AHV/IV/EO- und FAK-pflichtig, ALV entfällt. Der Freibetrag greift nur bei Personen, die unter „Mitarbeitende" als Rentner/in markiert sind. Richtwert: CHF 16'800/Jahr = CHF 1'400/Monat.</div>
+          <div className="grid-2">
+            {PS_NUMERIC_FIELDS.slice(10).map(f => (
               <div key={f.domId}>
                 <label htmlFor={f.domId}>{f.label}</label>
                 <input type="number" id={f.domId} step={f.step} min="0"
