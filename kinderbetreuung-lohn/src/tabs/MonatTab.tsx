@@ -139,8 +139,15 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
       )}
 
       <h4>Abzüge Arbeitnehmer/in</h4>
+      {calc.isPensioner && calc.freibetrag > 0 && (
+        <div className="summary-row"><span>AHV-pflichtig (Bruttolohn − Freibetrag CHF {fmtChf(calc.freibetrag)})</span><span>CHF {fmtChf(calc.ahvBasis)}</span></div>
+      )}
       <div className="summary-row"><span>– AHV/IV/EO ({e.ahvIvEoEmployee} %)</span><span>CHF {fmtChf(calc.an.ahvIvEo)}</span></div>
-      <div className="summary-row"><span>– ALV ({e.alvEmployee} %)</span><span>CHF {fmtChf(calc.an.alv)}</span></div>
+      {calc.isPensioner ? (
+        <div className="summary-row"><span>– ALV (entfällt – AHV-Referenzalter)</span><span>CHF {fmtChf(0)}</span></div>
+      ) : (
+        <div className="summary-row"><span>– ALV ({e.alvEmployee} %)</span><span>CHF {fmtChf(calc.an.alv)}</span></div>
+      )}
       {calc.nbuApplicable && (
         <div className="summary-row"><span>– UVG-NBU ({e.uvgNbuEmployee} %)</span><span>CHF {fmtChf(calc.an.nbu)}</span></div>
       )}
@@ -151,7 +158,11 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
 
       <h4>Arbeitgeberbeiträge (informativ, nicht vom Lohn abgezogen)</h4>
       <div className="summary-row"><span>AHV/IV/EO ({e.ahvIvEoEmployer} %)</span><span>CHF {fmtChf(calc.ag.ahvIvEo)}</span></div>
-      <div className="summary-row"><span>ALV ({e.alvEmployer} %)</span><span>CHF {fmtChf(calc.ag.alv)}</span></div>
+      {calc.isPensioner ? (
+        <div className="summary-row"><span>ALV (entfällt – AHV-Referenzalter)</span><span>CHF {fmtChf(0)}</span></div>
+      ) : (
+        <div className="summary-row"><span>ALV ({e.alvEmployer} %)</span><span>CHF {fmtChf(calc.ag.alv)}</span></div>
+      )}
       <div className="summary-row"><span>FAK ({e.fakEmployer} %)</span><span>CHF {fmtChf(calc.ag.fak)}</span></div>
       {calc.uvgAktivAny && (
         <div className="summary-row"><span>UVG-BU ({e.uvgBuEmployer} %)</span><span>CHF {fmtChf(calc.ag.bu)}</span></div>

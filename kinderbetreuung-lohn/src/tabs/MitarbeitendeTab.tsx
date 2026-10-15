@@ -14,6 +14,7 @@ type FormFields = {
   birthDate: string; ahvNumber: string; iban: string;
   vacationWeeks: number; weeklyHoursThreshold8h: boolean;
   employmentType: EmploymentType;
+  pensioner: boolean; pensionerWaiveAllowance: boolean;
 };
 
 function fieldsFrom(d: EmployeeData): FormFields {
@@ -21,7 +22,8 @@ function fieldsFrom(d: EmployeeData): FormFields {
     name: d.name, address: d.address, zip: d.zip, city: d.city,
     birthDate: d.birthDate, ahvNumber: d.ahvNumber, iban: d.iban,
     vacationWeeks: d.vacationWeeks, weeklyHoursThreshold8h: d.weeklyHoursThreshold8h,
-    employmentType: d.employmentType
+    employmentType: d.employmentType,
+    pensioner: d.pensioner, pensionerWaiveAllowance: d.pensionerWaiveAllowance
   };
 }
 
@@ -249,6 +251,18 @@ export function MitarbeitendeTab() {
                       onChange={e => setFields(f => ({ ...f, weeklyHoursThreshold8h: e.target.checked }))} />
                     <label htmlFor="emp-f-8h">Arbeitet ≥ 8 Stunden pro Woche beim selben Arbeitgeber (Pflicht NBU-Versicherung)</label>
                   </div>
+                  <div className="checkbox-row">
+                    <input type="checkbox" id="emp-f-pensioner" checked={fields.pensioner}
+                      onChange={e => setFields(f => ({ ...f, pensioner: e.target.checked }))} />
+                    <label htmlFor="emp-f-pensioner">Im AHV-Referenzalter (bezieht AHV): keine ALV; AHV/IV/EO nur über dem Freibetrag</label>
+                  </div>
+                  {fields.pensioner && (
+                    <div className="checkbox-row" style={{ marginLeft: 24 }}>
+                      <input type="checkbox" id="emp-f-pensioner-waive" checked={fields.pensionerWaiveAllowance}
+                        onChange={e => setFields(f => ({ ...f, pensionerWaiveAllowance: e.target.checked }))} />
+                      <label htmlFor="emp-f-pensioner-waive">Verzicht auf den AHV-Freibetrag (Beiträge auf dem ganzen Lohn)</label>
+                    </div>
+                  )}
                   <div className="btn-row">
                     <button className="btn" id="emp-save" onClick={onSave}>Speichern</button>
                     <button className="btn btn-secondary" id="emp-cancel" onClick={closeForm}>Abbrechen</button>

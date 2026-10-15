@@ -30,6 +30,13 @@ Vereinfachte Lohnabrechnung (VAV/VAVplus) für Kinderbetreuung im Privathaushalt
   erfassen keine Stunden; der Monat wird unter „Stundenerfassung" bestätigt. Ferien
   und Feiertage sind im Monatslohn enthalten (keine separate Zulage). Die
   Abrechnung, Jahresübersicht und QR-Rechnung funktionieren für beide Modelle.
+- **Mitarbeitende im AHV-Referenzalter (Rentner/innen).** Pro Person als
+  „im AHV-Referenzalter" markierbar. Dann entfällt die ALV, und AHV/IV/EO sowie
+  FAK werden nur auf dem Lohn über dem Rentnerfreibetrag erhoben. Der Freibetrag
+  (CHF 16'800/Jahr) wird pro Monat als CHF 1'400 abgebildet (in den Einstellungen
+  anpassbar) — passend zum monatsweisen Abrechnungsmodell. Optional kann pro
+  Person auf den Freibetrag verzichtet werden (Beiträge dann auf dem ganzen Lohn).
+  UVG und die Quellensteuer bleiben unverändert.
 
 ## Setup
 

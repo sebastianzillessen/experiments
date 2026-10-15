@@ -14,6 +14,10 @@ export type PaySettingsData = {
   uvgEnabled: boolean;
   uvgBuEmployer: number;
   uvgNbuEmployee: number;
+  // Monatlicher AHV-Freibetrag für Erwerbstätige im Referenzalter (CHF 16'800/
+  // Jahr → CHF 1'400/Monat). Wird nur bei als Rentner/in markierten Personen
+  // vom AHV-/FAK-pflichtigen Lohn abgezogen.
+  ahvPensionerAllowanceMonthly: number;
 };
 
 export type PaySettingsVersion = {
@@ -64,6 +68,11 @@ export type EmployeeData = {
   weeklyHoursThreshold8h: boolean;
   vacationWeeks: number; // 4 | 5 | 6
   employmentType: EmploymentType;
+  // Person im AHV-Referenzalter (bezieht bereits AHV): keine ALV, AHV/IV/EO und
+  // FAK nur auf dem Lohn über dem Rentnerfreibetrag.
+  pensioner: boolean;
+  // Verzicht auf den AHV-Freibetrag (Beiträge dann auf dem ganzen Lohn).
+  pensionerWaiveAllowance: boolean;
 };
 
 export type Employee = {
@@ -116,7 +125,8 @@ export function defaultPaySettingsData(canton?: string): PaySettingsData {
     adminFeeEmployer: 5.00,  // Verwaltungskosten: % der AHV/IV/EO-Beiträge (AN + AG)
     uvgEnabled: true,
     uvgBuEmployer: 0.505,
-    uvgNbuEmployee: 1.432
+    uvgNbuEmployee: 1.432,
+    ahvPensionerAllowanceMonthly: 1400 // CHF 16'800/Jahr, pro Monat
   };
 }
 
@@ -148,7 +158,8 @@ export function sanitizePaySettingsData(d: unknown): PaySettingsData {
     adminFeeEmployer: asNumber(raw.adminFeeEmployer, def.adminFeeEmployer),
     uvgEnabled:       raw.uvgEnabled === undefined ? def.uvgEnabled : !!raw.uvgEnabled,
     uvgBuEmployer:    asNumber(raw.uvgBuEmployer,    def.uvgBuEmployer),
-    uvgNbuEmployee:   asNumber(raw.uvgNbuEmployee,   def.uvgNbuEmployee)
+    uvgNbuEmployee:   asNumber(raw.uvgNbuEmployee,   def.uvgNbuEmployee),
+    ahvPensionerAllowanceMonthly: asNumber(raw.ahvPensionerAllowanceMonthly, def.ahvPensionerAllowanceMonthly)
   };
 }
 
@@ -165,7 +176,9 @@ export function sanitizeEmployeeData(eeRaw: unknown): EmployeeData {
     iban:           asString(ee.iban),
     weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
     vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4,
-    employmentType: ee.employmentType === 'monthly' ? 'monthly' : 'hourly'
+    employmentType: ee.employmentType === 'monthly' ? 'monthly' : 'hourly',
+    pensioner:               !!ee.pensioner,
+    pensionerWaiveAllowance: !!ee.pensionerWaiveAllowance
   };
 }
 

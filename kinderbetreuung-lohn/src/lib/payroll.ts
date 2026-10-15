@@ -106,6 +106,12 @@ export type Abrechnung = {
   agKostenTotal: number;
   nbuApplicable: boolean;
   uvgAktivAny: boolean;
+  // Rentner/in (AHV-Referenzalter): keine ALV; AHV/IV/EO + FAK nur auf dem Lohn
+  // über dem Freibetrag. `freibetrag` ist der angewandte Monatsabzug (0 wenn
+  // keine Rentnerin oder bei Verzicht), `ahvBasis` der beitragspflichtige Teil.
+  isPensioner: boolean;
+  freibetrag: number;
+  ahvBasis: number;
 };
 
 /* ---- BERECHNUNG ----
@@ -172,9 +178,23 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
     bruttoTotal      = round5(bruttoStunden + ferienzulage + feiertagszulage);
   }
 
+  // Rentner/in im AHV-Referenzalter: AHV/IV/EO (und FAK) nur auf dem Lohn über
+  // dem Freibetrag; der jährliche Freibetrag (CHF 16'800) wird pro Monat
+  // abgebildet (CHF 1'400), passend zum monatsweisen Abrechnungsmodell. ALV
+  // entfällt, weil die Beitragspflicht mit dem Referenzalter endet. Mit Verzicht
+  // auf den Freibetrag werden die Beiträge auf dem ganzen Lohn erhoben.
+  const isPensioner = !!empData?.pensioner;
+  const waiveAllowance = !!empData?.pensionerWaiveAllowance;
+  const freibetrag = isPensioner && !waiveAllowance
+    ? Math.min(bruttoTotal, e.ahvPensionerAllowanceMonthly)
+    : 0;
+  const ahvBasis = round5(bruttoTotal - freibetrag);
+  const alvEmployeeRate = isPensioner ? 0 : e.alvEmployee;
+  const alvEmployerRate = isPensioner ? 0 : e.alvEmployer;
+
   const an = {
-    ahvIvEo:   round2(bruttoTotal * e.ahvIvEoEmployee / 100),
-    alv:       round2(bruttoTotal * e.alvEmployee / 100),
+    ahvIvEo:   round2(ahvBasis * e.ahvIvEoEmployee / 100),
+    alv:       round2(bruttoTotal * alvEmployeeRate / 100),
     nbu:       nbuApplicable ? round2(bruttoTotal * e.uvgNbuEmployee / 100) : 0,
     quellenst: round2(bruttoTotal * e.withholdingTax / 100),
     total: 0
@@ -183,11 +203,11 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
   const netto = round5(bruttoTotal - an.total);
 
   // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
-  const ahvIvEoBeitraege = bruttoTotal * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
+  const ahvIvEoBeitraege = ahvBasis * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
   const ag = {
-    ahvIvEo: round2(bruttoTotal * e.ahvIvEoEmployer / 100),
-    alv:     round2(bruttoTotal * e.alvEmployer / 100),
-    fak:     round2(bruttoTotal * e.fakEmployer / 100),
+    ahvIvEo: round2(ahvBasis * e.ahvIvEoEmployer / 100),
+    alv:     round2(bruttoTotal * alvEmployerRate / 100),
+    fak:     round2(ahvBasis * e.fakEmployer / 100),
     bu:      uvgAktivAny ? round2(bruttoTotal * e.uvgBuEmployer / 100) : 0,
     verw:    round2(ahvIvEoBeitraege * e.adminFeeEmployer / 100),
     total: 0
@@ -195,5 +215,5 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny };
+  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny, isPensioner, freibetrag, ahvBasis };
 }
