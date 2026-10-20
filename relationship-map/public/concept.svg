@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="300" viewBox="0 0 480 300" font-family="system-ui, sans-serif">
+  <rect width="480" height="300" fill="#f8fafc"/>
+  <g stroke-width="2">
+    <line x1="240" y1="150" x2="240" y2="70" stroke="#e11d48" stroke-opacity="0.7"/>
+    <line x1="240" y1="150" x2="360" y2="110" stroke="#f59e0b" stroke-opacity="0.5"/>
+    <line x1="240" y1="150" x2="370" y2="210" stroke="#10b981" stroke-opacity="0.45"/>
+    <line x1="240" y1="150" x2="240" y2="250" stroke="#3b82f6" stroke-opacity="0.3"/>
+    <line x1="240" y1="150" x2="110" y2="210" stroke="#10b981" stroke-opacity="0.55"/>
+    <line x1="240" y1="150" x2="100" y2="100" stroke="#8b5cf6" stroke-opacity="0.4"/>
+  </g>
+  <g font-size="11" fill="#0f172a" text-anchor="middle">
+    <circle cx="240" cy="70" r="8" fill="#e11d48"/><text x="240" y="56">Partner · 9</text>
+    <circle cx="360" cy="110" r="7" fill="#f59e0b"/><text x="360" y="96">Mum · 7</text>
+    <circle cx="370" cy="210" r="7" fill="#10b981"/><text x="370" y="232">Sam · 6</text>
+    <circle cx="240" cy="250" r="7" fill="#3b82f6"/><text x="240" y="272">Boss · 4</text>
+    <circle cx="110" cy="210" r="7" fill="#10b981"/><text x="110" y="232">Jess · 8</text>
+    <circle cx="100" cy="100" r="7" fill="#8b5cf6"/><text x="100" y="86">Guard · 2</text>
+  </g>
+  <circle cx="240" cy="150" r="14" fill="#0f172a" stroke="#fff" stroke-width="3"/>
+  <text x="240" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">You</text>
+</svg>
