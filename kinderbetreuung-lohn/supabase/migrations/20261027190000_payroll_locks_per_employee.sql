@@ -6,7 +6,12 @@
 alter table public.payroll_locks
   add column employee_id uuid references public.employees(id) on delete cascade;
 
--- 2. Expand each existing household-wide lock into one row per employee that
+-- 2. Drop the old (household, month) uniqueness FIRST — the backfill below writes
+--    several rows per household + month (one per employee), which that constraint
+--    would reject.
+alter table public.payroll_locks drop constraint if exists payroll_locks_household_id_month_key;
+
+-- 3. Expand each existing household-wide lock into one row per employee that
 --    has shifts in that month. Employees without shifts in a locked month had
 --    nothing to lock, so they simply stay open.
 insert into public.payroll_locks (household_id, month, employee_id, created_at, created_by)
@@ -18,16 +23,15 @@ join public.shifts s
  and s.employee_id is not null
 where l.employee_id is null;
 
--- 3. Drop the old household-wide rows and make the column mandatory.
+-- 4. Drop the old household-wide rows and make the column mandatory.
 delete from public.payroll_locks where employee_id is null;
 alter table public.payroll_locks alter column employee_id set not null;
 
--- 4. Swap uniqueness from (household, month) to (household, month, employee).
-alter table public.payroll_locks drop constraint if exists payroll_locks_household_id_month_key;
+-- 5. Add the new (household, month, employee) uniqueness.
 alter table public.payroll_locks
   add constraint payroll_locks_household_month_employee_key unique (household_id, month, employee_id);
 
--- 5. is_month_locked now answers per employee. Its signature changes, so drop
+-- 6. is_month_locked now answers per employee. Its signature changes, so drop
 --    the old two-arg version first.
 drop function if exists public.is_month_locked(uuid, date);
 create or replace function public.is_month_locked(p_household_id uuid, p_date date, p_employee_id uuid)
@@ -45,7 +49,7 @@ as $$
   )
 $$;
 
--- 6. The shifts trigger now checks the lock for the shift's own employee. A
+-- 7. The shifts trigger now checks the lock for the shift's own employee. A
 --    shift with no employee cannot be locked (nothing to attribute it to).
 create or replace function public.shifts_block_locked()
 returns trigger
