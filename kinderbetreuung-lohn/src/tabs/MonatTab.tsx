@@ -9,6 +9,7 @@ import { vacationPercentForWeeks } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
 import { QrBillSection } from '../lib/qrbill';
 import type { QrTracker } from '../lib/qrbill';
+import { printReport } from '../lib/print';
 
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -258,11 +259,11 @@ export function MonatTab() {
   }
 
   function onPrint() {
-    // window.print() MUST run synchronously inside the tap: iOS Safari drops the
-    // user-gesture across an await and then silently ignores the call. We ensure
-    // the QR-bill is ready beforehand by disabling the button while it generates
-    // (qrPending), instead of awaiting here.
-    window.print();
+    // printReport() runs synchronously inside the tap (iOS Safari drops the
+    // user-gesture across an await) and handles the standalone-PWA case where
+    // window.print() is a no-op. The QR-bill is ready because the button is
+    // disabled while it generates (qrPending), so we never await here.
+    printReport('monat-doc', `Lohnabrechnung ${monthLabel(month)}`);
   }
 
   let doc = null;
