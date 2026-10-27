@@ -107,11 +107,13 @@ type AppContextValue = {
   // Mint a URL invite for someone whose email we don't know. Returns the full
   // shareable link (…?invite=<token>) or null on failure.
   createLinkInvite: (args: { role: Role; employeeId?: string | null }) => Promise<string | null>;
-  // Months (YYYY-MM) that are signed off / locked for this household. Their
-  // shifts are read-only (DB-enforced) and hidden from the Einsätze overview.
+  // Signed-off months, per employee. A locked (month, employee) pair has its
+  // shifts read-only (DB-enforced) and hidden from the Einsätze overview.
+  // Keys are `${month}__${employeeId}` (month is YYYY-MM).
   lockedMonths: Set<string>;
-  signOffMonth: (month: string) => Promise<boolean>;
-  reopenMonth: (month: string) => Promise<boolean>;
+  isMonthLockedFor: (month: string, employeeId: string | null) => boolean;
+  signOffMonth: (month: string, employeeId: string) => Promise<boolean>;
+  reopenMonth: (month: string, employeeId: string) => Promise<boolean>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -248,7 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from('employees').select('id, data, user_id, archived_at').eq('household_id', hh).order('created_at'),
       // employee_wages has no household_id; RLS already scopes rows to this household.
       supabase.from('employee_wages').select('id, employee_id, effective_month, hourly_rate, monthly_salary').order('effective_month'),
-      supabase.from('payroll_locks').select('month').eq('household_id', hh)
+      supabase.from('payroll_locks').select('month, employee_id').eq('household_id', hh)
     ]);
     if (profileRes.error) throw profileRes.error;
     if (shiftsRes.error) throw shiftsRes.error;
@@ -260,7 +262,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.warn('payroll_locks unavailable (migration not applied yet?):', locksRes.error);
       setLockedMonths(new Set());
     } else {
-      setLockedMonths(new Set((locksRes.data || []).map(r => String(r.month).slice(0, 7))));
+      setLockedMonths(new Set((locksRes.data || [])
+        .filter(r => r.employee_id)
+        .map(r => `${String(r.month).slice(0, 7)}__${r.employee_id}`)));
     }
     if (householdRes.error) throw householdRes.error;
     if (employeesRes.error) throw employeesRes.error;
@@ -995,29 +999,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Sign off a month (YYYY-MM): its shifts become read-only (DB trigger) and drop
   // out of the Einsätze overview.
-  const signOffMonth = useCallback(async (month: string): Promise<boolean> => {
+  const isMonthLockedFor = useCallback(
+    (month: string, employeeId: string | null): boolean =>
+      !!employeeId && lockedMonths.has(`${month}__${employeeId}`),
+    [lockedMonths]
+  );
+
+  const signOffMonth = useCallback(async (month: string, employeeId: string): Promise<boolean> => {
     setSyncStatus('pending');
     try {
       const { error } = await supabase.from('payroll_locks').insert({
         household_id: householdIdRef.current,
         month: `${month}-01`,
+        employee_id: employeeId,
         created_by: userRef.current?.id
       });
       if (error) throw error;
-      setLockedMonths(prev => new Set(prev).add(month));
+      setLockedMonths(prev => new Set(prev).add(`${month}__${employeeId}`));
       setSyncStatus('ok');
       return true;
     } catch (e) { setSyncStatus('error', e); return false; }
   }, [setSyncStatus]);
 
-  const reopenMonth = useCallback(async (month: string): Promise<boolean> => {
+  const reopenMonth = useCallback(async (month: string, employeeId: string): Promise<boolean> => {
     setSyncStatus('pending');
     try {
       const { error } = await supabase.from('payroll_locks').delete()
         .eq('household_id', householdIdRef.current)
-        .eq('month', `${month}-01`);
+        .eq('month', `${month}-01`)
+        .eq('employee_id', employeeId);
       if (error) throw error;
-      setLockedMonths(prev => { const next = new Set(prev); next.delete(month); return next; });
+      setLockedMonths(prev => { const next = new Set(prev); next.delete(`${month}__${employeeId}`); return next; });
       setSyncStatus('ok');
       return true;
     } catch (e) { setSyncStatus('error', e); return false; }
@@ -1034,7 +1046,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
     importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite,
-    lockedMonths, signOffMonth, reopenMonth
+    lockedMonths, isMonthLockedFor, signOffMonth, reopenMonth
   }), [
     user, role, householdId, members, openInvites, data, ui, sync, authError, loginWarning,
     recoveryMode,
@@ -1044,7 +1056,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEmployee, updateEmployee, unlinkEmployeeLogin, removeEmployeeFromHousehold, addWage, updateWage, deleteWage,
     addPaySettings, updatePaySettings, deletePaySettings,
     importState, clearAll, loadMembersList, reloadInvites, createInvite, createLinkInvite,
-    lockedMonths, signOffMonth, reopenMonth
+    lockedMonths, isMonthLockedFor, signOffMonth, reopenMonth
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

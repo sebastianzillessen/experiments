@@ -304,3 +304,6 @@ table th.group-head .group-rate { font-weight:400; color:var(--muted); white-spa
 /* On screen, separate the stacked documents of the combined "Alle" export. */
 .employee-doc + .employee-doc,
 .print-doc + .employee-doc { margin-top:24px; }
+
+/* Per-employee sign-off rows stack inside one card; separate them. */
+.signoff-row + .signoff-row { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }

@@ -42,7 +42,7 @@ function TimeSelect({ id, value, onChange }: { id: string; value: string; onChan
 export function ErfassungTab() {
   const {
     activeTab, data, user, role, householdId, addShift, deleteShift, primedTabs,
-    selectedEmployeeId, setSelectedEmployeeId, lockedMonths
+    selectedEmployeeId, setSelectedEmployeeId, isMonthLockedFor
   } = useApp();
   const [date, setDate] = useState(todayIso);
   const [hoursStr, setHoursStr] = useState('');
@@ -84,14 +84,13 @@ export function ErfassungTab() {
   const visibleAll = role === 'employee'
     ? data.shifts.filter(e => (own && e.employeeId === own.id) || e.entered_by === userId)
     : data.shifts;
-  const visible = visibleAll.filter(e => !lockedMonths.has(e.date.slice(0, 7)));
+  const visible = visibleAll.filter(e => !isMonthLockedFor(e.date.slice(0, 7), e.employeeId));
 
   async function onAdd() {
     const hours = Number(hoursStr);
     if (!date) { alert('Bitte ein Datum eingeben.'); return; }
     if (!hours || hours <= 0) { alert('Bitte gültige Stundenzahl eingeben.'); return; }
     if (!householdId) { alert('Nicht angemeldet.'); return; }
-    if (lockedMonths.has(date.slice(0, 7))) { alert('Dieser Monat ist abgeschlossen und kann nicht mehr bearbeitet werden.'); return; }
 
     if (!actives.length) { alert('Bitte zuerst unter „Mitarbeitende" eine Person anlegen.'); return; }
     // Determine the employee the shift belongs to.
@@ -106,6 +105,7 @@ export function ErfassungTab() {
       employeeId = selectedEmployeeId || (actives.length === 1 ? actives[0].id : null);
       if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
     }
+    if (isMonthLockedFor(date.slice(0, 7), employeeId)) { alert('Dieser Monat ist für diese Person abgeschlossen und kann nicht mehr bearbeitet werden.'); return; }
     // Persist the raw Von/Bis only when both are set (so the overview can show
     // the range); hours stays the authoritative figure either way.
     const bothTimes = fromTime && toTime;
@@ -125,9 +125,9 @@ export function ErfassungTab() {
     if (!householdId) { alert('Nicht angemeldet.'); return; }
     const month = normalizeEffectiveMonth(monthStr);
     if (!month) { alert('Bitte einen gültigen Monat wählen.'); return; }
-    if (lockedMonths.has(month.slice(0, 7))) { alert('Dieser Monat ist abgeschlossen und kann nicht mehr bearbeitet werden.'); return; }
     const employeeId = formEmp?.id ?? null;
     if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
+    if (isMonthLockedFor(month.slice(0, 7), employeeId)) { alert('Dieser Monat ist für diese Person abgeschlossen und kann nicht mehr bearbeitet werden.'); return; }
     if (data.shifts.some(s => s.employeeId === employeeId && s.date === month)) {
       alert('Dieser Monat wurde für diese Person bereits erfasst.');
       return;
