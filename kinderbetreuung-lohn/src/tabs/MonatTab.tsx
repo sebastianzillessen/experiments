@@ -226,8 +226,11 @@ export function MonatTab() {
   const { activeTab, data, role, user, isMonthLockedFor, signOffMonth, reopenMonth } = useApp();
   const [month, setMonth] = useState(currentMonth);
   const [empSel, setEmpSel] = useState('');
-  // Counts in-flight QR-bill generations so printing can wait for a stable DOM.
-  const qrTracker = useRef<QrTracker>({ pending: 0 });
+  // In-flight QR-bill generations. The ref is the live count; `qrPending`
+  // mirrors it in state so the print button can disable itself until the QR is
+  // ready (printing can't wait asynchronously — see onPrint).
+  const [qrPending, setQrPending] = useState(0);
+  const qrTracker = useRef<QrTracker>({ pending: 0, onChange: setQrPending });
 
   const ownId = data.employees.find(e => e.userId && e.userId === user?.id)?.id ?? null;
   const scope = reportScope(data, role, ownId, empSel);
@@ -254,13 +257,11 @@ export function MonatTab() {
     await reopenMonth(month, emp.id);
   }
 
-  async function onPrint() {
-    // Wait for the QR-bill to finish injecting so the print preview isn't
-    // mutated (and blanked) mid-print.
-    const deadline = Date.now() + 3000;
-    while (qrTracker.current.pending > 0 && Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 50));
-    }
+  function onPrint() {
+    // window.print() MUST run synchronously inside the tap: iOS Safari drops the
+    // user-gesture across an await and then silently ignores the call. We ensure
+    // the QR-bill is ready beforehand by disabling the button while it generates
+    // (qrPending), instead of awaiting here.
     window.print();
   }
 
@@ -308,7 +309,9 @@ export function MonatTab() {
           <ReportEmployeeSelect wrapId="m-employee-wrap" selId="m-employee"
             data={data} role={role} value={empSel} onChange={setEmpSel} />
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button className="btn" id="btn-print-monat" onClick={onPrint}>Drucken / als PDF speichern</button>
+            <button className="btn" id="btn-print-monat" onClick={onPrint} disabled={qrPending > 0}>
+              {qrPending > 0 ? 'Einen Moment …' : 'Drucken / als PDF speichern'}
+            </button>
           </div>
         </div>
       </div>

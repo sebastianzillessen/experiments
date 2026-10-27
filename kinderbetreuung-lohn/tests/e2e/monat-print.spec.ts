@@ -101,6 +101,32 @@ test.describe('Monatsabrechnung print', () => {
     await page.emulateMedia({ media: 'screen' });
   });
 
+  test('the print button triggers window.print() from the tap (no async gate)', async ({ signedInUser }) => {
+    const { page, householdId, userId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await seedHourlyShift(householdId, userId, month);
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#tab-monat').click();
+    await page.locator('#m-monat').fill(month);
+    await expect(page.locator('#monat-doc .print-doc')).toBeVisible({ timeout: 10_000 });
+
+    // Count window.print() calls. iOS Safari only honours the call when it runs
+    // synchronously inside the tap; this guards the regression where onPrint
+    // awaited first and lost the user-gesture.
+    await page.evaluate(() => {
+      (window as unknown as { __printCount: number }).__printCount = 0;
+      window.print = () => { (window as unknown as { __printCount: number }).__printCount++; };
+    });
+
+    const btn = page.locator('#btn-print-monat');
+    await expect(btn).toBeEnabled({ timeout: 8_000 });
+    await btn.click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __printCount: number }).__printCount))
+      .toBe(1);
+  });
+
   test('on a phone-width viewport the printed header stays side-by-side (compact, one page)', async ({ signedInUser }) => {
     const { page, householdId, userId } = signedInUser;
     const month = new Date().toISOString().slice(0, 7);
