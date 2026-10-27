@@ -19,11 +19,22 @@ async function seedShift(householdId: string, userId: string, month: string) {
   return { employeeId, shiftId: shift!.id as string };
 }
 
+async function seedNamedShift(householdId: string, userId: string, month: string, name: string, note: string) {
+  const { data: emp } = await adminClient().from('employees')
+    .insert({ household_id: householdId, data: { name } }).select('id').single();
+  const employeeId = emp!.id as string;
+  await adminClient().from('employee_wages').insert({ employee_id: employeeId, effective_month: `${month}-01`, hourly_rate: 30 });
+  const { data: shift } = await adminClient().from('shifts')
+    .insert({ household_id: householdId, date: `${month}-05`, hours: 4, note, entered_by: userId, employee_id: employeeId })
+    .select('id').single();
+  return { employeeId, shiftId: shift!.id as string };
+}
+
 test.describe('Month sign-off', () => {
-  test('signing off a month locks its shifts and removes them from the Einsätze overview', async ({ signedInUser }) => {
+  test('signing off a month locks that employee\'s shifts and removes them from the Einsätze overview', async ({ signedInUser }) => {
     const { page, householdId, userId } = signedInUser;
     const month = new Date().toISOString().slice(0, 7);
-    const { shiftId } = await seedShift(householdId, userId, month);
+    const { employeeId, shiftId } = await seedShift(householdId, userId, month);
     page.on('dialog', d => d.accept());
 
     await page.reload();
@@ -32,15 +43,16 @@ test.describe('Month sign-off', () => {
     // The shift shows in the (now "Einsätze") overview.
     await expect(page.locator('#entries-list')).toContainText('signoff-test', { timeout: 8_000 });
 
-    // Sign the month off from the Monatsabrechnung.
+    // Sign the month off for this employee from the Monatsabrechnung.
     await page.locator('#tab-monat').click();
     await page.locator('#m-monat').fill(month);
-    await page.locator('#btn-signoff-month').click();
-    await expect(page.locator('#signoff-status')).toContainText('abgeschlossen', { timeout: 8_000 });
+    await page.locator(`#btn-signoff-${employeeId}`).click();
+    await expect(page.locator(`#signoff-status-${employeeId}`)).toContainText('abgeschlossen', { timeout: 8_000 });
 
-    // A lock row now exists.
+    // A per-employee lock row now exists.
     await expect.poll(async () => {
-      const { data } = await adminClient().from('payroll_locks').select('month').eq('household_id', householdId);
+      const { data } = await adminClient().from('payroll_locks')
+        .select('month, employee_id').eq('household_id', householdId).eq('employee_id', employeeId);
       return (data ?? []).length;
     }, { timeout: 8_000 }).toBe(1);
 
@@ -58,8 +70,8 @@ test.describe('Month sign-off', () => {
 
     // Reopen restores editability and the overview entry.
     await page.locator('#tab-monat').click();
-    await page.locator('#btn-reopen-month').click();
-    await expect(page.locator('#btn-signoff-month')).toBeVisible({ timeout: 8_000 });
+    await page.locator(`#btn-reopen-${employeeId}`).click();
+    await expect(page.locator(`#btn-signoff-${employeeId}`)).toBeVisible({ timeout: 8_000 });
 
     await expect.poll(async () => {
       const { data } = await adminClient().from('payroll_locks').select('month').eq('household_id', householdId);
@@ -71,5 +83,38 @@ test.describe('Month sign-off', () => {
 
     await page.locator('#tab-erfassung').click();
     await expect(page.locator('#entries-list')).toContainText('signoff-test');
+  });
+
+  test('closing one employee\'s month leaves another employee\'s month open', async ({ signedInUser }) => {
+    const { page, householdId, userId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await adminClient().from('pay_settings').insert({ household_id: householdId, effective_month: `${month}-01`, data: PS });
+    const a = await seedNamedShift(householdId, userId, month, 'Anna Abschluss', 'shift-anna');
+    const b = await seedNamedShift(householdId, userId, month, 'Bea Offen', 'shift-bea');
+    page.on('dialog', d => d.accept());
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+
+    // Close the month for Anna only (via the combined "Alle" view).
+    await page.locator('#tab-monat').click();
+    await page.locator('#m-monat').fill(month);
+    await page.locator(`#btn-signoff-${a.employeeId}`).click();
+    await expect(page.locator(`#signoff-status-${a.employeeId}`)).toContainText('abgeschlossen', { timeout: 8_000 });
+
+    // Exactly one lock row, and it belongs to Anna.
+    await expect.poll(async () => {
+      const { data } = await adminClient().from('payroll_locks').select('employee_id').eq('household_id', householdId);
+      return (data ?? []).map(r => r.employee_id);
+    }, { timeout: 8_000 }).toEqual([a.employeeId]);
+
+    // Anna's shift is locked (DB rejects edits); Bea's is untouched.
+    expect((await adminClient().from('shifts').update({ hours: 9 }).eq('id', a.shiftId)).error).not.toBeNull();
+    expect((await adminClient().from('shifts').update({ hours: 9 }).eq('id', b.shiftId)).error).toBeNull();
+
+    // Anna dropped out of the Einsätze overview; Bea stays.
+    await page.locator('#tab-erfassung').click();
+    await expect(page.locator('#entries-list')).toContainText('shift-bea', { timeout: 8_000 });
+    await expect(page.locator('#entries-list')).not.toContainText('shift-anna');
   });
 });
