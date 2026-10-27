@@ -11,7 +11,9 @@ type QrState =
   | { kind: 'note'; msg: string }
   | { kind: 'img'; src: string };
 
-export type QrTracker = { pending: number };
+// Counts in-flight QR-bill generations. `onChange` lets the report tab reflect
+// the count in React state (to disable its print button until the QR is ready).
+export type QrTracker = { pending: number; onChange?: (pending: number) => void };
 
 async function buildQrDataUrl(ee: EmployeeData, er: Employer, yyyymm: string, netto: number): Promise<QrState> {
   if (!(netto > 0)) return { kind: 'note', msg: 'QR-Einzahlungsschein wird ab einem Nettolohn über CHF 0.00 erzeugt.' };
@@ -57,7 +59,16 @@ export function QrBillSection({ ee, er, yyyymm, netto, slotId, tracker }: {
     let cancelled = false;
     let released = false;
     tracker.pending++;
-    const release = () => { if (!released) { released = true; tracker.pending--; } };
+    tracker.onChange?.(tracker.pending);
+    const release = () => {
+      if (released) return;
+      released = true;
+      tracker.pending--;
+      tracker.onChange?.(tracker.pending);
+    };
+    // Safety net: never keep the print button disabled indefinitely if QR
+    // generation stalls (e.g. the lazy chunk is slow) — release after 3s.
+    const timer = setTimeout(release, 3000);
     setState({ kind: 'loading' });
     buildQrDataUrl(ee, er, yyyymm, netto)
       .then(async next => {
@@ -70,8 +81,8 @@ export function QrBillSection({ ee, er, yyyymm, netto, slotId, tracker }: {
           await imgRef.current?.decode?.().catch(() => {});
         }
       })
-      .finally(release);
-    return () => { cancelled = true; release(); };
+      .finally(() => { clearTimeout(timer); release(); });
+    return () => { cancelled = true; clearTimeout(timer); release(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ee, er, yyyymm, netto]);
 
