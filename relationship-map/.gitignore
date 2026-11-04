@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/*
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+playwright-report/
+test-results/
