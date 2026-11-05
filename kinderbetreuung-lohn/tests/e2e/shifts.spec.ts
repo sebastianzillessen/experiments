@@ -56,6 +56,9 @@ test.describe('Shifts', () => {
     await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
 
     await page.locator('#e-datum').fill(`${month}-10`);
+    await page.locator('#mode-hours').click();
+    // Hour-total mode has no Von/Bis to contradict the number.
+    await expect(page.locator('#e-von')).toHaveCount(0);
     await page.locator('#e-stunden').fill('4');
     await page.locator('#e-notiz').fill('Test-Einsatz');
     await page.locator('#btn-add').click();
@@ -69,10 +72,12 @@ test.describe('Shifts', () => {
 
     const { data } = await adminClient()
       .from('shifts')
-      .select('hours, note, employee_id')
+      .select('hours, note, employee_id, start_time, end_time')
       .eq('household_id', householdId);
     expect(data?.length).toBe(1);
     expect(Number(data?.[0].hours)).toBe(4);
+    expect(data?.[0].start_time).toBeNull();
+    expect(data?.[0].end_time).toBeNull();
     // With a single employee the shift is attributed to them (explicitly or via trigger).
     expect(data?.[0].employee_id).toBe(employeeId);
   });
@@ -91,7 +96,9 @@ test.describe('Shifts', () => {
     await page.locator('#e-datum').fill(`${month}-12`);
     await pickTime(page, 'e-von', '14:00');
     await pickTime(page, 'e-bis', '17:30');
-    await expect(page.locator('#e-stunden')).toHaveValue('3.5');
+    // Window mode derives the duration and offers no editable hour field.
+    await expect(page.locator('#e-computed')).toContainText('3.5 Std.');
+    await expect(page.locator('#e-stunden')).toHaveCount(0);
 
     await page.locator('#btn-add').click();
 
@@ -143,7 +150,7 @@ test.describe('Shifts', () => {
     await page.locator('#e-datum').fill(`${month}-13`);
     await pickTime(page, 'e-von', '22:00');
     await pickTime(page, 'e-bis', '06:00');
-    await expect(page.locator('#e-stunden')).toHaveValue('8');
+    await expect(page.locator('#e-computed')).toContainText('8 Std.');
   });
 
   test('wage raise: two versions yield different hourly rates per month', async ({ signedInUser }) => {

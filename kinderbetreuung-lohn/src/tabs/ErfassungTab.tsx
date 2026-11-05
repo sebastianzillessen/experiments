@@ -51,18 +51,9 @@ export function ErfassungTab() {
   const [note, setNote] = useState('');
   const [monthStr, setMonthStr] = useState(currentMonth);
 
-  // Von/Bis are a convenience: whenever both are set we fill the Stunden field
-  // automatically (still editable, so a manual number keeps working too).
-  function updateFromTime(v: string) {
-    setFromTime(v);
-    const h = hoursBetweenTimes(v, toTime);
-    if (h != null) setHoursStr(String(h));
-  }
-  function updateToTime(v: string) {
-    setToTime(v);
-    const h = hoursBetweenTimes(fromTime, v);
-    if (h != null) setHoursStr(String(h));
-  }
+  // One input mode at a time: either a Von/Bis window (hours derived, not
+  // editable) or a plain hour total (no times). Mixing them gave contradictions.
+  const [entryMode, setEntryMode] = useState<'range' | 'hours'>('range');
   const computedHours = hoursBetweenTimes(fromTime, toTime);
 
   const userId = user ? user.id : null;
@@ -87,8 +78,10 @@ export function ErfassungTab() {
   const visible = visibleAll.filter(e => !isMonthLockedFor(e.date.slice(0, 7), e.employeeId));
 
   async function onAdd() {
-    const hours = Number(hoursStr);
+    const isRange = entryMode === 'range';
+    const hours = isRange ? computedHours : Number(hoursStr);
     if (!date) { alert('Bitte ein Datum eingeben.'); return; }
+    if (isRange && hours == null) { alert('Bitte „Von“ und „Bis“ wählen.'); return; }
     if (!hours || hours <= 0) { alert('Bitte gültige Stundenzahl eingeben.'); return; }
     if (!householdId) { alert('Nicht angemeldet.'); return; }
 
@@ -106,13 +99,10 @@ export function ErfassungTab() {
       if (!employeeId) { alert('Bitte zuerst eine/n Mitarbeiter/in auswählen.'); return; }
     }
     if (isMonthLockedFor(date.slice(0, 7), employeeId)) { alert('Dieser Monat ist für diese Person abgeschlossen und kann nicht mehr bearbeitet werden.'); return; }
-    // Persist the raw Von/Bis only when both are set (so the overview can show
-    // the range); hours stays the authoritative figure either way.
-    const bothTimes = fromTime && toTime;
     await addShift({
       date, hours, note: note.trim(), employeeId: employeeId!,
-      startTime: bothTimes ? fromTime : null,
-      endTime: bothTimes ? toTime : null
+      startTime: isRange ? fromTime : null,
+      endTime: isRange ? toTime : null
     });
     setHoursStr('');
     setFromTime('');
@@ -160,7 +150,7 @@ export function ErfassungTab() {
     <section id="erfassung" role="tabpanel" aria-labelledby="tab-erfassung" tabIndex={0}
       className={activeTab === 'erfassung' ? 'active' : undefined}>
       <h2>Stundenerfassung</h2>
-      <div className="section-sub">Trage hier jeden Einsatz ein: Datum und Arbeitszeit von–bis — die Stunden werden automatisch berechnet. Eine Notiz ist optional.</div>
+      <div className="section-sub">Trage hier jeden Einsatz ein: entweder mit Arbeitszeit von–bis oder direkt mit der Anzahl Stunden. Eine Notiz ist optional.</div>
 
       <EmployeeTutorial />
 
@@ -195,39 +185,45 @@ export function ErfassungTab() {
           </>
         ) : (
           <>
-            <div className="grid-3">
-              <div>
-                <label htmlFor="e-datum">Datum</label>
-                <input type="date" id="e-datum" value={date} onChange={e => setDate(e.target.value)} />
-              </div>
-              <div>
-                <label htmlFor="e-von">Von</label>
-                <TimeSelect id="e-von" value={fromTime} onChange={updateFromTime} />
-              </div>
-              <div>
-                <label htmlFor="e-bis">Bis</label>
-                <TimeSelect id="e-bis" value={toTime} onChange={updateToTime} />
-              </div>
+            <div>
+              <label htmlFor="e-datum">Datum</label>
+              <input type="date" id="e-datum" value={date} onChange={e => setDate(e.target.value)} />
             </div>
-            <div className="grid-2" style={{ marginTop: 12 }}>
-              <div>
-                <label htmlFor="e-stunden">Stunden</label>
-                <input type="number" id="e-stunden" step="0.25" min="0" placeholder="z.B. 4.5"
-                  value={hoursStr} onChange={e => setHoursStr(e.target.value)} />
-                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            <div className="segmented" role="group" aria-label="Erfassungsart" style={{ marginTop: 12 }}>
+              <button type="button" id="mode-range" aria-pressed={entryMode === 'range'}
+                onClick={() => setEntryMode('range')}>Von–Bis</button>
+              <button type="button" id="mode-hours" aria-pressed={entryMode === 'hours'}
+                onClick={() => setEntryMode('hours')}>Nur Stunden</button>
+            </div>
+            {entryMode === 'range' ? (
+              <>
+                <div className="grid-2" style={{ marginTop: 12 }}>
+                  <div>
+                    <label htmlFor="e-von">Von</label>
+                    <TimeSelect id="e-von" value={fromTime} onChange={setFromTime} />
+                  </div>
+                  <div>
+                    <label htmlFor="e-bis">Bis</label>
+                    <TimeSelect id="e-bis" value={toTime} onChange={setToTime} />
+                  </div>
+                </div>
+                <div className="muted" id="e-computed" style={{ fontSize: 13, marginTop: 6 }}>
                   {computedHours != null
-                    ? `Aus Von/Bis berechnet: ${fmtNum(computedHours)} Std. — du kannst sie auch direkt anpassen.`
-                    : 'Wird aus Von/Bis automatisch berechnet — oder direkt eintragen.'}
+                    ? <>Dauer: <strong>{fmtNum(computedHours)} Std.</strong></>
+                    : 'Die Dauer wird aus Von und Bis berechnet.'}
                 </div>
+              </>
+            ) : (
+              <div style={{ marginTop: 12 }}>
+                <label htmlFor="e-stunden">Stunden</label>
+                <input type="number" id="e-stunden" step="0.25" min="0" inputMode="decimal" placeholder="z.B. 4.5"
+                  value={hoursStr} onChange={e => setHoursStr(e.target.value)} />
               </div>
-              <div>
-                <label htmlFor="e-notiz">Notiz <span className="muted" style={{ fontWeight: 400 }}>— optional</span></label>
-                <input type="text" id="e-notiz" placeholder="z.B. Spielplatz, Znacht kochen"
-                  value={note} onChange={e => setNote(e.target.value)} />
-                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                  Freitext für dich — für die Abrechnung nicht nötig. Die Zeiten gehören oben in „Von“ und „Bis“.
-                </div>
-              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <label htmlFor="e-notiz">Notiz <span className="muted" style={{ fontWeight: 400 }}>— optional</span></label>
+              <input type="text" id="e-notiz" placeholder="z.B. Spielplatz, Znacht kochen"
+                value={note} onChange={e => setNote(e.target.value)} />
             </div>
             <div className="btn-row">
               <button className="btn" id="btn-add" onClick={onAdd}>Einsatz hinzufügen</button>

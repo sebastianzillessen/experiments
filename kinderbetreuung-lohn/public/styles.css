@@ -307,3 +307,17 @@ table th.group-head .group-rate { font-weight:400; color:var(--muted); white-spa
 
 /* Per-employee sign-off rows stack inside one card; separate them. */
 .signoff-row + .signoff-row { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+
+/* Two-option switch (e.g. Von–Bis vs. Nur Stunden in the shift form). */
+.segmented { display:flex; background:var(--soft); border:1px solid var(--border); border-radius:8px; padding:3px; gap:3px; }
+.segmented button { flex:1; background:transparent; border:none; border-radius:6px; padding:8px 10px; font-size:14px; font-weight:600; font-family:inherit; color:var(--muted); cursor:pointer; }
+.segmented button[aria-pressed="true"] { background:var(--card); color:var(--primary-dark); box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+
+/* Live wage breakdown under the "new wage version" form. */
+.print-doc.wage-preview { max-width:none; margin:12px 0 0; padding:14px 16px; background:var(--soft); border-color:var(--border); }
+.wage-preview .footnote { margin-top:8px; }
+.wage-preview-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; color:var(--primary-dark); }
+.wage-preview-hours { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); }
+.wage-preview-hours input { width:72px; padding:4px 6px; }
+.wage-preview .summary-row { gap:12px; }
+.wage-preview .summary-row span:last-child { white-space:nowrap; }
