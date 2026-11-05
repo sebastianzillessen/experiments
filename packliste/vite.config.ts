@@ -52,6 +52,13 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      // lucide-react re-exports ~1500 icon files. Rollup's default of 1000
+      // parallel opens hits the open-file limit on Cloudflare builds (EMFILE).
+      maxParallelFileOps: 100,
+    },
+  },
   server: {
     port: 5173,
   },
