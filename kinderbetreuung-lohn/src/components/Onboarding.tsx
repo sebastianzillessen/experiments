@@ -141,7 +141,7 @@ export function EmployeeTutorial() {
           <span className="onboarding-step-marker" aria-hidden="true">2</span>
           <div className="onboarding-step-body">
             <div className="onboarding-step-title">Stunden eintragen</div>
-            <div className="onboarding-step-desc">Trage die geleisteten Stunden ein, z.&nbsp;B. 4.5. Eine Notiz ist optional.</div>
+            <div className="onboarding-step-desc">Wähle „Von–Bis“ und gib die Arbeitszeit an, oder wähle „Nur Stunden“ und trage die Anzahl ein, z.&nbsp;B. 4.5. Eine Notiz ist optional.</div>
           </div>
         </li>
         <li className="onboarding-step current">

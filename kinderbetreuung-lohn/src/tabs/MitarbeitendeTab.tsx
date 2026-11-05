@@ -6,6 +6,7 @@ import { fmtChf, monthLabel } from '../lib/format';
 import { normalizeEffectiveMonth, sanitizeEmployeeData } from '../lib/state';
 import type { Employee, EmployeeData, EmploymentType } from '../lib/state';
 import { cantonPreset } from '../lib/cantons';
+import { WagePreview } from '../components/WagePreview';
 
 type MitUi = { mode: 'list'; empId: null } | { mode: 'add'; empId: null } | { mode: 'edit'; empId: string };
 
@@ -313,11 +314,23 @@ export function MitarbeitendeTab() {
                     )}
                     <div className="grid-3" style={{ marginTop: 10 }}>
                       <div><label htmlFor="wage-new-month">Gültig ab Monat</label><input type="month" id="wage-new-month" value={wageMonth} onChange={e => setWageMonth(e.target.value)} /></div>
-                      <div><label htmlFor="wage-new-rate">{editingMonthly ? 'Monatslohn (CHF)' : 'Stundenlohn (CHF)'}</label><input type="number" id="wage-new-rate" step="0.01" min="0" placeholder={editingMonthly ? 'z.B. 2000.00' : 'z.B. 30.00'} value={wageRate} onChange={e => setWageRate(e.target.value)} /></div>
-                      <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="btn" id="wage-add" onClick={() => onWageAdd(editingEmp.id!, wageKind)}>Lohn-Version hinzufügen</button></div>
+                      <div>
+                        <label htmlFor="wage-new-rate">{editingMonthly ? 'Brutto-Monatslohn (CHF)' : 'Brutto-Stundenlohn (CHF)'}</label>
+                        <input type="number" id="wage-new-rate" step="0.01" min="0" inputMode="decimal" placeholder={editingMonthly ? 'z.B. 2000.00' : 'z.B. 30.00'} value={wageRate} onChange={e => setWageRate(e.target.value)} />
+                        <div className="muted" id="wage-rate-hint" style={{ fontSize: 12, marginTop: 4 }}>
+                          {editingMonthly
+                            ? 'Lohn vor Abzügen, Ferien und Feiertage inbegriffen.'
+                            : 'Grundlohn vor Abzügen, ohne Ferien- und Feiertagszulage – die kommen automatisch dazu.'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 22 }}><button className="btn" id="wage-add" onClick={() => onWageAdd(editingEmp.id!, wageKind)}>Lohn-Version hinzufügen</button></div>
                     </div>
                     {!editingMonthly && minWage > 0 && Number(wageRate) > 0 && Number(wageRate) < minWage && (
                       <div className="warn" style={{ marginTop: 8 }}>Hinweis: CHF {fmtChf(Number(wageRate))} liegt unter dem Richtwert-Mindestlohn (CHF {fmtChf(minWage)}/Std.) für diesen Kanton.</div>
+                    )}
+                    {Number(wageRate) > 0 && (
+                      <WagePreview data={data} employee={editingEmp} amount={Number(wageRate)}
+                        effectiveMonth={normalizeEffectiveMonth(wageMonth) ?? `${new Date().toISOString().slice(0, 7)}-01`} />
                     )}
                     <div id="wage-form-error" className="auth-error" hidden={!wageError} style={{ marginTop: 8 }}>{wageError}</div>
                   </div>

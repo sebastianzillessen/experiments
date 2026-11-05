@@ -414,7 +414,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // of whatever the signed-in flow renders behind it.
         setRecoveryMode(true);
       } else if (event === 'SIGNED_IN' && session && session.user) {
-        onSignedIn(session.user);
+        // Defer: Supabase calls made inside this callback run while auth-js
+        // holds its session lock and can hang (it fires again whenever a phone
+        // brings the app back to the foreground).
+        const u = session.user;
+        setTimeout(() => { onSignedIn(u); }, 0);
       } else if (event === 'SIGNED_OUT') {
         userRef.current = null;
         householdIdRef.current = null;
