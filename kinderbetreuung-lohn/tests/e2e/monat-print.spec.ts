@@ -127,6 +127,41 @@ test.describe('Monatsabrechnung print', () => {
       .toBe(1);
   });
 
+  test('in standalone (PWA) mode the button opens the payslip in a new window to print', async ({ signedInUser }) => {
+    const { page, householdId, userId } = signedInUser;
+    const month = new Date().toISOString().slice(0, 7);
+    await seedHourlyShift(householdId, userId, month);
+
+    await page.reload();
+    await expect(page.locator('#user-strip')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#tab-monat').click();
+    await page.locator('#m-monat').fill(month);
+    await expect(page.locator('#monat-doc .print-doc')).toBeVisible({ timeout: 10_000 });
+
+    // Simulate an iOS Home-Screen PWA (navigator.standalone === true), where
+    // window.print() is a no-op, and capture the document written to the new tab.
+    await page.evaluate(() => {
+      Object.defineProperty(window.navigator, 'standalone', { configurable: true, value: true });
+      (window as unknown as { __written: string | null }).__written = null;
+      window.open = (() => ({
+        focus() {},
+        document: {
+          open() {}, close() {},
+          write(html: string) { (window as unknown as { __written: string | null }).__written = html; }
+        }
+      })) as unknown as typeof window.open;
+    });
+
+    const btn = page.locator('#btn-print-monat');
+    await expect(btn).toBeEnabled({ timeout: 8_000 });
+    await btn.click();
+
+    const written = await page.evaluate(() => (window as unknown as { __written: string | null }).__written);
+    expect(written, 'standalone print must write a self-contained doc to the new window').toBeTruthy();
+    expect(written!).toContain('Lohnabrechnung Privathaushalt'); // the payslip itself
+    expect(written!).toContain('window.print()');                // auto-prints in the new tab
+  });
+
   test('on a phone-width viewport the printed header stays side-by-side (compact, one page)', async ({ signedInUser }) => {
     const { page, householdId, userId } = signedInUser;
     const month = new Date().toISOString().slice(0, 7);

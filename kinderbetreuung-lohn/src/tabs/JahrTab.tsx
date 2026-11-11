@@ -6,6 +6,7 @@ import { LIMIT_VEREINFACHT } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
 import { ausgleichskasseLabel, cantonName } from '../lib/cantons';
 import { ReportEmployeeSelect, reportScope } from './MonatTab';
+import { printReport } from '../lib/print';
 
 export function yearShiftsFor(state: AppState, empId: string | null, jahr: number): Shift[] {
   return state.shifts.filter(e => e.employeeId === empId && e.date.startsWith(String(jahr)));
@@ -169,7 +170,7 @@ export function JahrTab() {
           <ReportEmployeeSelect wrapId="j-employee-wrap" selId="j-employee"
             data={data} role={role} value={empSel} onChange={setEmpSel} />
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button className="btn" id="btn-print-jahr" onClick={() => window.print()}>Drucken / als PDF speichern</button>
+            <button className="btn" id="btn-print-jahr" onClick={() => printReport('jahr-doc', `Jahresübersicht ${yearStr}`)}>Drucken / als PDF speichern</button>
           </div>
         </div>
       </div>
