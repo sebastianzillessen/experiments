@@ -1,8 +1,29 @@
 // Verbatim port of the pay-settings/wage lookup + Abrechnung calculation from app.js.
 
 import { defaultPaySettingsData, vacationPercentForWeeks } from './state';
-import type { AppState, Employee, PaySettingsData, PaySettingsVersion, Shift, WageVersion } from './state';
+import type { AppState, Employee, HolidayMode, PaySettingsData, PaySettingsVersion, Shift, WageVersion } from './state';
 import { round2, round5 } from './format';
+
+/* ---- FEIERTAGSZUSCHLAG ----
+   Der 1. August (Bundesfeier) ist gesetzlich immer bezahlt (Art. 110 Abs. 3 BV).
+   Als Stundenlohn-Zuschlag entspricht ein einzelner Feiertag rund 0.39 % (≈ ein
+   Tag von neun ZH-Feiertagen, 3.59 % / 9). Diesen Minimalsatz bilden wir fix ab;
+   die volle Variante nutzt den kantonalen holidayPercent aus den pay_settings. */
+export const AUGUST_ONLY_HOLIDAY_PERCENT = 0.39;
+
+// Effektiver Feiertags-% für ein Arbeitsverhältnis, abhängig vom gewählten Modus.
+export function holidayPercentFor(mode: HolidayMode, fullPercent: number): number {
+  if (mode === 'none') return 0;
+  if (mode === 'august') return AUGUST_ONLY_HOLIDAY_PERCENT;
+  return fullPercent;
+}
+
+// Beschriftung der Feiertagszulage-Zeile auf der Abrechnung (leer bei 'none').
+export function holidayLineLabel(mode: HolidayMode, percent: number): string {
+  if (mode === 'august') return `Feiertagszulage 1. August (${percent} %)`;
+  if (mode === 'full') return `Feiertagszulage 9 Feiertage (${percent} %)`;
+  return '';
+}
 
 /* ---- EMPLOYEE / WAGE HELPERS ---- */
 // Active (non-archived) employees, in stable insertion order.
@@ -99,9 +120,17 @@ export type Abrechnung = {
   bruttoStunden: number;
   ferienzulage: number;
   feiertagszulage: number;
+  // Gewählter Feiertagsmodus und der angewandte %-Satz (für die Beschriftung).
+  holidayMode: HolidayMode;
+  feiertagPercent: number;
   bruttoTotal: number;
   an: { ahvIvEo: number; alv: number; nbu: number; quellenst: number; total: number };
+  // Nettolohn auf den Rappen genau (Bruttolohn − Abzüge). `auszahlung` ist
+  // derselbe Betrag auf die 5-Rappen-Zahlgrenze gerundet, `rundungsdifferenz`
+  // die Differenz (auszahlung − netto), die als eigene Zeile ausgewiesen wird.
   netto: number;
+  auszahlung: number;
+  rundungsdifferenz: number;
   ag: { ahvIvEo: number; alv: number; fak: number; bu: number; verw: number; total: number };
   agKostenTotal: number;
   nbuApplicable: boolean;
@@ -134,8 +163,9 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
   const empId = (employee && employee.id) ? employee.id : null;
   const isMonthly = empData?.employmentType === 'monthly';
 
+  const holidayMode: HolidayMode = empData?.holidayMode ?? 'full';
   let stundenTotal = 0;
-  let bruttoStunden = 0, ferienzulage = 0, feiertagszulage = 0, bruttoTotal = 0;
+  let bruttoStunden = 0, ferienzulage = 0, feiertagszulage = 0, feiertagPercent = 0, bruttoTotal = 0;
   let nbuApplicable = false;
   let uvgAktivAny = false;
   // Active rate set for the month. Defaults cover the empty-entry case; it is
@@ -171,10 +201,14 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
     // not by the versioned pay_settings.
     const vacationPercent = vacationPercentForWeeks(empData?.vacationWeeks ?? 4);
 
+    // Feiertagszuschlag je Arbeitsverhältnis (0 % / 1. August / voller Satz).
+    // Ferien- und Feiertagszulage werden separat auf dem Grundlohn berechnet
+    // (nicht auf Grundlohn + Ferienzulage) — so rechnet auch das SECO.
+    feiertagPercent  = holidayPercentFor(holidayMode, e.holidayPercent);
     stundenTotal     = round2(stundenTotal);
     bruttoStunden    = round5(bruttoStundenRaw);
     ferienzulage     = round5(bruttoStundenRaw * vacationPercent / 100);
-    feiertagszulage  = round5(bruttoStundenRaw * e.holidayPercent / 100);
+    feiertagszulage  = round5(bruttoStundenRaw * feiertagPercent / 100);
     bruttoTotal      = round5(bruttoStunden + ferienzulage + feiertagszulage);
   }
 
@@ -200,7 +234,12 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
     total: 0
   };
   an.total = round2(an.ahvIvEo + an.alv + an.nbu + an.quellenst);
-  const netto = round5(bruttoTotal - an.total);
+  // Alle Positionen rechnen auf den Rappen; nur der Auszahlungsbetrag wird auf
+  // die 5-Rappen-Grenze gerundet. Die Differenz wird separat ausgewiesen, damit
+  // die Abrechnung nachvollziehbar bleibt.
+  const netto = round2(bruttoTotal - an.total);
+  const auszahlung = round5(netto);
+  const rundungsdifferenz = round2(auszahlung - netto);
 
   // Verwaltungskosten der SVA werden in % der AHV/IV/EO-Beiträge (AN + AG) berechnet.
   const ahvIvEoBeitraege = ahvBasis * (e.ahvIvEoEmployee + e.ahvIvEoEmployer) / 100;
@@ -215,5 +254,5 @@ export function berechneAbrechnung(state: AppState, shifts: Shift[], employee: E
   ag.total = round2(ag.ahvIvEo + ag.alv + ag.fak + ag.bu + ag.verw);
   const agKostenTotal = round2(bruttoTotal + ag.total);
 
-  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, bruttoTotal, an, netto, ag, agKostenTotal, nbuApplicable, uvgAktivAny, isPensioner, freibetrag, ahvBasis };
+  return { stundenTotal, bruttoStunden, ferienzulage, feiertagszulage, holidayMode, feiertagPercent, bruttoTotal, an, netto, auszahlung, rundungsdifferenz, ag, agKostenTotal, nbuApplicable, uvgAktivAny, isPensioner, freibetrag, ahvBasis };
 }

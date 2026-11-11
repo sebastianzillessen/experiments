@@ -36,6 +36,12 @@ jobs:
         run: npm ci
         working-directory: .
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests (payroll)
+        run: npm run test:unit
+
       - uses: supabase/setup-cli@v1
         with:
           version: 2.116.0

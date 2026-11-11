@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  activeMonthlySalaryFor, activePaySettingsFor, activeWageFor, berechneAbrechnung, employeeById, employeeName
+  activeMonthlySalaryFor, activePaySettingsFor, activeWageFor, berechneAbrechnung, employeeById, employeeName, holidayLineLabel
 } from '../lib/payroll';
 import { fmtChf, fmtDate, fmtNum, monthLabel, round2, shiftNoteLabel } from '../lib/format';
 import { ausgleichskasseLabel } from '../lib/cantons';
+import { holidayName, isSunday } from '../lib/holidays';
 import { vacationPercentForWeeks } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
 import { QrBillSection } from '../lib/qrbill';
@@ -51,6 +52,20 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
   const e = activePaySettingsFor(data, refDate);
   const monthlySalary = (isMonthly && empId) ? activeMonthlySalaryFor(data, empId, refDate) : 0;
 
+  // Plausibilitätschecks: Einsätze in der Zukunft (→ Vorschau) und Einsätze an
+  // Sonntagen/Feiertagen (→ Hinweis auf möglichen Zuschlag/Ersatzruhe).
+  const today = new Date().toISOString().slice(0, 10);
+  const hasFutureShift = sorted.some(x => x.date > today);
+  const sundayHolidayHits = sorted
+    .map(x => {
+      const hol = holidayName(x.date, er.canton);
+      const sun = isSunday(x.date);
+      if (!hol && !sun) return null;
+      const what = [sun ? 'Sonntag' : null, hol].filter(Boolean).join(', ');
+      return `${fmtDate(x.date)} (${what})`;
+    })
+    .filter((s): s is string => s !== null);
+
   return (
     <div className="print-doc">
       <div className="doc-header">
@@ -71,9 +86,20 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
       </div>
 
       <div className="doc-title">
-        <h1>Lohnabrechnung Privathaushalt</h1>
+        <h1>Lohnabrechnung Privathaushalt{hasFutureShift ? ' — Vorschau' : ''}</h1>
         <div className="period">{monthLabel(yyyymm)}</div>
       </div>
+
+      {hasFutureShift && (
+        <div className="warn" style={{ marginBottom: 12 }}>
+          <strong>Vorschau:</strong> Diese Abrechnung enthält Einsätze, die noch in der Zukunft liegen (nach dem heutigen Datum). Die definitive Abrechnung erst mit den tatsächlich geleisteten Stunden erstellen.
+        </div>
+      )}
+      {sundayHolidayHits.length > 0 && (
+        <div className="info" style={{ marginBottom: 12 }}>
+          <strong>Hinweis Sonntag/Feiertag:</strong> Einsätze an {sundayHolidayHits.join('; ')}. Ob ein Zuschlag oder Ersatzruhe nötig ist, nach NAV Hauswirtschaft {er.canton ? er.canton : 'ZH'} prüfen.
+        </div>
+      )}
 
       {isMonthly ? (
         <>
@@ -134,7 +160,9 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
           <h4>Bruttolohn</h4>
           <div className="summary-row"><span>Stundenlohn-Summe</span><span>CHF {fmtChf(calc.bruttoStunden)}</span></div>
           <div className="summary-row"><span>+ Ferienzulage ({ee?.vacationWeeks} Wochen, {vacationPercentForWeeks(ee?.vacationWeeks ?? 4)} %)</span><span>CHF {fmtChf(calc.ferienzulage)}</span></div>
-          <div className="summary-row"><span>+ Feiertagszulage ({e.holidayPercent} %)</span><span>CHF {fmtChf(calc.feiertagszulage)}</span></div>
+          {calc.holidayMode !== 'none' && (
+            <div className="summary-row"><span>+ {holidayLineLabel(calc.holidayMode, calc.feiertagPercent)}</span><span>CHF {fmtChf(calc.feiertagszulage)}</span></div>
+          )}
           <div className="summary-row total"><span>Bruttolohn</span><span>CHF {fmtChf(calc.bruttoTotal)}</span></div>
         </>
       )}
@@ -155,7 +183,11 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
       <div className="summary-row"><span>– Quellensteuer ({e.withholdingTax} %)</span><span>CHF {fmtChf(calc.an.quellenst)}</span></div>
       <div className="summary-row total"><span>Total Abzüge</span><span>CHF {fmtChf(calc.an.total)}</span></div>
 
-      <div className="summary-row netto"><span>Auszahlung netto</span><span>CHF {fmtChf(calc.netto)}</span></div>
+      <div className="summary-row"><span>Nettolohn</span><span>CHF {fmtChf(calc.netto)}</span></div>
+      {calc.rundungsdifferenz !== 0 && (
+        <div className="summary-row"><span>Rundungsdifferenz (5 Rappen)</span><span>CHF {fmtChf(calc.rundungsdifferenz)}</span></div>
+      )}
+      <div className="summary-row netto"><span>Auszahlung netto</span><span>CHF {fmtChf(calc.auszahlung)}</span></div>
 
       <h4>Arbeitgeberbeiträge (informativ, nicht vom Lohn abgezogen)</h4>
       <div className="summary-row"><span>AHV/IV/EO ({e.ahvIvEoEmployer} %)</span><span>CHF {fmtChf(calc.ag.ahvIvEo)}</span></div>
@@ -168,7 +200,7 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
       {calc.uvgAktivAny && (
         <div className="summary-row"><span>UVG-BU ({e.uvgBuEmployer} %)</span><span>CHF {fmtChf(calc.ag.bu)}</span></div>
       )}
-      <div className="summary-row"><span>Verwaltungskosten ({e.adminFeeEmployer} % der AHV/IV/EO-Beiträge)</span><span>CHF {fmtChf(calc.ag.verw)}</span></div>
+      <div className="summary-row"><span>Verwaltungskosten ({e.adminFeeEmployer} % der AHV/IV/EO-Beiträge AN + AG)</span><span>CHF {fmtChf(calc.ag.verw)}</span></div>
       <div className="summary-row total"><span>Total Arbeitgeberbeiträge</span><span>CHF {fmtChf(calc.ag.total)}</span></div>
       <div className="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF {fmtChf(calc.agKostenTotal)}</span></div>
 
@@ -181,7 +213,7 @@ export function Lohnabrechnung({ data, eintraege, yyyymm, employee, tracker }: {
         <div className="sig">Ort, Datum &amp; Unterschrift Arbeitnehmer/in (Empfangsbestätigung)</div>
       </div>
       {ee?.iban ? (
-        <QrBillSection ee={ee} er={er} yyyymm={yyyymm} netto={calc.netto}
+        <QrBillSection ee={ee} er={er} yyyymm={yyyymm} netto={calc.auszahlung}
           slotId={`qr-bill-slot-${empId}`} tracker={tracker} />
       ) : null}
     </div>

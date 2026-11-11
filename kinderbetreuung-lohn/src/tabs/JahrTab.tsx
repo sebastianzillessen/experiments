@@ -30,7 +30,7 @@ function Jahresuebersicht({ data, eintraege, jahr, employee }: {
     const calc = berechneAbrechnung(data, monatEintraege, employee);
     yJahresStunden += calc.stundenTotal;
     yJahresBrutto += calc.bruttoTotal;
-    yJahresNetto += calc.netto;
+    yJahresNetto += calc.auszahlung;
     yJahresAG += calc.ag.total;
     yJahresAN += calc.an.total;
     monatsRows.push({ yyyymm, calc });
@@ -92,7 +92,7 @@ function Jahresuebersicht({ data, eintraege, jahr, employee }: {
               <td className="num">{fmtNum(calc.stundenTotal)}</td>
               <td className="num">CHF {fmtChf(calc.bruttoTotal)}</td>
               <td className="num">CHF {fmtChf(calc.an.total)}</td>
-              <td className="num">CHF {fmtChf(calc.netto)}</td>
+              <td className="num">CHF {fmtChf(calc.auszahlung)}</td>
               <td className="num">CHF {fmtChf(calc.ag.total)}</td>
             </tr>
           ))}

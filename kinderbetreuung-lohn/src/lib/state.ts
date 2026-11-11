@@ -55,6 +55,12 @@ export type Employer = {
 // salary (no hours; vacation/holidays included in the salary).
 export type EmploymentType = 'hourly' | 'monthly';
 
+// Feiertagszuschlag choice per employment relationship:
+//   'none'    – kein Zuschlag (0 %). Der 1. August muss trotzdem bezahlt sein.
+//   'august'  – nur der Bundesfeiertag (gesetzliches Minimum, Art. 110 Abs. 3 BV).
+//   'full'    – alle bezahlten Feiertage des Kantons (voller holidayPercent).
+export type HolidayMode = 'none' | 'august' | 'full';
+
 // Stammdaten of a single employee (same shape as the old household_profile.employee).
 export type EmployeeData = {
   name: string;
@@ -68,6 +74,8 @@ export type EmployeeData = {
   weeklyHoursThreshold8h: boolean;
   vacationWeeks: number; // 4 | 5 | 6
   employmentType: EmploymentType;
+  // Feiertagszuschlag für dieses Arbeitsverhältnis (siehe HolidayMode).
+  holidayMode: HolidayMode;
   // Person im AHV-Referenzalter (bezieht bereits AHV): keine ALV, AHV/IV/EO und
   // FAK nur auf dem Lohn über dem Rentnerfreibetrag.
   pensioner: boolean;
@@ -177,6 +185,11 @@ export function sanitizeEmployeeData(eeRaw: unknown): EmployeeData {
     weeklyHoursThreshold8h: !!ee.weeklyHoursThreshold8h,
     vacationWeeks:  [4, 5, 6].includes(Number(ee.vacationWeeks)) ? Number(ee.vacationWeeks) : 4,
     employmentType: ee.employmentType === 'monthly' ? 'monthly' : 'hourly',
+    // Legacy records without the field kept the full household holidayPercent,
+    // so default to 'full' here to leave existing payrolls unchanged. New
+    // employees get 'august' (the legal minimum) from the Mitarbeitende form.
+    holidayMode: (ee.holidayMode === 'none' || ee.holidayMode === 'august' || ee.holidayMode === 'full')
+      ? ee.holidayMode : 'full',
     pensioner:               !!ee.pensioner,
     pensionerWaiveAllowance: !!ee.pensionerWaiveAllowance
   };

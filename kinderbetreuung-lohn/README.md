@@ -38,6 +38,17 @@ Vereinfachte Lohnabrechnung (VAV/VAVplus) für Kinderbetreuung im Privathaushalt
   anpassbar) — passend zum monatsweisen Abrechnungsmodell. Optional kann pro
   Person auf den Freibetrag verzichtet werden (Beiträge dann auf dem ganzen Lohn).
   UVG und die Quellensteuer bleiben unverändert.
+- **Feiertagszuschlag pro Arbeitsverhältnis.** Pro Stundenlohn-Person wählbar:
+  kein Zuschlag (0 %), nur der 1. August (0.39 %, gesetzliches Minimum nach
+  Art. 110 Abs. 3 BV) oder alle 9 bezahlten Feiertage (kantonaler Satz aus den
+  Einstellungen). Neue Personen starten mit „Nur 1. August"; bestehende behalten
+  die volle Variante, bis sie bewusst umgestellt werden. Ferien- und
+  Feiertagszulage werden separat auf dem Grundlohn berechnet (nicht auf
+  Grundlohn + Ferienzulage), wie beim SECO.
+- **Nachvollziehbare Rundung.** Alle Positionen werden auf den Rappen gerechnet;
+  nur der Auszahlungsbetrag wird auf 5 Rappen gerundet und die Rundungsdifferenz
+  als eigene Zeile ausgewiesen. Die Abrechnung warnt bei Einsätzen in der Zukunft
+  („Vorschau") und bei Einsätzen an Sonntagen/Feiertagen.
 
 ## Setup
 
@@ -64,8 +75,12 @@ Production builds happen via the repo-root `build.sh` (Cloudflare Pages), which 
 ## Tests
 
 ```bash
+npm run test:unit      # Vitest unit tests for the payroll calculation (no Supabase needed)
 npm test               # Playwright e2e (starts/reset local Supabase, builds site, serves on :8080)
 npm run test:ui        # Playwright UI mode
 ```
+
+`src/lib/payroll.test.ts` pins the payroll math against the documented
+November 2026 reference payslip (Feiertagszuschlag variants, rounding).
 
 `tests/e2e/visual.spec.ts` contains visual regression tests. Baselines (in `visual.spec.ts-snapshots/`) were captured on macOS/Chromium and are platform-tied; regenerate with `npx playwright test visual --update-snapshots` when intentionally changing the UI.
