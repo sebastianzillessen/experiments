@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { berechneAbrechnung } from './payroll';
-import { defaultPaySettingsData, sanitizeEmployeeData } from './state';
+import { defaultPaySettingsData, sanitizeEmployeeData, vacationPercentForWeeks } from './state';
 import type { AppState, Employee, HolidayMode, Shift } from './state';
 
 // Builds a minimal household state with one hourly employee, one wage version
@@ -83,6 +83,12 @@ describe('Feiertagszuschlag-Varianten', () => {
     expect(calc.netto).toBe(170.82);
     expect(calc.auszahlung).toBe(170.80);
     expect(calc.rundungsdifferenz).toBe(-0.02);
+  });
+
+  it('Ferienzuschlag: 4 Wochen 8.33 %, 5 Wochen 10.64 % (GR-NAV), 6 Wochen 13.04 %', () => {
+    expect(vacationPercentForWeeks(4)).toBe(8.33);
+    expect(vacationPercentForWeeks(5)).toBe(10.64);
+    expect(vacationPercentForWeeks(6)).toBe(13.04);
   });
 
   it('kein Feiertagszuschlag (0 %) lässt die Feiertagszulage weg', () => {

@@ -31,7 +31,7 @@ export function InfoTab() {
             <tr><th>Beitrag</th><th className="num">Arbeitnehmer</th><th className="num">Arbeitgeber</th></tr>
           </thead>
           <tbody>
-            <tr><td>Ferienentschädigung (4 / 5 / 6 Ferienwochen)</td><td className="num" colSpan={2}>8.33 % / 10.63 % / 13.04 % auf Bruttostunden</td></tr>
+            <tr><td>Ferienentschädigung (4 / 5 / 6 Ferienwochen)</td><td className="num" colSpan={2}>8.33 % / 10.64 % / 13.04 % auf Bruttostunden</td></tr>
             <tr><td>Feiertagsentschädigung (kantonal, Richtwert{preset ? `, ${cantonName(canton)}` : ''})</td><td className="num" colSpan={2}>{preset ? preset.holidayPercent : 3.59} % auf Bruttostunden</td></tr>
             <tr><td>AHV / IV / EO</td><td className="num">5.30 %</td><td className="num">5.30 %</td></tr>
             <tr><td>ALV (Arbeitslosenversicherung)</td><td className="num">1.10 %</td><td className="num">1.10 %</td></tr>

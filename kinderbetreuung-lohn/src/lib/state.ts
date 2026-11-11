@@ -114,7 +114,7 @@ export const LIMIT_VEREINFACHT = 22680; // CHF/Jahr brutto pro Person 2026
 /* ---- DEFAULTS ---- */
 // Ferienentschädigung is an employee-level entitlement: 4, 5 or 6 weeks map to
 // a fixed Zuschlag on the gross hourly wage (Kanton Zürich / NAV Hauswirtschaft).
-export const VACATION_WEEKS_PERCENT: Record<number, number> = { 4: 8.33, 5: 10.63, 6: 13.04 };
+export const VACATION_WEEKS_PERCENT: Record<number, number> = { 4: 8.33, 5: 10.64, 6: 13.04 };
 export function vacationPercentForWeeks(weeks: number): number {
   return VACATION_WEEKS_PERCENT[weeks] ?? VACATION_WEEKS_PERCENT[4];
 }

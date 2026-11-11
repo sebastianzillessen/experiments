@@ -241,7 +241,7 @@ export function MitarbeitendeTab() {
                       <select id="emp-f-vacation" value={String(fields.vacationWeeks)}
                         onChange={e => setFields(f => ({ ...f, vacationWeeks: Number(e.target.value) || 4 }))}>
                         <option value="4">4 Wochen (8.33 %)</option>
-                        <option value="5">5 Wochen (10.63 %)</option>
+                        <option value="5">5 Wochen (10.64 %)</option>
                         <option value="6">6 Wochen (13.04 %)</option>
                       </select>
                     </div>

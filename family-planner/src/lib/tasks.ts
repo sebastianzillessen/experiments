@@ -25,7 +25,7 @@ export function weekdayNumber(key: string): number {
 /* ------------------------------------------------------------- planning */
 
 /** How often the task is meant to happen, per week. */
-export function plannedPerWeek(task: HouseholdTask): number {
+export function plannedPerWeek(task: HouseholdTask, now: number = Date.now()): number {
   const r = task.rhythm;
   if (r.kind === 'takt') {
     const avg = (r.min + (r.max || r.min)) / 2;
@@ -37,7 +37,7 @@ export function plannedPerWeek(task: HouseholdTask): number {
   if (r.kind === 'ereignis') return Math.max(0, r.estPerWeek);
   // A list of days is its own rate: what it actually asks for in the eight
   // weeks around today, which is the window a list like that usually covers.
-  return datesAround(task, 28).length / 8;
+  return datesAround(task, 28, now).length / 8;
 }
 
 /** The planned days within `days` either side of today. */
@@ -62,8 +62,8 @@ export function dateLabel(dateKey: string): string {
 }
 
 /** Planned minutes per week — the figure the distribution is budgeted on. */
-export function weeklyMinutes(task: HouseholdTask): number {
-  return plannedPerWeek(task) * task.minutes;
+export function weeklyMinutes(task: HouseholdTask, now: number = Date.now()): number {
+  return plannedPerWeek(task, now) * task.minutes;
 }
 
 /** How many runs a day expects, or null when the task has no daily rhythm. */
@@ -193,7 +193,7 @@ export function taskStatus(
   }
 
   if (!last) return { kind: 'over', doneToday, daysSince };
-  const interval = 7 / Math.max(0.01, plannedPerWeek(task));
+  const interval = 7 / Math.max(0.01, plannedPerWeek(task, now));
   const ratio = (now - Date.parse(last.doneAt)) / DAY_MS / interval;
   return { kind: ratio >= 1.25 ? 'over' : ratio >= 0.85 ? 'due' : 'ok', doneToday, daysSince };
 }
@@ -206,7 +206,7 @@ export function driftsFromPlan(
   const from = now - 28 * DAY_MS;
   const n = logs.filter(l => l.taskId === task.id && Date.parse(l.doneAt) >= from).length;
   if (n < 4) return false;
-  const planned = plannedPerWeek(task);
+  const planned = plannedPerWeek(task, now);
   return planned > 0 && Math.abs(measuredPerWeek(logs, task.id, now) - planned) / planned > 0.3;
 }
 
