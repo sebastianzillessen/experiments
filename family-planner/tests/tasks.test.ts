@@ -226,8 +226,8 @@ describe('a task that is a list of dates', () => {
       dates: ['2026-09-07', '2026-09-20', '2026-10-03', '2026-10-05']
         .map(d => ({ date: d, note: null })),
     });
-    expect(plannedPerWeek(t)).toBe(0.5);
-    expect(weeklyMinutes(t)).toBe(45);
+    expect(plannedPerWeek(t, NOW)).toBe(0.5);
+    expect(weeklyMinutes(t, NOW)).toBe(45);
   });
 
   it('names the next day rather than pretending to have a rhythm', () => {

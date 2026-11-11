@@ -13,13 +13,13 @@ type NumericKey = Exclude<keyof PaySettingsData, 'uvgEnabled'>;
 const PS_NUMERIC_FIELDS: { domId: string; key: NumericKey; step: number; label: string }[] = [
   // hourlyRate moved to per-employee employee_wages — only household-wide
   // statutory/cantonal rates live here now.
-  { domId: 'ps-holiday-percent',   key: 'holidayPercent',   step: 0.01,  label: 'Feiertagszulage (% auf Bruttostunden)' },
+  { domId: 'ps-holiday-percent',   key: 'holidayPercent',   step: 0.01,  label: 'Feiertagszulage – volle Variante (% auf Grundlohn, 9 Feiertage)' },
   { domId: 'ps-ahv-employee',      key: 'ahvIvEoEmployee',  step: 0.01,  label: 'AHV/IV/EO Arbeitnehmer' },
   { domId: 'ps-ahv-employer',      key: 'ahvIvEoEmployer',  step: 0.01,  label: 'AHV/IV/EO Arbeitgeber' },
   { domId: 'ps-alv-employee',      key: 'alvEmployee',      step: 0.01,  label: 'ALV Arbeitnehmer' },
   { domId: 'ps-alv-employer',      key: 'alvEmployer',      step: 0.01,  label: 'ALV Arbeitgeber' },
   { domId: 'ps-fak-employer',      key: 'fakEmployer',      step: 0.01,  label: 'FAK Arbeitgeber (% — kantonal)' },
-  { domId: 'ps-admin-fee-employer',key: 'adminFeeEmployer', step: 0.01,  label: 'Verwaltungskosten (% der AHV/IV/EO-Beiträge)' },
+  { domId: 'ps-admin-fee-employer',key: 'adminFeeEmployer', step: 0.01,  label: 'Verwaltungskosten (% der AHV/IV/EO-Beiträge AN + AG)' },
   { domId: 'ps-withholding-tax',   key: 'withholdingTax',   step: 0.01,  label: 'Quellensteuer (VAV, einheitlich 5 %)' },
   { domId: 'ps-uvg-bu-employer',   key: 'uvgBuEmployer',    step: 0.001, label: 'UVG-BU Arbeitgeber (%)' },
   { domId: 'ps-uvg-nbu-employee',  key: 'uvgNbuEmployee',   step: 0.001, label: 'UVG-NBU Arbeitnehmer (%, nur ab 8 h/Woche)' },
@@ -347,7 +347,7 @@ export function EinstellungenTab() {
               </div>
             ))}
           </div>
-          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Der <strong>Stundenlohn</strong> wird pro Person im Bereich „Mitarbeitende" festgelegt. Der Ferienanspruch (4/5/6 Wochen) wird ebenfalls pro Person dort gewählt. Diese Sätze hier gelten haushaltsweit für alle Mitarbeitenden.</p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Der <strong>Stundenlohn</strong>, der <strong>Ferienanspruch</strong> (4/5/6 Wochen) und die <strong>Feiertagszuschlag-Variante</strong> (kein / nur 1. August / 9 Feiertage) werden pro Person im Bereich „Mitarbeitende" festgelegt. Der Satz hier oben ist nur die volle Variante (9 Feiertage) und gilt haushaltsweit als Grundlage dafür.</p>
         </div>
 
         <div className="card">

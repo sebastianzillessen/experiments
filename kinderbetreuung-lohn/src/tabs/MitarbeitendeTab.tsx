@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { employeeById, employeeName, wageVersionHasShifts } from '../lib/payroll';
 import { fmtChf, monthLabel } from '../lib/format';
 import { normalizeEffectiveMonth, sanitizeEmployeeData } from '../lib/state';
-import type { Employee, EmployeeData, EmploymentType } from '../lib/state';
+import type { Employee, EmployeeData, EmploymentType, HolidayMode } from '../lib/state';
 import { cantonPreset } from '../lib/cantons';
 import { WagePreview } from '../components/WagePreview';
 
@@ -15,6 +15,7 @@ type FormFields = {
   birthDate: string; ahvNumber: string; iban: string;
   vacationWeeks: number; weeklyHoursThreshold8h: boolean;
   employmentType: EmploymentType;
+  holidayMode: HolidayMode;
   pensioner: boolean; pensionerWaiveAllowance: boolean;
 };
 
@@ -24,6 +25,7 @@ function fieldsFrom(d: EmployeeData): FormFields {
     birthDate: d.birthDate, ahvNumber: d.ahvNumber, iban: d.iban,
     vacationWeeks: d.vacationWeeks, weeklyHoursThreshold8h: d.weeklyHoursThreshold8h,
     employmentType: d.employmentType,
+    holidayMode: d.holidayMode,
     pensioner: d.pensioner, pensionerWaiveAllowance: d.pensionerWaiveAllowance
   };
 }
@@ -49,7 +51,9 @@ export function MitarbeitendeTab() {
 
   function openAdd() {
     setMitUi({ mode: 'add', empId: null });
-    setFields(fieldsFrom(sanitizeEmployeeData({})));
+    // New relationships default to "Nur 1. August" (the legal minimum). Existing
+    // records keep whatever they had ('full' for legacy data without the field).
+    setFields({ ...fieldsFrom(sanitizeEmployeeData({})), holidayMode: 'august' });
     setWageError(null);
     setWageEdits({});
   }
@@ -237,11 +241,27 @@ export function MitarbeitendeTab() {
                       <select id="emp-f-vacation" value={String(fields.vacationWeeks)}
                         onChange={e => setFields(f => ({ ...f, vacationWeeks: Number(e.target.value) || 4 }))}>
                         <option value="4">4 Wochen (8.33 %)</option>
-                        <option value="5">5 Wochen (10.63 %)</option>
+                        <option value="5">5 Wochen (10.64 %)</option>
                         <option value="6">6 Wochen (13.04 %)</option>
                       </select>
                     </div>
+                    {fields.employmentType !== 'monthly' && (
+                      <div>
+                        <label htmlFor="emp-f-holiday">Feiertagszuschlag</label>
+                        <select id="emp-f-holiday" value={fields.holidayMode}
+                          onChange={e => setFields(f => ({ ...f, holidayMode: e.target.value as HolidayMode }))}>
+                          <option value="none">Kein Feiertagszuschlag (0 %)</option>
+                          <option value="august">Nur 1. August (0.39 %)</option>
+                          <option value="full">9 bezahlte Feiertage (voller Satz)</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
+                  {fields.employmentType !== 'monthly' && fields.holidayMode === 'none' && (
+                    <div className="warn" style={{ marginTop: 8 }}>
+                      Hinweis: Der 1. August (Bundesfeiertag) muss gesetzlich bezahlt sein (Art. 110 Abs. 3 BV). „Kein Feiertagszuschlag" ist nur korrekt, wenn der Feiertag anderweitig abgegolten wird.
+                    </div>
+                  )}
                   {fields.employmentType === 'monthly' && (
                     <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                       Monatslohn: feste monatliche Auszahlung. Ferien und Feiertage sind im Lohn enthalten (keine separate Zulage). Die Person erfasst keine Stunden — die Monate werden unter „Stundenerfassung" bestätigt.

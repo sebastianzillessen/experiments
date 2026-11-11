@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { activePaySettingsFor, berechneAbrechnung } from '../lib/payroll';
+import { activePaySettingsFor, berechneAbrechnung, holidayLineLabel } from '../lib/payroll';
 import { fmtChf, fmtNum, monthLabel } from '../lib/format';
 import { vacationPercentForWeeks } from '../lib/state';
 import type { AppState, Employee, Shift } from '../lib/state';
@@ -46,7 +46,9 @@ export function WagePreview({ data, employee, amount, effectiveMonth }: {
         <>
           <div className="summary-row"><span>{fmtNum(hours)} Std. × CHF {fmtChf(amount)}</span><span>CHF {fmtChf(calc.bruttoStunden)}</span></div>
           <div className="summary-row"><span>+ Ferienzulage ({weeks} Wochen, {vacationPercentForWeeks(weeks)} %)</span><span>CHF {fmtChf(calc.ferienzulage)}</span></div>
-          <div className="summary-row"><span>+ Feiertagszulage ({e.holidayPercent} %)</span><span>CHF {fmtChf(calc.feiertagszulage)}</span></div>
+          {calc.holidayMode !== 'none' && (
+            <div className="summary-row"><span>+ {holidayLineLabel(calc.holidayMode, calc.feiertagPercent)}</span><span>CHF {fmtChf(calc.feiertagszulage)}</span></div>
+          )}
         </>
       )}
       <div className="summary-row total"><span>Bruttolohn</span><span>CHF {fmtChf(calc.bruttoTotal)}</span></div>
@@ -67,7 +69,11 @@ export function WagePreview({ data, employee, amount, effectiveMonth }: {
       <div className="summary-row"><span>– Quellensteuer ({e.withholdingTax} %)</span><span>CHF {fmtChf(calc.an.quellenst)}</span></div>
       <div className="summary-row total"><span>Total Abzüge</span><span>CHF {fmtChf(calc.an.total)}</span></div>
 
-      <div className="summary-row netto"><span>Auszahlung netto</span><span>CHF {fmtChf(calc.netto)}</span></div>
+      <div className="summary-row"><span>Nettolohn</span><span>CHF {fmtChf(calc.netto)}</span></div>
+      {calc.rundungsdifferenz !== 0 && (
+        <div className="summary-row"><span>Rundungsdifferenz (5 Rappen)</span><span>CHF {fmtChf(calc.rundungsdifferenz)}</span></div>
+      )}
+      <div className="summary-row netto"><span>Auszahlung netto</span><span>CHF {fmtChf(calc.auszahlung)}</span></div>
 
       <h4>Arbeitgeberbeiträge</h4>
       <div className="summary-row"><span>AHV/IV/EO ({e.ahvIvEoEmployer} %)</span><span>CHF {fmtChf(calc.ag.ahvIvEo)}</span></div>
@@ -78,10 +84,10 @@ export function WagePreview({ data, employee, amount, effectiveMonth }: {
       {calc.uvgAktivAny && (
         <div className="summary-row"><span>UVG-BU ({e.uvgBuEmployer} %)</span><span>CHF {fmtChf(calc.ag.bu)}</span></div>
       )}
-      <div className="summary-row"><span>Verwaltungskosten ({e.adminFeeEmployer} % der AHV/IV/EO-Beiträge)</span><span>CHF {fmtChf(calc.ag.verw)}</span></div>
+      <div className="summary-row"><span>Verwaltungskosten ({e.adminFeeEmployer} % der AHV/IV/EO-Beiträge AN + AG)</span><span>CHF {fmtChf(calc.ag.verw)}</span></div>
       <div className="summary-row total"><span>Total Arbeitgeberkosten (Brutto + AG-Beiträge)</span><span>CHF {fmtChf(calc.agKostenTotal)}</span></div>
       <div className="footnote" style={{ marginTop: 8 }}>
-        Gerechnet mit den Sätzen aus den Einstellungen{monthly ? '' : '; der Nettolohn wird auf 5 Rappen gerundet'}.
+        Gerechnet mit den Sätzen aus den Einstellungen; die Auszahlung wird auf 5 Rappen gerundet.
       </div>
     </div>
   );
